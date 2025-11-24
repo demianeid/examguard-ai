@@ -124,11 +124,11 @@ const Header: React.FC<HeaderProps> = ({
 
   // Navigation items based on user status AND user type - مع ضمان أن الـ paths تكون strings
   const navItems = isRegistered ? [
-    { name: "Home", path: "/home" },
-    { name: "Features", path: "/features" },
-    { name: "How It Works", path: "/how-it-works" },
-    { name: "Contact", path: "/contact" },
-    { name: "Classes", path: "/ClassesStudent" }
+    { name: "Home", path: ensurePath(paths.home) },
+    { name: "Features", path: ensurePath(paths.features) },
+    { name: "How It Works", path: ensurePath(paths.howItWorks) },
+    { name: "Contact", path: ensurePath(paths.contact) },
+    { name: "Classes", path: ensurePath(paths.classes) }
   ] : [
     { name: "Home", path: ensurePath(paths.home) },
     { name: "Features", path: ensurePath(paths.features) },

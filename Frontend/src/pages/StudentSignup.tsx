@@ -3,8 +3,6 @@ import { ArrowLeft, Upload } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { div } from "framer-motion/client";
 
 export default function StudentSignup() {
   const [formData, setFormData] = useState({
@@ -18,6 +16,7 @@ export default function StudentSignup() {
   });
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -80,7 +79,9 @@ export default function StudentSignup() {
 
     const dataToSubmit = { ...formData };
     console.log("Form submitted:", dataToSubmit);
-    alert("Signup successful!");
+    
+    // بعد التسجيل الناجح، اذهب إلى صفحة الـ Home الخاصة بالـ Student
+    navigate("/home");
   };
 
   return (

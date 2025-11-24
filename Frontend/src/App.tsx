@@ -12,6 +12,7 @@ import HowItWorks from './pages/HowItWorks';
 import Contact from './pages/Contact';
 import AccountStudent from './pages/AccountStudent';
 import ClassesStudent from './pages/ClassesStudent';
+import AccountInstructor from "./pages/AccountInstructor";
 
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/contact" element={<Contact />} />
       <Route path="/account-student" element={<AccountStudent />} />
+      <Route path="/account-instructor" element={<AccountInstructor />} />
       <Route path="/ClassesStudent" element={<ClassesStudent />} />
     </Routes>
   );
