@@ -1,5 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 
 const Hero = () => {
   return (
@@ -36,9 +37,9 @@ const Hero = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1.2, delay: 0.6 }}
           >
-            <button className="px-6 py-3 bg-[#176ADA] text-white font-semibold rounded-lg hover:bg-[#1D7EF8] transition-colors">
+            <Link to="/SignUp" className="px-6 py-3 bg-[#176ADA] text-white font-semibold rounded-lg hover:bg-[#1D7EF8] transition-colors"> 
               Get Started
-            </button>
+            </Link>
             <button className="px-6 py-3 bg-transparent border-2 border-gray-900 text-gray-900 font-semibold rounded-lg hover:bg-gray-900 hover:text-white transition-all flex items-center gap-2">
               <span className="text-sm">▶</span>
               Watch A Demo

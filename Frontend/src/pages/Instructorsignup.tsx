@@ -4,14 +4,9 @@ import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { div } from "framer-motion/client";
 
-export default function ExamGuardSignup() {
-  const navigate = useNavigate();
-
-  const handleBack = () => {
-    navigate("/signup");
-  };
-
+export default function StudentSignup() {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -80,8 +75,7 @@ export default function ExamGuardSignup() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!validate()) return;
 
     const dataToSubmit = { ...formData };
@@ -90,229 +84,242 @@ export default function ExamGuardSignup() {
   };
 
   return (
-    <div className="bg-background p-20">
+    <div className="bg-background px-4 py-8 md:p-20">
+            <Header hideSignup={true} />
       
-      {/* ✅ Header stays static, no animation */}
-      <Header hideSignup={true} />
+    
+    <div className="min-h-screen bg-background px-4 py-6 md:px-8">
+      {/* Main content card */}
+      <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-8">
+        
+        <Link to="/Signup"
+        
+          className="flex items-center gap-2 text-gray-600 mb-6 hover:text-gray-800"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span className="text-sm">Back to role selection</span>
+        </Link>
 
-      {/* ✅ Only this section animates */}
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="min-h-screen bg-background p-8"
-      >
-        <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-8">
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-2 text-gray-600 mb-8 hover:text-gray-800"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-sm">Back to role selection</span>
-          </button>
-
-          <div className="flex flex-col items-center">
-            <div className="w-40 h-40 rounded-full bg-blue-200 flex items-center justify-center mb-4 shadow-lg">
+        {/* Column layout for small screens / Row for big screens */}
+        <div className="flex flex-col items-center">
+        {/* Avatar */}
+            <div className="w-28 h-28 md:w-40 md:h-40 rounded-full bg-blue-200 flex items-center justify-center mb-4 shadow-lg">
               <img
                 src="/images/ilogin.png"
                 alt="Avatar"
-                className="w-38 h-38 rounded-full object-cover"
+                className="w-full h-full rounded-full object-cover"
               />
             </div>
 
-            <h1 className="text-3xl font-bold text-primary mb-2">
-              LET'S GET STARTED
-            </h1>
-            <p className="text-primary font-semibold mb-8">SIGN UP</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-primary mb-1 text-center">
+            LET'S GET STARTED
+          </h1>
+          <p className="text-primary font-semibold mb-6 md:mb-8 text-center">SIGN UP</p>
 
-            <form className="w-full max-w-2xl" onSubmit={handleSubmit}>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">
-                    First name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    placeholder="John"
-                    className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
-                      errors.firstName
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-200 focus:ring-blue-500"
-                    }`}
-                  />
-                  {errors.firstName && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.firstName}
-                    </p>
-                  )}
-                </div>
+          {/* FORM */}
+          <div className="w-full max-w-2xl">
 
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">
-                    Last name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    placeholder="Doe"
-                    className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
-                      errors.lastName
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-200 focus:ring-blue-500"
-                    }`}
-                  />
-                  {errors.lastName && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.lastName}
-                    </p>
-                  )}
-                </div>
+            {/* Grid becomes 1 col on phones, 2 cols on desktop */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
 
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">
-                    Email <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="example@mail.com"
-                    className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
-                      errors.email
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-200 focus:ring-blue-500"
-                    }`}
-                  />
-                  {errors.email && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.email}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">
-                    Phone number <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleChange}
-                    placeholder="012 3456 789"
-                    className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
-                      errors.phone
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-200 focus:ring-blue-500"
-                    }`}
-                  />
-                  {errors.phone && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.phone}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">
-                    Password <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="••••••••••••"
-                    className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
-                      errors.password
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-200 focus:ring-blue-500"
-                    }`}
-                  />
-                  {errors.password && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.password}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">
-                    Confirm Password <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="••••••••"
-                    className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
-                      errors.confirmPassword
-                        ? "border-red-500 focus:ring-red-500"
-                        : "border-gray-200 focus:ring-blue-500"
-                    }`}
-                  />
-                  {errors.confirmPassword && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.confirmPassword}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-sm text-gray-600 mb-2">
-                  Upload Profile Image <span className="text-red-500">*</span>
+              {/* First name */}
+              <div>
+                <label className="block text-left text-sm text-gray-600 mb-1">
+                  First name <span className="text-red-500">*</span>
                 </label>
-                <label className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-white hover:border-blue-400 transition cursor-pointer flex flex-col items-center justify-center">
-                  <Upload className="w-8 h-8 text-blue-500 mb-2" />
-                  <span className="text-sm text-gray-600 mb-1">
-                    Click or drag and drop
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    SVG, PNG, JPG or GIF (max. 3MB)
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                  />
-                </label>
-                {errors.profileImage && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.profileImage}
+                <input
+                  type="text"
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  placeholder="John"
+                  className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+                    errors.firstName
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-200 focus:ring-blue-500"
+                  }`}
+                />
+                {errors.firstName && (
+                  <p className="text-red-500 text-sm mt-1 text-left">
+                    {errors.firstName}
                   </p>
                 )}
               </div>
 
-                    <button
-  type="button"
-  onClick={() => navigate("/home-instructor")}
-  className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-secondary transition shadow-md"
->
-  Sign Up
-</button>
+              {/* Last name */}
+              <div>
+                <label className="block text-left text-sm text-gray-600 mb-1">
+                  Last name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  placeholder="Doe"
+                  className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+                    errors.lastName
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-200 focus:ring-blue-500"
+                  }`}
+                />
+                {errors.lastName && (
+                  <p className="text-red-500 text-sm mt-1 text-left">
+                    {errors.lastName}
+                  </p>
+                )}
+              </div>
 
-              <p className="text-center mt-4 text-sm text-gray-600">
-                <span className="text-blue-500">Already Have An Account?</span>{" "}
-                <Link
-                  to="/Login"
-                  className="text-gray-800 font-semibold hover:text-blue-600"
-                >
-                  Sign In
-                </Link>
-              </p>
-            </form>
+              {/* Email */}
+              <div>
+                <label className="block text-left text-sm text-gray-600 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="example@mail.com"
+                  className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+                    errors.email
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-200 focus:ring-blue-500"
+                  }`}
+                />
+                {errors.email && (
+                  <p className="text-red-500 text-sm mt-1 text-left">
+                    {errors.email}
+                  </p>
+                )}
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="block text-left text-sm text-gray-600 mb-1">
+                  Phone number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  placeholder="012 3456 789"
+                  className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+                    errors.phone
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-200 focus:ring-blue-500"
+                  }`}
+                />
+                {errors.phone && (
+                  <p className="text-red-500 text-sm mt-1 text-left">
+                    {errors.phone}
+                  </p>
+                )}
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-left text-sm text-gray-600 mb-1">
+                  Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+                    errors.password
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-200 focus:ring-blue-500"
+                  }`}
+                />
+                {errors.password && (
+                  <p className="text-red-500 text-sm mt-1 text-left">
+                    {errors.password}
+                  </p>
+                )}
+              </div>
+
+              {/* Confirm password */}
+              <div>
+                <label className="block text-left text-sm text-gray-600 mb-1">
+                  Confirm Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+                    errors.confirmPassword
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-200 focus:ring-blue-500"
+                  }`}
+                />
+                {errors.confirmPassword && (
+                  <p className="text-red-500 text-sm mt-1 text-left">
+                    {errors.confirmPassword}
+                  </p>
+                )}
+              </div>
+
+            </div>
+
+            {/* Upload image */}
+            <div className="mb-6">
+              <label className="block text-left text-sm text-gray-600 mb-2">
+                Upload Profile Image <span className="text-red-500">*</span>
+              </label>
+
+              <label className="border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-8 text-center bg-white hover:border-blue-400 transition cursor-pointer flex flex-col items-center justify-center">
+                <Upload className="w-7 h-7 md:w-8 md:h-8 text-blue-500 mb-2" />
+                <span className="text-sm text-gray-600">
+                  Click or drag and drop
+                </span>
+                <span className="text-xs text-gray-400">
+                  SVG, PNG, JPG or GIF (max. 3MB)
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+              </label>
+
+              {errors.profileImage && (
+                <p className="text-red-500 text-sm mt-1 text-left">
+                  {errors.profileImage}
+                </p>
+              )}
+            </div>
+
+            {/* Submit button */}
+            <button
+              onClick={handleSubmit}
+              className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-md"
+            >
+              Sign Up
+            </button>
+
+            {/* Already have account */}
+            <p className="text-center mt-4 text-sm text-gray-600">
+              <span className="text-blue-500">Already Have An Account?</span>{" "}
+              <Link
+                to="/Login"
+                className="text-gray-800 font-semibold hover:text-blue-600"
+              >
+                Sign In
+              </Link>
+            </p>
+
           </div>
         </div>
-      </motion.div>
+      </div>
+    </div>
     </div>
   );
 }

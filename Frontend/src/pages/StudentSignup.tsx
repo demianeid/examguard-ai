@@ -4,14 +4,9 @@ import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { div } from "framer-motion/client";
 
 export default function StudentSignup() {
-  const navigate = useNavigate();
-
-  const handleBack = () => {
-    navigate("/signup");
-  };
-
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -80,8 +75,7 @@ export default function StudentSignup() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!validate()) return;
 
     const dataToSubmit = { ...formData };
@@ -90,45 +84,46 @@ export default function StudentSignup() {
   };
 
   return (
-    <div className="bg-background p-20">
-      
-      {/* ✅ Header stays static, no animation */}
+    <div className="bg-background px-4 py-8 md:p-20">
       <Header hideSignup={true} />
 
-      {/* ✅ Only this section animates */}
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="min-h-screen bg-background p-8"
-      >
-        <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-8">
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-2 text-gray-600 mb-8 hover:text-gray-800"
+      <div className="min-h-screen bg-background px-4 py-6 md:px-8">
+        {/* Main content card */}
+        
+        <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-8">
+          <Link
+            to="/Signup"
+            className="flex items-center gap-2 text-gray-600 mb-6 hover:text-gray-800"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back to role selection</span>
-          </button>
+          </Link>
 
+          {/* Column layout for small screens / Row for big screens */}
           <div className="flex flex-col items-center">
-            <div className="w-40 h-40 rounded-full bg-blue-200 flex items-center justify-center mb-4 shadow-lg">
+            {/* Avatar */}
+            <div className="w-28 h-28 md:w-40 md:h-40 rounded-full bg-blue-200 flex items-center justify-center mb-4 shadow-lg">
               <img
                 src="/images/slogin.png"
                 alt="Avatar"
-                className="w-38 h-38 rounded-full object-cover"
+                className="w-full h-full rounded-full object-cover"
               />
             </div>
 
-            <h1 className="text-3xl font-bold text-primary mb-2">
+            <h1 className="text-2xl md:text-3xl font-bold text-primary mb-1 text-center">
               LET'S GET STARTED
             </h1>
-            <p className="text-primary font-semibold mb-8">SIGN UP</p>
+            <p className="text-primary font-semibold mb-6 md:mb-8 text-center">
+              SIGN UP
+            </p>
 
-            <form className="w-full max-w-2xl" onSubmit={handleSubmit}>
-              <div className="grid grid-cols-2 gap-4 mb-4">
+            {/* FORM */}
+            <div className="w-full max-w-2xl">
+              {/* Grid becomes 1 col on phones, 2 cols on desktop */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {/* First name */}
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">
+                  <label className="block text-left text-sm text-gray-600 mb-1">
                     First name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -144,14 +139,15 @@ export default function StudentSignup() {
                     }`}
                   />
                   {errors.firstName && (
-                    <p className="text-red-500 text-sm mt-1">
+                    <p className="text-red-500 text-sm mt-1 text-left">
                       {errors.firstName}
                     </p>
                   )}
                 </div>
 
+                {/* Last name */}
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">
+                  <label className="block text-left text-sm text-gray-600 mb-1">
                     Last name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -167,14 +163,15 @@ export default function StudentSignup() {
                     }`}
                   />
                   {errors.lastName && (
-                    <p className="text-red-500 text-sm mt-1">
+                    <p className="text-red-500 text-sm mt-1 text-left">
                       {errors.lastName}
                     </p>
                   )}
                 </div>
 
+                {/* Email */}
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">
+                  <label className="block text-left text-sm text-gray-600 mb-1">
                     Email <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -190,14 +187,15 @@ export default function StudentSignup() {
                     }`}
                   />
                   {errors.email && (
-                    <p className="text-red-500 text-sm mt-1">
+                    <p className="text-red-500 text-sm mt-1 text-left">
                       {errors.email}
                     </p>
                   )}
                 </div>
 
+                {/* Phone */}
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">
+                  <label className="block text-left text-sm text-gray-600 mb-1">
                     Phone number <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -213,14 +211,15 @@ export default function StudentSignup() {
                     }`}
                   />
                   {errors.phone && (
-                    <p className="text-red-500 text-sm mt-1">
+                    <p className="text-red-500 text-sm mt-1 text-left">
                       {errors.phone}
                     </p>
                   )}
                 </div>
 
+                {/* Password */}
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">
+                  <label className="block text-left text-sm text-gray-600 mb-1">
                     Password <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -228,7 +227,7 @@ export default function StudentSignup() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    placeholder="••••••••••••"
+                    placeholder="••••••••"
                     className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
                       errors.password
                         ? "border-red-500 focus:ring-red-500"
@@ -236,14 +235,15 @@ export default function StudentSignup() {
                     }`}
                   />
                   {errors.password && (
-                    <p className="text-red-500 text-sm mt-1">
+                    <p className="text-red-500 text-sm mt-1 text-left">
                       {errors.password}
                     </p>
                   )}
                 </div>
 
+                {/* Confirm password */}
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">
+                  <label className="block text-left text-sm text-gray-600 mb-1">
                     Confirm Password <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -259,20 +259,22 @@ export default function StudentSignup() {
                     }`}
                   />
                   {errors.confirmPassword && (
-                    <p className="text-red-500 text-sm mt-1">
+                    <p className="text-red-500 text-sm mt-1 text-left">
                       {errors.confirmPassword}
                     </p>
                   )}
                 </div>
               </div>
 
+              {/* Upload image */}
               <div className="mb-6">
-                <label className="block text-sm text-gray-600 mb-2">
+                <label className="block text-left text-sm text-gray-600 mb-2">
                   Upload Profile Image <span className="text-red-500">*</span>
                 </label>
-                <label className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-white hover:border-blue-400 transition cursor-pointer flex flex-col items-center justify-center">
-                  <Upload className="w-8 h-8 text-blue-500 mb-2" />
-                  <span className="text-sm text-gray-600 mb-1">
+
+                <label className="border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-8 text-center bg-white hover:border-blue-400 transition cursor-pointer flex flex-col items-center justify-center">
+                  <Upload className="w-7 h-7 md:w-8 md:h-8 text-blue-500 mb-2" />
+                  <span className="text-sm text-gray-600">
                     Click or drag and drop
                   </span>
                   <span className="text-xs text-gray-400">
@@ -285,21 +287,23 @@ export default function StudentSignup() {
                     onChange={handleImageUpload}
                   />
                 </label>
+
                 {errors.profileImage && (
-                  <p className="text-red-500 text-sm mt-1">
+                  <p className="text-red-500 text-sm mt-1 text-left">
                     {errors.profileImage}
                   </p>
                 )}
               </div>
 
-                   <button
-  type="button"
-  onClick={() => navigate("/home")}
-  className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-secondary transition shadow-md"
->
-  Sign Up
-</button>
+              {/* Submit button */}
+              <button
+                onClick={handleSubmit}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-md"
+              >
+                Sign Up
+              </button>
 
+              {/* Already have account */}
               <p className="text-center mt-4 text-sm text-gray-600">
                 <span className="text-blue-500">Already Have An Account?</span>{" "}
                 <Link
@@ -309,11 +313,10 @@ export default function StudentSignup() {
                   Sign In
                 </Link>
               </p>
-            </form>
+            </div>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
-
