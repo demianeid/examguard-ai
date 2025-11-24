@@ -1,3 +1,35 @@
+# 
+
+# ================== Python / Django ==================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+*.log
+*.pot
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.dmypy.json
+dmypy.json
+
+# migrations: ignore everything except __init__.py
+**/migrations/**
+!**/migrations/__init__.py
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# ================== Node / Vite (Frontend) ==================
 # Logs
 logs
 *.log
@@ -7,18 +39,22 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
 *.local
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# OS
+Thumbs.db
