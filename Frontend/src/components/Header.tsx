@@ -111,7 +111,7 @@ const Header: React.FC<HeaderProps> = ({
       features: "/features",
       howItWorks: "/how-it-works",
       contact: "/contact",
-      classes: "/classes"
+      classes: "/ClassesStudent"
     };
   };
 
