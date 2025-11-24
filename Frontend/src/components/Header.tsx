@@ -1,21 +1,53 @@
 import { useState, useEffect } from "react";
 import { HashLink } from "react-router-hash-link";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { LogOut, Settings } from "lucide-react";
+import { useUser } from '../context/UserContext';
 
-const Header = ({ 
+interface HeaderProps {
+  hideSignup?: boolean;
+  hideLogin?: boolean;
+  fixed?: boolean;
+  showAccount?: boolean;
+  isRegistered?: boolean;
+  isAccountPage?: boolean;
+  userType?: 'student' | 'instructor';
+}
+
+const Header: React.FC<HeaderProps> = ({ 
   hideSignup = false, 
   hideLogin = false, 
   fixed = false, 
   showAccount = false, 
   isRegistered = false,
-  isAccountPage = false
+  isAccountPage = false,
+  userType: propUserType
 }) => {
+  const { userType: contextUserType, setUserType } = useUser();
+  const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
   const [lastScroll, setLastScroll] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
+
+  // Use prop userType or context userType
+  const userType = propUserType || contextUserType;
+
+  // Auto-detect account pages
+  const isAccountPageAuto = location.pathname === "/account-instructor" || 
+                           location.pathname === "/account-student";
+
+  // Auto-detect user type from current page
+  useEffect(() => {
+    if (location.pathname === "/home-registered-instructor" || 
+        location.pathname === "/account-instructor") {
+      setUserType('instructor');
+    } else if (location.pathname === "/home-registered-student" || 
+               location.pathname === "/account-student") {
+      setUserType('student');
+    }
+  }, [location.pathname, setUserType]);
 
   useEffect(() => {
     if (fixed) return;
@@ -56,7 +88,6 @@ const Header = ({
     { name: "Contact", path: "/#contact" }
   ];
 
-
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -64,6 +95,20 @@ const Header = ({
     if (confirmed) {
       navigate("/");
     }
+  };
+
+  // Use auto-detected value or prop value
+  const finalIsAccountPage = isAccountPage || isAccountPageAuto;
+
+  // Determine home path based on user type
+  const getHomePath = (): string => {
+    if (!isRegistered) return "/";
+    return userType === 'instructor' ? "/home-registered-instructor" : "/home-registered-student";
+  };
+
+  // Determine account path based on user type
+  const getAccountPath = (): string => {
+    return userType === 'instructor' ? "/account-instructor" : "/account-student";
   };
 
   return (
@@ -80,7 +125,7 @@ const Header = ({
       <div className="flex items-center justify-between">
         {/* Logo */}
         <Link
-          to={isRegistered ? "/home-registered" : "/"}
+          to={getHomePath()}
           className={`text-2xl font-bold ${
             isScrolled ? "text-white" : "text-gray-900"
           }`}
@@ -90,10 +135,8 @@ const Header = ({
 
         {/* Right Section - Buttons & Toggle */}
         <div className="flex items-center gap-2 lg:order-2">
-          {isAccountPage ? (
-            // في حالة صفحة الـ Account نعرض Logout أولاً ثم Settings
+          {finalIsAccountPage ? (
             <div className="flex items-center gap-4">
-              {/* Logout Button - باللون الأحمر (danger) مع الكتابة */}
               <button
                 onClick={handleLogout}
                 className={`flex items-center gap-2 px-3 py-2 font-semibold rounded-lg border-2 transition-all ${
@@ -106,7 +149,6 @@ const Header = ({
                 <span>Logout</span>
               </button>
 
-              {/* Settings Button - بدون بوردر وباللون الداكن */}
               <Link
                 to="/settings"
                 className={`p-2 font-semibold rounded-lg transition-all ${
@@ -120,9 +162,8 @@ const Header = ({
               </Link>
             </div>
           ) : showAccount ? (
-            // في باقي الصفحات لما يكون showAccount true
             <Link
-              to="/account-student"
+              to={getAccountPath()}
               className={`px-5 py-3 font-semibold rounded-lg border-2 transition-all ${
                 isScrolled
                   ? "bg-transparent text-white border-white/50 hover:bg-white hover:text-primary hover:border-white"
@@ -132,7 +173,6 @@ const Header = ({
               Account
             </Link>
           ) : (
-            // في الحالة العادية نعرض Login و Signup
             <>
               {!hideLogin && (
                 <Link
@@ -252,8 +292,7 @@ const Header = ({
             </li>
           ))}
 
-          {isAccountPage ? (
-            // في الـ mobile menu لصفحة الـ Account بالترتيب الجديد
+          {finalIsAccountPage ? (
             <>
               <li className="w-full">
                 <button
@@ -285,7 +324,7 @@ const Header = ({
           ) : showAccount ? (
             <li className="w-full">
               <Link
-                to="/account-student"
+                to={getAccountPath()}
                 className={`px-4 py-2 font-semibold transition-colors w-full border-2 rounded-lg block text-center ${
                   isScrolled
                     ? "text-white border-white/50 hover:bg-white hover:text-primary hover:border-white"

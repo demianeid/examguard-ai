@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 const HomeRegisteredInstructor = () => {
   return (
     <div className="w-full min-h-screen bg-[#E3F0FE]">
-      <Header fixed={true} showAccount={true} isRegistered={true} />
+      <Header fixed={true} showAccount={true} isRegistered={true} userType="instructor" />
 
       {/* Hero Section */}
       <section className="w-full min-h-[90vh] flex items-center px-6 sm:px-20 py-12 pt-32" id="home">
