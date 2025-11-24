@@ -221,7 +221,7 @@ const Header: React.FC<HeaderProps> = ({
             {!isMobile && (
               <span
                 className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
-                  isScrolled ? "bg-white" : "bg-blue-600"
+                  isScrolled ? "bg-white" : "bg-primary"
                 }`}
               ></span>
             )}

@@ -33,6 +33,7 @@ function App() {
       <Route path="/account-student" element={<AccountStudent />} />
       <Route path="/account-instructor" element={<AccountInstructor />} />
       <Route path="/ClassesStudent" element={<ClassesStudent />} />
+      
     </Routes>
   );
 }
