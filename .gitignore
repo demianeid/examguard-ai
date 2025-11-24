@@ -5,3 +5,5 @@ venv/
 ENV/
 env/
 
+# Environment variables
+.env
