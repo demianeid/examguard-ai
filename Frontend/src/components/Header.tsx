@@ -15,6 +15,11 @@ interface HeaderProps {
   userType?: 'student' | 'instructor';
 }
 
+// Type guard للتحقق من أن الـ path مناسب لـ HashLink
+const isValidHashLinkPath = (path: string): boolean => {
+  return path.startsWith('/#') || path === '/';
+};
+
 const Header: React.FC<HeaderProps> = ({ 
   hideSignup = false, 
   hideLogin = false, 
@@ -24,12 +29,23 @@ const Header: React.FC<HeaderProps> = ({
   isAccountPage = false,
   userType: propUserType
 }) => {
-  const { userType: contextUserType, setUserType } = useUser();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
   const [lastScroll, setLastScroll] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
+
+  // Safe hook usage with fallback
+  let contextUserType: 'student' | 'instructor' = 'student';
+  let setUserType: (type: 'student' | 'instructor') => void = () => {};
+
+  try {
+    const userContext = useUser();
+    contextUserType = userContext.userType;
+    setUserType = userContext.setUserType;
+  } catch (error) {
+    console.warn('UserContext not available, using default values');
+  }
 
   // Use prop userType or context userType
   const userType = propUserType || contextUserType;
@@ -40,10 +56,10 @@ const Header: React.FC<HeaderProps> = ({
 
   // Auto-detect user type from current page
   useEffect(() => {
-    if (location.pathname === "/home-registered-instructor" || 
+    if (location.pathname === "/home-instructor" || 
         location.pathname === "/account-instructor") {
       setUserType('instructor');
-    } else if (location.pathname === "/home-registered-student" || 
+    } else if (location.pathname === "/home" || 
                location.pathname === "/account-student") {
       setUserType('student');
     }
@@ -74,18 +90,50 @@ const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener("scroll", handleScroll);
   }, [lastScroll, fixed]);
 
-  // Navigation items based on user status
+  // Determine paths based on user type - مع ضمان أن كل الـ paths تكون strings
+  const getNavPaths = () => {
+    if (!isRegistered) {
+      return {
+        home: "/#home",
+        features: "/#features",
+        howItWorks: "/#howitworks",
+        contact: "/#contact"
+      };
+    }
+
+    // الـ routes الفعلية:
+    // - instructor: /home-instructor
+    // - student: /home
+    const baseHomePath = userType === 'instructor' ? "/home-instructor" : "/home";
+    
+    return {
+      home: baseHomePath,
+      features: "/features",
+      howItWorks: "/how-it-works",
+      contact: "/contact",
+      classes: "/classes"
+    };
+  };
+
+  const paths = getNavPaths();
+
+  // تأكد أن كل الـ paths موجودة وتعطي قيمة افتراضية إذا كانت undefined
+  const ensurePath = (path: string | undefined): string => {
+    return path || "/";
+  };
+
+  // Navigation items based on user status AND user type - مع ضمان أن الـ paths تكون strings
   const navItems = isRegistered ? [
-    { name: "Home", path: "/home" },
-    { name: "Features", path: "/features" },
-    { name: "How It Works", path: "/how-it-works" },
-    { name: "Contact", path: "/contact" },
-    { name: "Classes", path: "/classes" }
+    { name: "Home", path: ensurePath(paths.home) },
+    { name: "Features", path: ensurePath(paths.features) },
+    { name: "How It Works", path: ensurePath(paths.howItWorks) },
+    { name: "Contact", path: ensurePath(paths.contact) },
+    { name: "Classes", path: ensurePath(paths.classes) }
   ] : [
-    { name: "Home", path: "/#home" },
-    { name: "Features", path: "/#features" },
-    { name: "How It Works", path: "/#howitworks" },
-    { name: "Contact", path: "/#contact" }
+    { name: "Home", path: ensurePath(paths.home) },
+    { name: "Features", path: ensurePath(paths.features) },
+    { name: "How It Works", path: ensurePath(paths.howItWorks) },
+    { name: "Contact", path: ensurePath(paths.contact) }
   ];
 
   const navigate = useNavigate();
@@ -93,6 +141,7 @@ const Header: React.FC<HeaderProps> = ({
   const handleLogout = () => {
     const confirmed = window.confirm("Are you sure you want to logout?");
     if (confirmed) {
+      setUserType('student'); // Reset to default
       navigate("/");
     }
   };
@@ -100,15 +149,86 @@ const Header: React.FC<HeaderProps> = ({
   // Use auto-detected value or prop value
   const finalIsAccountPage = isAccountPage || isAccountPageAuto;
 
-  // Determine home path based on user type
+  // Determine home path based on user type - مع ضمان أن الـ path يكون string
   const getHomePath = (): string => {
     if (!isRegistered) return "/";
-    return userType === 'instructor' ? "/home-registered-instructor" : "/home-registered-student";
+    return userType === 'instructor' ? "/home-instructor" : "/home";
   };
 
   // Determine account path based on user type
   const getAccountPath = (): string => {
     return userType === 'instructor' ? "/account-instructor" : "/account-student";
+  };
+
+  // Render navigation link based on type
+  const renderNavLink = (item: { name: string; path: string }, isMobile: boolean = false) => {
+    const baseClasses = isMobile 
+      ? `block text-center px-3.5 py-2 font-semibold transition-colors ${
+          isScrolled
+            ? "text-white hover:text-blue-200"
+            : "text-gray-900 hover:text-blue-600"
+        }`
+      : `relative px-3.5 py-2 font-semibold transition-colors group ${
+          isScrolled ? "text-white" : "text-gray-900"
+        }`;
+
+    if (isRegistered) {
+      return (
+        <Link
+          to={item.path}
+          className={baseClasses}
+          onClick={() => isMobile && setIsMenuOpen(false)}
+        >
+          {item.name}
+          {!isMobile && (
+            <span
+              className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
+                isScrolled ? "bg-white" : "bg-blue-600"
+              }`}
+            ></span>
+          )}
+        </Link>
+      );
+    } else {
+      // للغير مسجلين، استخدم HashLink فقط للـ paths التي تبدأ بـ /#
+      if (isValidHashLinkPath(item.path)) {
+        return (
+          <HashLink
+            smooth
+            to={item.path}
+            className={baseClasses}
+            onClick={() => isMobile && setIsMenuOpen(false)}
+          >
+            {item.name}
+            {!isMobile && (
+              <span
+                className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
+                  isScrolled ? "bg-white" : "bg-blue-600"
+                }`}
+              ></span>
+            )}
+          </HashLink>
+        );
+      } else {
+        // إذا كان path مش مناسب لـ HashLink، استخدم Link عادي
+        return (
+          <Link
+            to={item.path}
+            className={baseClasses}
+            onClick={() => isMobile && setIsMenuOpen(false)}
+          >
+            {item.name}
+            {!isMobile && (
+              <span
+                className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
+                  isScrolled ? "bg-white" : "bg-blue-600"
+                }`}
+              ></span>
+            )}
+          </Link>
+        );
+      }
+    }
   };
 
   return (
@@ -218,36 +338,7 @@ const Header: React.FC<HeaderProps> = ({
           <ul className="flex items-center gap-1">
             {navItems.map((item, index) => (
               <li key={index}>
-                {isRegistered ? (
-                  <Link
-                    to={item.path}
-                    className={`relative px-3.5 py-2 font-semibold transition-colors group ${
-                      isScrolled ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {item.name}
-                    <span
-                      className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
-                        isScrolled ? "bg-white" : "bg-blue-600"
-                      }`}
-                    ></span>
-                  </Link>
-                ) : (
-                  <HashLink
-                    smooth
-                    to={item.path}
-                    className={`relative px-3.5 py-2 font-semibold transition-colors group ${
-                      isScrolled ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {item.name}
-                    <span
-                      className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
-                        isScrolled ? "bg-white" : "bg-blue-600"
-                      }`}
-                    ></span>
-                  </HashLink>
-                )}
+                {renderNavLink(item, false)}
               </li>
             ))}
           </ul>
@@ -263,32 +354,7 @@ const Header: React.FC<HeaderProps> = ({
         <ul className="flex flex-col items-center gap-2 pb-4">
           {navItems.map((item, index) => (
             <li key={index} className="w-full">
-              {isRegistered ? (
-                <Link
-                  to={item.path}
-                  className={`block text-center px-3.5 py-2 font-semibold transition-colors ${
-                    isScrolled
-                      ? "text-white hover:text-blue-200"
-                      : "text-gray-900 hover:text-blue-600"
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  {item.name}
-                </Link>
-              ) : (
-                <HashLink
-                  smooth
-                  to={item.path}
-                  className={`block text-center px-3.5 py-2 font-semibold transition-colors ${
-                    isScrolled
-                      ? "text-white hover:text-blue-200"
-                      : "text-gray-900 hover:text-blue-600"
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  {item.name}
-                </HashLink>
-              )}
+              {renderNavLink(item, true)}
             </li>
           ))}
 
