@@ -1,3 +1,5 @@
+import Header from '../components/Header'
+
 import React, { useState } from "react";
 import {
   BookOpen,
@@ -52,7 +54,11 @@ const ClassesStudent = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+    <div className="w-full pt-20 min-h-screen bg-[#E3F0FE]">
+    
+    <div className="min-h-screen bg-background p-6">
+                  <Header fixed={true} showAccount={true} isRegistered={true} />
+
       <div className="max-w-7xl mx-auto">
 
         {/* Header */}
@@ -296,6 +302,7 @@ const ClassesStudent = () => {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 };
