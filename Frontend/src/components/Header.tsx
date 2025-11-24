@@ -128,7 +128,7 @@ const Header: React.FC<HeaderProps> = ({
     { name: "Features", path: "/features" },
     { name: "How It Works", path: "/how-it-works" },
     { name: "Contact", path: "/contact" },
-    { name: "Classes", path: "/classes" }
+    { name: "Classes", path: "/ClassesStudent" }
   ] : [
     { name: "Home", path: ensurePath(paths.home) },
     { name: "Features", path: ensurePath(paths.features) },
