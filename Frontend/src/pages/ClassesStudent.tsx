@@ -1,4 +1,6 @@
 import Header from '../components/Header'
+import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 
 import React, { useState } from "react";
 import {
@@ -197,9 +199,9 @@ const ClassesStudent = () => {
                         {exam.status === "upcoming" ? (
                           <>
                             <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-sm">Upcoming</span>
-                            <button className="bg-green-600 text-white px-4 py-2 rounded-lg">
+                            <Link to="/CreateExam" className="bg-green-600 text-white px-4 py-2 rounded-lg">
                               Start Exam
-                            </button>
+                            </Link>
                           </>
                         ) : (
                           <>

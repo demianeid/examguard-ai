@@ -13,6 +13,7 @@ import Contact from './pages/Contact';
 import AccountStudent from './pages/AccountStudent';
 import ClassesStudent from './pages/ClassesStudent';
 import AccountInstructor from "./pages/AccountInstructor";
+import CreateExam from "./pages/CreateExam";
 
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
       <Route path="/account-student" element={<AccountStudent />} />
       <Route path="/account-instructor" element={<AccountInstructor />} />
       <Route path="/ClassesStudent" element={<ClassesStudent />} />
+      <Route path="/CreateExam" element={<CreateExam />} />
       
     </Routes>
   );
