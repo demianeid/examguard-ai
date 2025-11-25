@@ -34,8 +34,11 @@ function App() {
       <Route path="/contact" element={<Contact />} />
       <Route path="/account-student" element={<AccountStudent />} />
       <Route path="/account-instructor" element={<AccountInstructor />} />
-      <Route path="/ClassesStudent" element={<ClassesStudent />} />
-      <Route path="/CreateExam" element={<CreateExam />} />
+        <Route path="/classes" element={<ClassesStudent />}>
+          <Route path=":classId" element={<ClassesStudent />}>
+            <Route path=":tab" element={<ClassesStudent />} />
+          </Route>
+        </Route>      <Route path="/CreateExam" element={<CreateExam />} />
       <Route path="StartExam" element={<StartExam />} />
       
     </Routes>
