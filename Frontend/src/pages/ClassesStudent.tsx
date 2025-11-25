@@ -36,6 +36,13 @@ const ClassesStudent = () => {
   const { classId, tab } = useParams<{ classId?: string; tab?: string }>();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [completedExams, setCompletedExams] = useState<number[]>([]);
+
+  // Load completed exams from localStorage on component mount
+  useEffect(() => {
+    const completed = JSON.parse(localStorage.getItem('completedExams') || '[]');
+    setCompletedExams(completed);
+  }, []);
 
   const studentClasses: ClassType[] = [
     {
@@ -45,7 +52,7 @@ const ClassesStudent = () => {
       upcomingExams: 2,
       progress: 75,
       lastActivity: "2 days ago",
-      color: "from-blue-500 to-Tertiary",
+      color: "bg-d2",
     },
     {
       id: 2,
@@ -54,7 +61,7 @@ const ClassesStudent = () => {
       upcomingExams: 1,
       progress: 60,
       lastActivity: "1 day ago",
-      color: "from-secondary to-green-600",
+      color: "bg-d3",
     },
     {
       id: 3,
@@ -63,12 +70,20 @@ const ClassesStudent = () => {
       upcomingExams: 0,
       progress: 90,
       lastActivity: "5 hours ago",
-      color: "from-secondary to-purple-600",
+      color: "bg-secondary",
     },
   ];
 
+  // Update exams based on completion status
   const exams: Exam[] = [
-    { id: 1, name: "Midterm Exam", date: "2025-10-15", duration: "120 min", status: "upcoming", score: null },
+    { 
+      id: 1, 
+      name: "Midterm Exam", 
+      date: "2025-10-15", 
+      duration: "120 min", 
+      status: completedExams.includes(1) ? "completed" : "upcoming", 
+      score: completedExams.includes(1) ? 88 : null // Add a sample score when completed
+    },
     { id: 2, name: "Quiz 3", date: "2025-10-20", duration: "30 min", status: "upcoming", score: null },
     { id: 3, name: "Quiz 2", date: "2025-09-28", duration: "30 min", status: "completed", score: 85 },
     { id: 4, name: "Quiz 1", date: "2025-09-15", duration: "30 min", status: "completed", score: 92 },

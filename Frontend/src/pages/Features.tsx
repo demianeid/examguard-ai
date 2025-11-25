@@ -79,7 +79,7 @@ const Features = () => {
   ];
 
   return (
-    <div className="w-full min-h-screen bg-[#E3F0FE]">
+    <div className="w-full min-h-screen bg-background">
       <Header showAccount={true} isRegistered={true} />
       
       <section className="w-full py-24 px-4" id="features">

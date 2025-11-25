@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, FileText, CheckCircle, Circle, ChevronLeft, ChevronRight, Settings, Camera, Mic, Wifi, Monitor, Flag, AlertTriangle, Send } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 interface Question {
   en: string;
@@ -17,6 +17,7 @@ interface SystemCheck {
 }
 
 const ExamInterface: React.FC = () => {
+  const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<'rules' | 'system-check' | 'exam'>('rules');
   const [agreedToRules, setAgreedToRules] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -157,9 +158,16 @@ const ExamInterface: React.FC = () => {
   const handleSubmitConfirm = () => {
     // Handle exam submission logic here
     console.log('Exam submitted with answers:', answers);
-    alert('Exam submitted successfully!');
-    setShowSubmitModal(false);
-    setCurrentView('rules'); // Go back to rules screen or wherever appropriate
+    
+    // Store the exam completion status in localStorage
+    const completedExams = JSON.parse(localStorage.getItem('completedExams') || '[]');
+    if (!completedExams.includes(1)) { // Assuming exam ID is 1
+      completedExams.push(1);
+      localStorage.setItem('completedExams', JSON.stringify(completedExams));
+    }
+    
+    // Navigate to classes page with exams tab
+    navigate('/classes/1/exams');
   };
 
   const toggleFlag = () => {
