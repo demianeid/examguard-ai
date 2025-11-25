@@ -1,6 +1,7 @@
 
 import Header from '../components/Header'
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 
 const HomeRegistered = () => {
   return (
@@ -27,9 +28,9 @@ const HomeRegistered = () => {
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3 justify-center lg:justify-start">
-              <button className="px-6 py-3 bg-[#176ADA] text-white font-semibold rounded-lg hover:bg-[#1D7EF8] transition-colors">
+              <Link to = "/classesStudent" className="px-6 py-3 bg-[#176ADA] text-white font-semibold rounded-lg hover:bg-[#1D7EF8] transition-colors">
                 Go To Classes
-              </button>
+              </Link>
             </div>
           </motion.div>
 

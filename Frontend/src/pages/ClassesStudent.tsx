@@ -199,7 +199,7 @@ const ClassesStudent = () => {
                         {exam.status === "upcoming" ? (
                           <>
                             <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-sm">Upcoming</span>
-                            <Link to="/CreateExam" className="bg-green-600 text-white px-4 py-2 rounded-lg">
+                            <Link to="/StartExam" className="bg-green-600 text-white px-4 py-2 rounded-lg">
                               Start Exam
                             </Link>
                           </>

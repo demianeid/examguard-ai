@@ -14,6 +14,7 @@ import AccountStudent from './pages/AccountStudent';
 import ClassesStudent from './pages/ClassesStudent';
 import AccountInstructor from "./pages/AccountInstructor";
 import CreateExam from "./pages/CreateExam";
+import StartExam from "./pages/StartExam";
 
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
       <Route path="/account-instructor" element={<AccountInstructor />} />
       <Route path="/ClassesStudent" element={<ClassesStudent />} />
       <Route path="/CreateExam" element={<CreateExam />} />
+      <Route path="StartExam" element={<StartExam />} />
       
     </Routes>
   );
