@@ -257,18 +257,7 @@ const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-2 lg:order-2">
           {finalIsAccountPage ? (
             <div className="flex items-center gap-4">
-              <button
-                onClick={handleLogout}
-                className={`flex items-center gap-2 px-3 py-2 font-semibold rounded-lg border-2 transition-all ${
-                  isScrolled
-                    ? "bg-transparent text-red-400 border-red-400 hover:bg-red-400 hover:text-white hover:border-red-400"
-                    : "bg-transparent text-danger border-danger hover:bg-danger hover:text-white hover:border-danger"
-                }`}
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
-              </button>
-
+              {/* Settings icon - show on both mobile and desktop */}
               <Link
                 to="/settings"
                 className={`p-2 font-semibold rounded-lg transition-all ${
@@ -280,18 +269,53 @@ const Header: React.FC<HeaderProps> = ({
               >
                 <Settings className="w-5 h-5" />
               </Link>
+
+              {/* Logout button - only show on desktop */}
+              <button
+                onClick={handleLogout}
+                className={`hidden lg:flex items-center gap-2 px-3 py-2 font-semibold rounded-lg border-2 transition-all ${
+                  isScrolled
+                    ? "bg-red-400 text-white border-red-400 hover:bg-red-500 hover:text-white hover:border-red-500"
+                    : "bg-transparent text-danger border-danger hover:bg-danger hover:text-white hover:border-danger"
+                }`}
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+
+              {/* Mobile Toggle - only show on mobile */}
+              <button
+                className={`lg:hidden ml-2 text-2xl ${
+                  isScrolled ? "text-white" : "text-gray-900"
+                }`}
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+              >
+                {isMenuOpen ? "✕" : "☰"}
+              </button>
             </div>
           ) : showAccount ? (
-            <Link
-              to={getAccountPath()}
-              className={`px-5 py-3 font-semibold rounded-lg border-2 transition-all ${
-                isScrolled
-                  ? "bg-transparent text-white border-white/50 hover:bg-white hover:text-primary hover:border-white"
-                  : "bg-transparent text-primary border-primary/50 hover:bg-primary hover:text-white hover:border-primary"
-              }`}
-            >
-              Account
-            </Link>
+            <>
+              <Link
+                to={getAccountPath()}
+                className={`px-5 py-3 font-semibold rounded-lg border-2 transition-all ${
+                  isScrolled
+                    ? "bg-transparent text-white border-white/50 hover:bg-white hover:text-primary hover:border-white"
+                    : "bg-transparent text-primary border-primary/50 hover:bg-primary hover:text-white hover:border-primary"
+                }`}
+              >
+                Account
+              </Link>
+
+              {/* Mobile Toggle - only show on mobile */}
+              <button
+                className={`lg:hidden ml-2 text-2xl ${
+                  isScrolled ? "text-white" : "text-gray-900"
+                }`}
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+              >
+                {isMenuOpen ? "✕" : "☰"}
+              </button>
+            </>
           ) : (
             <>
               {!hideLogin && (
@@ -319,18 +343,18 @@ const Header: React.FC<HeaderProps> = ({
                   Sign up
                 </Link>
               )}
+
+              {/* Mobile Toggle - only show on mobile */}
+              <button
+                className={`lg:hidden ml-2 text-2xl ${
+                  isScrolled ? "text-white" : "text-gray-900"
+                }`}
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+              >
+                {isMenuOpen ? "✕" : "☰"}
+              </button>
             </>
           )}
-
-          {/* Mobile Toggle */}
-          <button
-            className={`lg:hidden ml-2 text-2xl ${
-              isScrolled ? "text-white" : "text-gray-900"
-            }`}
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
-            {isMenuOpen ? "✕" : "☰"}
-          </button>
         </div>
 
         {/* Desktop Nav Links */}
@@ -359,34 +383,19 @@ const Header: React.FC<HeaderProps> = ({
           ))}
 
           {finalIsAccountPage ? (
-            <>
-              <li className="w-full">
-                <button
-                  onClick={handleLogout}
-                  className={`flex items-center justify-center gap-2 px-4 py-2 font-semibold transition-colors w-full border-2 rounded-lg ${
-                    isScrolled
-                      ? "text-red-400 border-red-400 hover:bg-red-400 hover:text-white hover:border-red-400"
-                      : "text-danger border-danger hover:bg-red-500 hover:text-white hover:border-red-500"
-                  }`}
-                >
-                  <LogOut className="w-4 h-4" />
-                  Logout
-                </button>
-              </li>
-              <li className="w-full">
-                <Link
-                  to="/settings"
-                  className={`flex items-center justify-center gap-2 px-4 py-2 font-semibold transition-colors w-full rounded-lg ${
-                    isScrolled
-                      ? "text-white hover:text-gray-300"
-                      : "text-gray-700 hover:text-gray-900"
-                  }`}
-                >
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </Link>
-              </li>
-            </>
+            <li className="w-full">
+              <button
+                onClick={handleLogout}
+                className={`flex items-center justify-center gap-2 px-4 py-2 font-semibold transition-colors w-full border-2 rounded-lg ${
+                  isScrolled
+                    ? "bg-red-400 text-white  border-red-400 hover:bg-red-500 hover:text-white hover:border-red-500"
+                    : "text-danger border-danger hover:bg-red-500 hover:text-white hover:border-red-500"
+                }`}
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </li>
           ) : showAccount ? (
             <li className="w-full">
               <Link
