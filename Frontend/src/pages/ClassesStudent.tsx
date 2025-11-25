@@ -1,7 +1,7 @@
 import Header from '../components/Header'
 import { motion } from "framer-motion";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   BookOpen,
   Clock,
@@ -10,6 +10,11 @@ import {
   Bell,
   Calendar,
   Award,
+  X,
+  AlertCircle,
+  CheckCircle,
+  Info,
+  Megaphone
 } from "lucide-react";
 
 // Types
@@ -32,17 +37,78 @@ interface Exam {
   score: number | null;
 }
 
+interface NotificationItem {
+  id: number;
+  type: "exam" | "grade" | "system" | "announcement";
+  title: string;
+  content: string;
+  time: string;
+  isRead: boolean;
+}
+
 const ClassesStudent = () => {
   const { classId, tab } = useParams<{ classId?: string; tab?: string }>();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [completedExams, setCompletedExams] = useState<number[]>([]);
+  const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
 
   // Load completed exams from localStorage on component mount
   useEffect(() => {
     const completed = JSON.parse(localStorage.getItem('completedExams') || '[]');
     setCompletedExams(completed);
   }, []);
+
+  // Close notifications when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Sample notifications data
+  const notifications: NotificationItem[] = [
+    {
+      id: 1,
+      type: "exam",
+      title: "Upcoming Exam",
+      content: "Midterm Exam in Data Structures-Tomorrow at 10:00 Am",
+      time: "2 hours ago",
+      isRead: false
+    },
+    {
+      id: 2,
+      type: "grade",
+      title: "Grade Posted",
+      content: "Your Quiz 2 grade is now available:85/100",
+      time: "5 hours ago",
+      isRead: false
+    },
+    {
+      id: 3,
+      type: "system",
+      title: "System Alert",
+      content: "Camera check required before next exam",
+      time: "1 day ago",
+      isRead: true
+    },
+    {
+      id: 4,
+      type: "announcement",
+      title: "Announcement",
+      content: "Offline hours moved to Thursday 2 - 4 PM",
+      time: "2 days ago",
+      isRead: true
+    }
+  ];
 
   const studentClasses: ClassType[] = [
     {
@@ -82,7 +148,7 @@ const ClassesStudent = () => {
       date: "2025-10-15", 
       duration: "120 min", 
       status: completedExams.includes(1) ? "completed" : "upcoming", 
-      score: completedExams.includes(1) ? 88 : null // Add a sample score when completed
+      score: completedExams.includes(1) ? 88 : null
     },
     { id: 2, name: "Quiz 3", date: "2025-10-20", duration: "30 min", status: "upcoming", score: null },
     { id: 3, name: "Quiz 2", date: "2025-09-28", duration: "30 min", status: "completed", score: 85 },
@@ -112,6 +178,97 @@ const ClassesStudent = () => {
 
   const handleBackToList = () => {
     navigate("/classes");
+  };
+
+  // Get notification icon based on type
+  const getNotificationIcon = (type: string) => {
+    switch(type) {
+      case "exam":
+        return <Calendar className="text-blue-600" size={18} />;
+      case "grade":
+        return <CheckCircle className="text-green-600" size={18} />;
+      case "system":
+        return <AlertCircle className="text-red-600" size={18} />;
+      case "announcement":
+        return <Megaphone className="text-purple-600" size={18} />;
+      default:
+        return <Info className="text-gray-600" size={18} />;
+    }
+  };
+
+  // Notification Dropdown Component
+  const NotificationDropdown = () => {
+    const unreadCount = notifications.filter(n => !n.isRead).length;
+
+    return (
+      <div className="relative" ref={notificationRef}>
+        <button 
+          title="Notifications" 
+          className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors"
+          onClick={() => setShowNotifications(!showNotifications)}
+        >
+          <Bell size={20} className="sm:w-6 sm:h-6" />
+          {unreadCount > 0 && (
+            <span className="absolute top-0 right-0 bg-red-500 w-2 h-2 rounded-full"></span>
+          )}
+        </button>
+
+        {showNotifications && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl z-50 overflow-hidden"
+          >
+            <div className="bg-blue-600 text-white px-4 py-3 flex justify-between items-center">
+              <h3 className="font-semibold">Notifications</h3>
+              <span className="bg-white text-blue-600 text-xs px-2 py-1 rounded-full">
+                {unreadCount} unread
+              </span>
+            </div>
+            
+            <div className="max-h-96 overflow-y-auto">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                    !notification.isRead ? 'bg-blue-50' : ''
+                  }`}
+                >
+                  <div className="flex gap-3">
+                    <div className="mt-1">
+                      {getNotificationIcon(notification.type)}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <h4 className="font-semibold text-gray-800 text-sm">
+                          {notification.title}
+                        </h4>
+                        <button title='close' className="text-gray-400 hover:text-gray-600">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <p className="text-gray-600 text-sm mt-1">
+                        {notification.content}
+                      </p>
+                      <p className="text-gray-500 text-xs mt-1">
+                        {notification.time}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="px-4 py-2 bg-gray-50 text-center">
+              <button className="text-blue-600 text-sm font-medium hover:text-blue-700">
+                View all notifications
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </div>
+    );
   };
 
   // Tab Components
@@ -385,10 +542,8 @@ const ClassesStudent = () => {
                   </div>
                 </div>
 
-                <button title="Notifications" className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors">
-                  <Bell size={20} className="sm:w-6 sm:h-6" />
-                  <span className="absolute top-0 right-0 bg-red-500 w-2 h-2 rounded-full"></span>
-                </button>
+                {/* Replace the Bell button with our NotificationDropdown component */}
+                <NotificationDropdown />
               </div>
 
               {/* Bottom Row - Search Bar */}

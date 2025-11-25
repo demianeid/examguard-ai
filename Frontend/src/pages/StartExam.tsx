@@ -541,7 +541,7 @@ const ExamInterface: React.FC = () => {
         </Link>
 
         {/* Main Header Card */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-8 mb-6 shadow-lg text-white">
+        <div className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-8 mb-6 shadow-lg text-white">
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">
             Midterm Exam - Data Structures & Algorithms
           </h1>
