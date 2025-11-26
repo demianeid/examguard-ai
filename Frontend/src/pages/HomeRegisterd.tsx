@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { ChevronRight } from 'lucide-react';
 
-
 const HomeRegistered = () => {
   return (
     <div className="w-full min-h-screen bg-[#E3F0FE]">
@@ -34,30 +33,33 @@ const HomeRegistered = () => {
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3 justify-center lg:justify-start">
-                          <motion.button 
-              className="group bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-300 flex items-center gap-2 shadow-lg"
-              whileHover={{ scale: 1.05, boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}
-              whileTap={{ scale: 0.95 }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.6 }}
-              type="button"
-            >
-              Go To Classes
               <motion.div
-                animate={{ x: [0, 5, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 1 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.8, delay: 0.6 }}
               >
-                <ChevronRight size={20} />
+                <Link
+                  to="/classes" // Replace with your actual classes route
+                  className="group bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-300 flex items-center gap-2 shadow-lg hover:shadow-xl"
+                >
+                  Go To Classes
+                  <motion.div
+                    animate={{ x: [0, 5, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 1 }}
+                  >
+                    <ChevronRight size={20} />
+                  </motion.div>
+                </Link>
               </motion.div>
-            </motion.button>
             </div>
           </motion.div>
 
           {/* Right image */}
           <motion.div
             className="w-full lg:w-1/2 flex justify-center mt-8 lg:mt-0"
-            initial={{ opacity: 0, x: 130 }} // keep old slide-in
+            initial={{ opacity: 0, x: 130 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 1.5, ease: "easeOut" }}
           >
@@ -65,7 +67,7 @@ const HomeRegistered = () => {
               src="/images/banner.png"
               alt="exam guard ai"
               className="w-full max-w-[600px]"
-              animate={{ y: [0, 30, 0] }} // drop down then rise up
+              animate={{ y: [0, 30, 0] }}
               transition={{
                 delay: 1.5,
                 duration: 3,
