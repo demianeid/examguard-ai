@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import Signup from "./pages/Signup";
 import StudentSignup from "./pages/StudentSignup";
@@ -20,9 +20,15 @@ import StartExam from "./pages/StartExam";
 import Settings from "./pages/Setting";
 
 function App() {
+  const location = useLocation();
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   return (
     <Routes>

@@ -15,7 +15,7 @@ const Hero = () => {
         >
           <motion.h1 className="text-4xl sm:text-5xl font-bold text-[#1d1d1d] leading-tight">
             Prevent Cheating in <br />
-            <span className="text-[#1D7EF8]">Online & Offline</span> <br />
+            <span className="text-primary">Online & Offline</span> <br />
             Exams
           </motion.h1>
 
