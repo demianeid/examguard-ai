@@ -1,3 +1,2 @@
-# TODO: Show Header Component in App
-
-- [x] Edit src/App.tsx to remove redundant <Header /> from the Route element and add a proper route for LandingPage.tsx
+- [x] Add import for useEffect from React in App.tsx
+- [x] Add useEffect hook in App component to scroll to top on mount

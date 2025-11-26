@@ -185,7 +185,7 @@ const HeroSection: React.FC = () => {
             variants={slideInRight}
           >
             <motion.div 
-              className="bg-white rounded-2xl shadow-xl p-8 relative overflow-hidden"
+              className="bg-background rounded-2xl shadow-xl p-8 relative overflow-hidden"
               whileHover={{ scale: 1.02, boxShadow: "0 20px 40px rgba(0,0,0,0.1)" }}
               transition={{ type: "spring", stiffness: 300 }}
             >
@@ -299,7 +299,7 @@ const HeroSection: React.FC = () => {
                   <motion.div
                     key={slide.id}
                     className={`text-center p-2 rounded-lg transition-all duration-300 ${
-                      currentSlide === index ? 'bg-blue-100 text-blue-600' : 'bg-gray-50 text-gray-600'
+                      currentSlide === index ? 'bg-blue-100 text-blue-600' : 'bg-background text-gray-600'
                     }`}
                     whileHover={{ scale: 1.05 }}
                     onClick={() => setCurrentSlide(index)}
@@ -314,16 +314,16 @@ const HeroSection: React.FC = () => {
       </section>
 
       {/* Offline Exams Section */}
-      <section className="container mx-auto px-6 py-16">
+      <section className="container min-h-screen pt-32 pb-0 mx-auto px-6 py-16">
         <motion.div 
-          className="flex flex-col lg:flex-row-reverse items-center justify-between gap-12"
+          className="flex flex-col lg:flex-row-reverse items-center justify-between gap-12 "
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.3 }}
           variants={containerVariants}
         >
           <motion.div 
-            className="lg:w-1/2"
+            className="lg:w-1/2 "
             variants={slideInRight}
           >
             <motion.h2 
@@ -364,7 +364,7 @@ const HeroSection: React.FC = () => {
             variants={slideInLeft}
           >
             <motion.div 
-              className="bg-white rounded-2xl shadow-xl p-8"
+              className="bg-background rounded-2xl shadow-xl p-8"
               whileHover={{ scale: 1.02, boxShadow: "0 20px 40px rgba(0,0,0,0.1)" }}
               transition={{ type: "spring", stiffness: 300 }}
             >
@@ -449,7 +449,7 @@ const HeroSection: React.FC = () => {
 
       {/* Features Overview */}
       <motion.section 
-        className="bg-blue-50 py-16"
+        className="bg-background py-16"
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, amount: 0.3 }}
@@ -557,7 +557,29 @@ const HeroSection: React.FC = () => {
           </motion.div>
         </div>
       </motion.section>
+           {/* Footer */}
+      {/* Bottom Bar */}
+      <div className="border-t border-[#1d1d1d]/20 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-[#E3F0FE] px-6 pb-4">
+        <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">
+          © 2024 ExamGuard. All rights reserved.
+        </p>
+
+        <div className="flex flex-wrap gap-3 justify-center md:justify-end">
+          {["Privacy Policy", "Terms of Service", "Cookie Policy"].map(
+            (item, idx) => (
+              <a
+                key={idx}
+                href="#"
+                className="text-[#1d1d1d]/70 text-sm hover:underline"
+              >
+                {item}
+              </a>
+            )
+          )}
+        </div>
+      </div>
     </div>
+    
   );
 };
 
