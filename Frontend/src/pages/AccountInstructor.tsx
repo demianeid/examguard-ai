@@ -1,11 +1,16 @@
 // pages/AccountInstructor.tsx
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from '../components/Header';
 import { motion } from "framer-motion";
 import { Mail, Phone, Edit, Users, FileText, TrendingUp, Video, AlertCircle, CheckCircle, Eye, BarChart3, Calendar, Clock, ChevronDown, ChevronUp } from "lucide-react";
 
 const AccountInstructor: React.FC = () => {
   const [showAllMonitoring, setShowAllMonitoring] = useState(false);
+  const navigate = useNavigate();
+  const handleEditProfile = () => {
+  navigate("/settings");
+};
   
   const upcomingExams = [
     {
@@ -157,10 +162,13 @@ const AccountInstructor: React.FC = () => {
               </div>
 
               {/* Edit Button */}
-              <button className="absolute top-6 right-8 flex items-center gap-2 bg-white/90 hover:bg-white text-[#3F72B7] px-4 py-2 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl">
-                <Edit className="w-4 h-4" />
-                <span className="text-sm">Edit Profile</span>
-              </button>
+             <button 
+  onClick={handleEditProfile}
+  className="absolute top-6 right-8 flex items-center gap-2 bg-white/90 hover:bg-white text-[#3F72B7] px-4 py-2 rounded-xl font-semibold transition-all duration-200 shadow-lg hover:shadow-xl"
+>
+  <Edit className="w-4 h-4" />
+  <span className="text-sm">Edit Profile</span>
+</button>
 
               {/* Name & ID */}
               <div className="text-center mb-6">

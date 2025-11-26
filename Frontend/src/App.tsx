@@ -13,6 +13,7 @@ import HowItWorks from "./pages/HowItWorks";
 import Contact from "./pages/Contact";
 import AccountStudent from "./pages/AccountStudent";
 import ClassesStudent from "./pages/ClassesStudent";
+import ClassesInstructor from "./pages/ClassesInstructor";
 import AccountInstructor from "./pages/AccountInstructor";
 import CreateExam from "./pages/CreateExam";
 import StartExam from "./pages/StartExam";
@@ -39,6 +40,8 @@ function App() {
       <Route path="/account-student" element={<AccountStudent />} />
       <Route path="/account-instructor" element={<AccountInstructor />} />
       <Route path="/settings" element={<Settings />} />
+      <Route path="/classes-instructor" element={<ClassesInstructor />} />
+       <Route path="/classes-instructor/:classId/:tab" element={<ClassesInstructor />} />
         <Route path="/classes" element={<ClassesStudent />}>
           <Route path=":classId" element={<ClassesStudent />}>
             <Route path=":tab" element={<ClassesStudent />} />

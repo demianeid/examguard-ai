@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { HashLink } from "react-router-hash-link";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Link } from "react-router-dom";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, User } from "lucide-react";
 import { useUser } from '../context/UserContext';
 
 interface HeaderProps {
@@ -57,10 +57,14 @@ const Header: React.FC<HeaderProps> = ({
   // Auto-detect user type from current page
   useEffect(() => {
     if (location.pathname === "/home-instructor" || 
-        location.pathname === "/account-instructor") {
+        location.pathname === "/account-instructor" ||
+        location.pathname === "/classes-instructor" ||
+        location.pathname.startsWith("/classes-instructor/")) {
       setUserType('instructor');
     } else if (location.pathname === "/home" || 
-               location.pathname === "/account-student") {
+               location.pathname === "/account-student" ||
+               location.pathname === "/classes" ||
+               location.pathname.startsWith("/classes/")) {
       setUserType('student');
     }
   }, [location.pathname, setUserType]);
@@ -90,7 +94,7 @@ const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener("scroll", handleScroll);
   }, [lastScroll, fixed]);
 
-  // Determine paths based on user type - مع ضمان أن كل الـ paths تكون strings
+  // Determine paths based on user type
   const getNavPaths = () => {
     if (!isRegistered) {
       return {
@@ -101,17 +105,16 @@ const Header: React.FC<HeaderProps> = ({
       };
     }
 
-    // الـ routes الفعلية:
-    // - instructor: /home-instructor
-    // - student: /home
+    // الـ routes الفعلية حسب نوع المستخدم
     const baseHomePath = userType === 'instructor' ? "/home-instructor" : "/home";
+    const classesPath = userType === 'instructor' ? "/classes-instructor" : "/classes";
     
     return {
       home: baseHomePath,
       features: "/features",
       howItWorks: "/how-it-works",
       contact: "/contact",
-      classes: "/classes"
+      classes: classesPath  // هنا الفرق - كل واحد هيروح للصفحة الخاصة بيه
     };
   };
 
@@ -122,13 +125,13 @@ const Header: React.FC<HeaderProps> = ({
     return path || "/";
   };
 
-  // Navigation items based on user status AND user type - مع ضمان أن الـ paths تكون strings
+  // Navigation items based on user status AND user type
   const navItems = isRegistered ? [
     { name: "Home", path: ensurePath(paths.home) },
     { name: "Features", path: ensurePath(paths.features) },
     { name: "How It Works", path: ensurePath(paths.howItWorks) },
     { name: "Contact", path: ensurePath(paths.contact) },
-    { name: "Classes", path: ensurePath(paths.classes) }
+    { name: "Classes", path: ensurePath(paths.classes) }  // هنا الـ path يتغير حسب userType
   ] : [
     { name: "Home", path: ensurePath(paths.home) },
     { name: "Features", path: ensurePath(paths.features) },
@@ -149,7 +152,7 @@ const Header: React.FC<HeaderProps> = ({
   // Use auto-detected value or prop value
   const finalIsAccountPage = isAccountPage || isAccountPageAuto;
 
-  // Determine home path based on user type - مع ضمان أن الـ path يكون string
+  // Determine home path based on user type
   const getHomePath = (): string => {
     if (!isRegistered) return "/";
     return userType === 'instructor' ? "/home-instructor" : "/home";
@@ -295,15 +298,29 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           ) : showAccount ? (
             <>
+              {/* Desktop Account Button */}
               <Link
                 to={getAccountPath()}
-                className={`px-5 py-3 font-semibold rounded-lg border-2 transition-all ${
+                className={`hidden lg:flex px-5 py-3 font-semibold rounded-lg border-2 transition-all ${
                   isScrolled
                     ? "bg-transparent text-white border-white/50 hover:bg-white hover:text-primary hover:border-white"
                     : "bg-transparent text-primary border-primary/50 hover:bg-primary hover:text-white hover:border-primary"
                 }`}
               >
                 Account
+              </Link>
+
+              {/* Mobile Account Icon - Only icon, no text */}
+              <Link
+                to={getAccountPath()}
+                className={`lg:hidden p-2 font-semibold rounded-lg transition-all ${
+                  isScrolled
+                    ? "text-white hover:text-gray-300"
+                    : "text-gray-700 hover:text-gray-900"
+                }`}
+                title="Account"
+              >
+                <User className="w-5 h-5" />
               </Link>
 
               {/* Mobile Toggle - only show on mobile */}
@@ -382,46 +399,44 @@ const Header: React.FC<HeaderProps> = ({
             </li>
           ))}
 
-          {finalIsAccountPage ? (
-            <li className="w-full">
-              <button
-                onClick={handleLogout}
-                className={`flex items-center justify-center gap-2 px-4 py-2 font-semibold transition-colors w-full border-2 rounded-lg ${
-                  isScrolled
-                    ? "bg-red-400 text-white  border-red-400 hover:bg-red-500 hover:text-white hover:border-red-500"
-                    : "text-danger border-danger hover:bg-red-500 hover:text-white hover:border-red-500"
-                }`}
-              >
-                <LogOut className="w-4 h-4" />
-                Logout
-              </button>
-            </li>
-          ) : showAccount ? (
-            <li className="w-full">
-              <Link
-                to={getAccountPath()}
-                className={`px-4 py-2 font-semibold transition-colors w-full border-2 rounded-lg block text-center ${
-                  isScrolled
-                    ? "text-white border-white/50 hover:bg-white hover:text-primary hover:border-white"
-                    : "text-primary border-primary/50 hover:bg-primary hover:text-white hover:border-primary"
-                }`}
-              >
-                Account
-              </Link>
-            </li>
+          {/* إظهار الأزرار المناسبة حسب حالة المستخدم */}
+          {isRegistered ? (
+            // إذا كان المستخدم مسجل - إظهار زر Logout فقط
+            finalIsAccountPage ? (
+              <li className="w-full">
+                <button
+                  onClick={handleLogout}
+                  className={`flex items-center justify-center gap-2 px-4 py-2 font-semibold transition-colors w-full border-2 rounded-lg ${
+                    isScrolled
+                      ? "bg-red-400 text-white border-red-400 hover:bg-red-500 hover:text-white hover:border-red-500"
+                      : "text-danger border-danger hover:bg-red-500 hover:text-white hover:border-red-500"
+                  }`}
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </button>
+              </li>
+            ) : (
+              // إذا كان المستخدم مسجل ولكن ليس في صفحة Account - لا نعرض أي أزرار إضافية
+              null
+            )
           ) : (
-            <li className="w-full">
-              <Link
-                to="/Login"
-                className={`px-4 py-2 font-semibold transition-colors w-full border rounded-lg block text-center ${
-                  isScrolled
-                    ? "text-white border-white"
-                    : "text-gray-900 border-gray-900"
-                }`}
-              >
-                Log in
-              </Link>
-            </li>
+            // إذا كان المستخدم غير مسجل - إظهار زر Log in
+            !hideLogin && (
+              <li className="w-full">
+                <Link
+                  to="/Login"
+                  className={`px-4 py-2 font-semibold transition-colors w-full border rounded-lg block text-center ${
+                    isScrolled
+                      ? "text-white border-white"
+                      : "text-gray-900 border-gray-900"
+                  }`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  Log in
+                </Link>
+              </li>
+            )
           )}
         </ul>
       </div>
