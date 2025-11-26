@@ -1,5 +1,5 @@
 import React from "react";
-import Header from '../components/Header';
+import Header from "../components/Header";
 import { motion } from "framer-motion";
 
 const Features = () => {
@@ -81,7 +81,7 @@ const Features = () => {
   return (
     <div className="w-full min-h-screen bg-background">
       <Header showAccount={true} isRegistered={true} />
-      
+
       <section className="w-full py-24 px-4" id="features">
         <div className="max-w-[1340px] w-full mx-auto">
           {/* Section Header */}
@@ -185,8 +185,8 @@ const Features = () => {
             transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
             className="text-center text-gray-500 mb-6"
           >
-            A smart AI-powered offline monitoring system using LAN-connected CCTV
-            cameras.
+            A smart AI-powered offline monitoring system using LAN-connected
+            CCTV cameras.
           </motion.p>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
@@ -196,7 +196,11 @@ const Features = () => {
                 initial={{ opacity: 0, y: 50 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, amount: 0.2 }}
-                transition={{ delay: idx * 0.15, duration: 0.6, ease: "easeOut" }}
+                transition={{
+                  delay: idx * 0.15,
+                  duration: 0.6,
+                  ease: "easeOut",
+                }}
                 className="
                   group bg-white rounded-xl p-5 text-center shadow-md
                   hover:shadow-2xl 
@@ -247,25 +251,27 @@ const Features = () => {
           </div>
         </div>
       </section>
-            {/* Footer */}
+      {/* Footer */}
       {/* Bottom Bar */}
-  <div className="border-t border-[#1d1d1d]/20 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-[#E3F0FE] px-6 pb-4">
-  <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">
-    © 2024 ExamGuard. All rights reserved.
-  </p>
+      <div className="border-t border-[#1d1d1d]/20 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-[#E3F0FE] px-6 pb-4">
+        <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">
+          © 2024 ExamGuard. All rights reserved.
+        </p>
 
-  <div className="flex flex-wrap gap-3 justify-center md:justify-end">
-    {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item, idx) => (
-      <a
-        key={idx}
-        href="#"
-        className="text-[#1d1d1d]/70 text-sm hover:underline"
-      >
-        {item}
-      </a>
-    ))}
-  </div>
-</div>
+        <div className="flex flex-wrap gap-3 justify-center md:justify-end">
+          {["Privacy Policy", "Terms of Service", "Cookie Policy"].map(
+            (item, idx) => (
+              <a
+                key={idx}
+                href="#"
+                className="text-[#1d1d1d]/70 text-sm hover:underline"
+              >
+                {item}
+              </a>
+            )
+          )}
+        </div>
+      </div>
     </div>
   );
 };
