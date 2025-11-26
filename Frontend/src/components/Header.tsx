@@ -301,7 +301,7 @@ const Header: React.FC<HeaderProps> = ({
               {/* Desktop Account Button */}
               <Link
                 to={getAccountPath()}
-                className={`hidden lg:flex px-5 py-3 font-semibold rounded-lg border-2 transition-all ${
+                className={`hidden lg:flex px-4 py-2 font-semibold rounded-lg border-2 transition-all ${
                   isScrolled
                     ? "bg-transparent text-white border-white/50 hover:bg-white hover:text-primary hover:border-white"
                     : "bg-transparent text-primary border-primary/50 hover:bg-primary hover:text-white hover:border-primary"
