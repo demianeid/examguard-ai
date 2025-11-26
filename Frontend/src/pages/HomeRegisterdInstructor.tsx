@@ -130,7 +130,7 @@ const HeroSection: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background pt-20 overflow-hidden">
-            <Header fixed={true} showAccount={true} isRegistered={true} />
+            <Header  showAccount={true} isRegistered={true} />
 
       {/* Online Exams Section */}
       <section className="container mx-auto px-6 py-16">
