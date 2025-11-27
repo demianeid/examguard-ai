@@ -42,17 +42,17 @@ export default function Login() {
   };
 
   return (
-    <div className="bg-background p-20">
+    <div className="bg-background lg:p-20  p-4">
       <Header hideLogin={true} />
 
-      <div className="min-h-screen bg-background p-8 flex justify-center items-start">
+      <div className="min-h-screen pt-20 bg-background lg:p-8 p-4 flex justify-center items-start">
         
         {/* Container Animation */}
         <motion.div
           initial={{ opacity: 0, y: 60 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: "easeOut" }}
-          className="max-w-3xl w-full mx-auto bg-white rounded-2xl shadow-xl p-10"
+          className="max-w-2xl w-full mx-auto bg-white rounded-2xl shadow-xl lg:p-10 p-6"
         >
 
           {/* Avatar Section */}
@@ -62,11 +62,11 @@ export default function Login() {
             transition={{ duration: 0.6, ease: "easeOut" }}
             className="flex flex-col items-center mb-6"
           >
-            <div className="w-50 h-50 rounded-full bg-blue-200 flex items-center justify-center mb-4 shadow-lg">
+            <div className="lg:w-50 lg:h-50 w-32 h-32 rounded-full bg-blue-200 flex items-center justify-center mb-4 shadow-lg">
               <img
                 src="/images/signin.png"
                 alt="Avatar"
-                className="w-40 h-40 rounded-full object-cover"
+                className="lg:w-40 lg:h-40 w-24 h-24 rounded-full object-cover"
               />
             </div>
 
@@ -74,7 +74,7 @@ export default function Login() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-3xl font-bold text-primary mb-1"
+              className="lg:text-3xl text-xl font-bold text-primary mb-1 text-center"
             >
               WELCOME BACK
             </motion.h1>
@@ -83,7 +83,7 @@ export default function Login() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.15 }}
-              className="text-primary font-semibold"
+              className="text-primary font-semibold text-sm lg:text-base"
             >
               SIGN IN
             </motion.p>
@@ -108,7 +108,7 @@ export default function Login() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="e.g., name2026@exam.edu"
-                className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+                className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 text-sm lg:text-base ${
                   errors.email
                     ? "border-red-500 focus:ring-red-500"
                     : "border-gray-200 focus:ring-blue-500"
@@ -130,7 +130,7 @@ export default function Login() {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="********"
-                className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+                className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 text-sm lg:text-base ${
                   errors.password
                     ? "border-red-500 focus:ring-red-500"
                     : "border-gray-200 focus:ring-blue-500"
@@ -143,24 +143,23 @@ export default function Login() {
 
             {/* Forget Password */}
             <Link to="/ForgetPassword">
-            <p className="text-right text-sm text-blue-600 mb-5 cursor-pointer hover:underline">
-              Forget Password?
-            </p>
+              <p className="text-right text-sm text-blue-600 mb-5 cursor-pointer hover:underline">
+                Forget Password?
+              </p>
             </Link>
 
             {/* Login Button */}
-        <button
-  type="button"
-  onClick={() => navigate("/home")}
-  className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-secondary transition shadow-md"
->
-  SIGN IN
-</button>
-
+            <button
+              type="button"
+              onClick={() => navigate("/home")}
+              className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-secondary transition shadow-md text-sm lg:text-base"
+            >
+              SIGN IN
+            </button>
 
             {/* Create Account */}
             <p className="text-center mt-4 text-sm text-gray-600">
-              Don’t Have An Account?{" "}
+              Don't Have An Account?{" "}
               <span
                 onClick={() => navigate("/signup")}
                 className="text-blue-600 font-semibold hover:underline cursor-pointer"
