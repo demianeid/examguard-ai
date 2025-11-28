@@ -7,8 +7,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#155DFC",    // الأزرق الأساسي
-        secondary: "#1447e6",  // الأزرق الفاتح
+        primary: "#176ADA",    // الأزرق الأساسي
+        secondary: "#1D7EF8",  // الأزرق الفاتح
         Tertiary:"#3DA5FA",
         Quaternary:"#61B5FB",
         Quinary:"#8EC9FC",
