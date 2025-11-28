@@ -5,6 +5,10 @@ import { Link } from "react-router-dom";
 import { LogOut, Settings, User } from "lucide-react";
 import { useUser } from '../context/UserContext';
 
+// Logo URLs
+const LOGO_URL = "/images/logo1.png"; // Default logo
+const SCROLLED_LOGO_URL = "/images/logo2.png"; // Logo for scrolled state
+
 interface HeaderProps {
   hideSignup?: boolean;
   hideLogin?: boolean;
@@ -93,6 +97,9 @@ const Header: React.FC<HeaderProps> = ({
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, [lastScroll, fixed]);
+
+  // Determine which logo to use based on scroll state
+  const currentLogo = isScrolled ? SCROLLED_LOGO_URL : LOGO_URL;
 
   // Determine paths based on user type
   const getNavPaths = () => {
@@ -224,7 +231,7 @@ const Header: React.FC<HeaderProps> = ({
             {!isMobile && (
               <span
                 className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
-                  isScrolled ? "bg-white" : "bg-primary"
+                  isScrolled ? "bg-primary" : "bg-primary"
                 }`}
               ></span>
             )}
@@ -240,7 +247,7 @@ const Header: React.FC<HeaderProps> = ({
         ${!fixed && showHeader ? "translate-y-0" : !fixed ? "-translate-y-full" : "translate-y-0"}
         ${
           isScrolled
-            ? "bg-primary shadow-lg px-5 sm:px-20 py-4"
+            ? "bg-primary/80 backdrop-blur-md shadow-lg px-5 sm:px-20 py-4" // Added blur and transparency
             : "bg-background px-5 sm:px-20 py-4"
         }
       `}
@@ -249,11 +256,13 @@ const Header: React.FC<HeaderProps> = ({
         {/* Logo */}
         <Link
           to={getHomePath()}
-          className={`text-2xl font-bold ${
-            isScrolled ? "text-white" : "text-gray-900"
-          }`}
+          className="flex items-center"
         >
-          ExamGuard
+          <img 
+            src={currentLogo} // Use dynamic logo based on scroll state
+            alt="ExamGuard Logo" 
+            className="h-10 sm:h-10 w-auto object-contain transition-all duration-300"
+          />
         </Link>
 
         {/* Right Section - Buttons & Toggle */}
@@ -353,7 +362,7 @@ const Header: React.FC<HeaderProps> = ({
                   to="/Signup"
                   className={`px-4 py-2 font-semibold rounded transition-all ${
                     isScrolled
-                      ? "bg-white text-blue-600 border border-white hover:bg-blue-600 hover:text-white"
+                      ? "bg-white text-blue-600 border border-white hover:bg-transparent hover:text-white"
                       : "bg-primary text-white hover:bg-secondary"
                   }`}
                 >
