@@ -18,7 +18,7 @@ import AccountInstructor from "./pages/AccountInstructor";
 import CreateExam from "./pages/CreateExam";
 import StartExam from "./pages/StartExam";
 import Settings from "./pages/Setting";
-
+import AccountStudentInstructorView from "./pages/AccountStudentInstructorView";
 function App() {
   const location = useLocation();
 
@@ -44,6 +44,8 @@ function App() {
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/contact" element={<Contact />} />
       <Route path="/account-student" element={<AccountStudent />} />
+     
+    <Route path="/instructor/student-profile/:studentId" element={<AccountStudentInstructorView />} />
       <Route path="/account-instructor" element={<AccountInstructor />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/classes-instructor" element={<ClassesInstructor />} />

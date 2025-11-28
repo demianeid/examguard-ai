@@ -61,13 +61,26 @@ const ClassesInstructor = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const [showCreateClassModal, setShowCreateClassModal] = useState<boolean>(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  
+  // Form states for Create Class
+  const [className, setClassName] = useState<string>("");
+  const [subject, setSubject] = useState<string>("");
+  const [numberOfStudents, setNumberOfStudents] = useState<number>(1);
+  const [classDescription, setClassDescription] = useState<string>("");
 
-  // Close notifications when clicking outside
+  // Close notifications and modal when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
+      }
+      
+      // Close modal when clicking outside
+      if (modalRef.current && showCreateClassModal && !modalRef.current.contains(event.target as Node)) {
+        setShowCreateClassModal(false);
       }
     };
 
@@ -75,7 +88,20 @@ const ClassesInstructor = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [showCreateClassModal]);
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (showCreateClassModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showCreateClassModal]);
 
   // Sample notifications data
   const notifications: NotificationItem[] = [
@@ -182,8 +208,32 @@ const ClassesInstructor = () => {
   const handleBackToList = () => {
     navigate("/classes-instructor");
   };
-    const handleCreateExam = () => {
-    navigate("/CreateExam");
+
+  const handleCreateClass = () => {
+    setShowCreateClassModal(true);
+  };
+   const handleCreateExam = () => {
+    navigate('/CreateExam');
+  };
+
+  const handleCloseModal = () => {
+    setShowCreateClassModal(false);
+    // Reset form
+    setClassName("");
+    setSubject("");
+    setNumberOfStudents(1);
+    setClassDescription("");
+  };
+const handleViewProfile = (studentId: string) => {
+    navigate(`/instructor/student-profile/${studentId}`);
+  };
+
+
+  const handleSubmitClass = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Create class logic
+    console.log("Creating class:", { className, subject, numberOfStudents, classDescription });
+    handleCloseModal();
   };
 
   // Get notification icon based on type
@@ -278,7 +328,7 @@ const ClassesInstructor = () => {
   };
 
   // Tab Components
-  const OverviewTab = ({ class: cls }: { class: ClassType }) => (
+  const OverviewTab = ({ cls }: { cls: ClassType }) => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
@@ -312,44 +362,47 @@ const ClassesInstructor = () => {
   );
 
   const StudentsTab = ({ students }: { students: Student[] }) => (
-    <div className="space-y-4">
-      {students.map((student) => (
-        <div key={student.id} className="bg-white border p-4 rounded-lg shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
-              S{student.id}
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-800">{student.name}</h4>
-              <p className="text-gray-500 text-sm">ID: {student.studentId}</p>
-            </div>
+  <div className="space-y-4">
+    {students.map((student) => (
+      <div key={student.id} className="bg-white border p-4 rounded-lg shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+            S{student.id}
           </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm text-gray-500">Avg Score</p>
-              <p className="text-xl font-bold text-gray-800">{student.avgScore}%</p>
-            </div>
-            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-              View Profile
-            </button>
+          <div>
+            <h4 className="font-semibold text-gray-800">{student.name}</h4>
+            <p className="text-gray-500 text-sm">ID: {student.studentId}</p>
           </div>
         </div>
-      ))}
-    </div>
-  );
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <p className="text-sm text-gray-500">Avg Score</p>
+            <p className="text-xl font-bold text-gray-800">{student.avgScore}%</p>
+          </div>
+          <button 
+            onClick={() => handleViewProfile(student.studentId)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            View Profile
+          </button>
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
   const ExamsTab = ({ exams }: { exams: Exam[] }) => (
-        <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-gray-800 text-lg">Manage Exams</h3>
-        <button 
-          onClick={handleCreateExam}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <Plus size={18} />
-          Create New Exam
-        </button>
-      </div>
+  <div className="space-y-4">
+    <div className="flex justify-between items-center mb-4">
+      <h3 className="font-semibold text-gray-800 text-lg">Manage Exams</h3>
+      <button 
+        onClick={handleCreateExam}
+        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+      >
+        <Plus size={18} />
+        Create New Exam
+      </button>
+    </div>
 
       {exams.map((exam) => (
         <div key={exam.id} className="bg-white border p-4 rounded-lg shadow-sm">
@@ -456,7 +509,7 @@ const ClassesInstructor = () => {
 
     switch (activeTab) {
       case "overview":
-        return <OverviewTab class={selectedClass} />;
+        return <OverviewTab cls={selectedClass} />;
       case "students":
         return <StudentsTab students={students} />;
       case "exams":
@@ -466,7 +519,7 @@ const ClassesInstructor = () => {
       case "analytics":
         return <AnalyticsTab />;
       default:
-        return <OverviewTab class={selectedClass} />;
+        return <OverviewTab cls={selectedClass} />;
     }
   };
 
@@ -583,6 +636,111 @@ const ClassesInstructor = () => {
     </div>
   );
 
+  // Create Class Modal Component
+ // Create Class Modal Component
+// Create Class Modal Component
+// Create Class Modal Component
+// Create Class Modal Component - تصميم مضغوط
+const CreateClassModal = () => {
+  if (!showCreateClassModal) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
+      <motion.div
+        ref={modalRef}
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.2 }}
+        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
+      >
+        {/* الهيدر */}
+        <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="text-2xl">🏫</div>
+            <h2 className="text-xl font-bold">Create New Class</h2>
+          </div>
+          <button
+            onClick={handleCloseModal}
+            className="text-white hover:bg-blue-700 p-1 rounded-lg transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* المحتوى - مضغوط بدون حاجة للscroll */}
+        <form onSubmit={handleSubmitClass} className="p-6 space-y-4 flex-1 overflow-hidden">
+          {/* Class Name */}
+          <div>
+            <label className="block text-gray-800 font-semibold mb-1 text-sm">
+              Class Name *
+            </label>
+            <input
+              type="text"
+              value={className}
+              onChange={(e) => setClassName(e.target.value)}
+              placeholder="e.g., Data structure & Algorithms"
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            />
+          </div>
+
+          {/* Subject and Number of Students */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-gray-800 font-semibold mb-1 text-sm">
+                Subject *
+              </label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="e.g., Computer Science"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-800 font-semibold mb-1 text-sm">
+                Number of Students *
+              </label>
+              <input
+                type="number"
+                value={numberOfStudents}
+                onChange={(e) => setNumberOfStudents(parseInt(e.target.value))}
+                min="1"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Class Description */}
+          <div className="flex-1">
+            <label className="block text-gray-800 font-semibold mb-1 text-sm">
+              Class Description
+            </label>
+            <textarea
+              value={classDescription}
+              onChange={(e) => setClassDescription(e.target.value)}
+              placeholder="Brief description of the class..."
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+            />
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors mt-2"
+          >
+            Create Class
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
   return (
     <div className="w-full pt-20 min-h-screen bg-[#E3F0FE]">
       <div className="min-h-screen bg-background p-6">
@@ -608,7 +766,10 @@ const ClassesInstructor = () => {
                 <div className="flex items-center gap-2">
                   <NotificationDropdown />
                   {!selectedClass && (
-                    <button className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm sm:text-base">
+                    <button 
+                      onClick={handleCreateClass}
+                      className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm sm:text-base"
+                    >
                       <Plus size={18} />
                       <span className="hidden sm:inline">Create Class</span>
                     </button>
@@ -622,6 +783,9 @@ const ClassesInstructor = () => {
           {selectedClass ? <ClassDetails /> : <ClassesList />}
         </div>
       </div>
+      
+      {/* Create Class Modal */}
+      <CreateClassModal />
     </div>
   );
 };
