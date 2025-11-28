@@ -16,6 +16,7 @@ module.exports = {
         background:"#E3F0FE", // background
 
         st:"#3D93DA",
+        p1:"#176ADA",
 
        
         accent: "#FACC15",     // أصفر تحفيزي

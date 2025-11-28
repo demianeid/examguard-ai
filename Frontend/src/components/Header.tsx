@@ -35,8 +35,6 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [showHeader, setShowHeader] = useState(true);
-  const [lastScroll, setLastScroll] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
 
   // Safe hook usage with fallback
@@ -74,29 +72,19 @@ const Header: React.FC<HeaderProps> = ({
   }, [location.pathname, setUserType]);
 
   useEffect(() => {
-    if (fixed) return;
-    
     const handleScroll = () => {
       const current = window.scrollY;
-
-      if (current > lastScroll) {
-        setShowHeader(false);
-      } else {
-        setShowHeader(true);
-      }
 
       if (current > 50) {
         setIsScrolled(true);
       } else {
         setIsScrolled(false);
       }
-
-      setLastScroll(current);
     };
 
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [lastScroll, fixed]);
+  }, []);
 
   // Determine which logo to use based on scroll state
   const currentLogo = isScrolled ? SCROLLED_LOGO_URL : LOGO_URL;
@@ -244,10 +232,9 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <nav
       className={`fixed top-0 left-0 w-full z-[9999] transition-all duration-300 ease-in-out
-        ${!fixed && showHeader ? "translate-y-0" : !fixed ? "-translate-y-full" : "translate-y-0"}
         ${
           isScrolled
-            ? "bg-primary/80 backdrop-blur-md shadow-lg px-5 sm:px-20 py-4" // Added blur and transparency
+            ? "bg-p1/80 backdrop-blur-md shadow-lg px-5 sm:px-20 py-4" // Added blur and transparency
             : "bg-background px-5 sm:px-20 py-4"
         }
       `}

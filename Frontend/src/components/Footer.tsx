@@ -2,7 +2,7 @@ import React from "react";
 
 const Footer = () => {
   return (
-    <footer className="bg-blue-600 py-12 md:py-10 px-4" id="contact">
+    <footer className="bg-p1 py-12 md:py-10 px-4" id="contact">
       <div className="max-w-[1200px] mx-auto">
         <div className="flex flex-wrap -mx-4">
           {/* Brand Section */}
