@@ -7,11 +7,15 @@ import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
-     <UserProvider>
-      <App />
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
+      <UserProvider>
+        <App />
       </UserProvider>
     </BrowserRouter>
   </React.StrictMode>
 );
-

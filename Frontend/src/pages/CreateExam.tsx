@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
 import { 
   FileText, Clock, Calendar, Users, Shield, Eye, Camera, 
   Mic, Monitor, AlertCircle, Plus, Trash2, Settings, 
-  Save, X, CheckCircle, Lock, Unlock, Brain, Video, ArrowLeft
+  Save, X, CheckCircle, Lock, Unlock, Brain, Video
 } from 'lucide-react';
 
 // Type definitions
@@ -57,7 +56,6 @@ interface ToggleItemProps {
 }
 
 const CreateExamPage: React.FC = () => {
-  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [examData, setExamData] = useState<ExamData>({
     title: '',
@@ -92,10 +90,6 @@ const CreateExamPage: React.FC = () => {
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [showProctoringPanel, setShowProctoringPanel] = useState<boolean>(false);
-
-  const handleBack = () => {
-    navigate(-1);
-  };
 
   const addQuestion = (): void => {
     setQuestions([...questions, {
@@ -783,7 +777,7 @@ const CreateExamPage: React.FC = () => {
       transition={{ duration: 0.8 }}
     >
       <div className="max-w-5xl mx-auto">
-        {/* Header مع زر Back */}
+        {/* Header */}
         <motion.div 
           className="bg-white rounded-xl shadow-md p-6 mb-6"
           initial={{ opacity: 0, y: -50 }}
@@ -791,18 +785,9 @@ const CreateExamPage: React.FC = () => {
           transition={{ duration: 0.6 }}
         >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleBack}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors p-2 rounded-lg hover:bg-gray-100"
-                aria-label="Go back"
-              >
-                <ArrowLeft size={20} />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">Create New Exam</h1>
-                <p className="text-gray-600">Set up your exam with anti-cheating measures</p>
-              </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">Create New Exam</h1>
+              <p className="text-gray-600">Set up your exam with anti-cheating measures</p>
             </div>
             <button
               onClick={() => setShowProctoringPanel(!showProctoringPanel)}

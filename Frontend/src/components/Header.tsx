@@ -248,7 +248,7 @@ const Header: React.FC<HeaderProps> = ({
           <img 
             src={currentLogo} // Use dynamic logo based on scroll state
             alt="ExamGuard Logo" 
-            className="h-10 sm:h-10 w-auto object-contain transition-all duration-300"
+            className="h-9 sm:h-10 w-auto object-contain transition-all duration-300"
           />
         </Link>
 
