@@ -1,904 +1,1215 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { 
-  FileText, Clock, Calendar, Users, Shield, Eye, Camera, 
-  Mic, Monitor, AlertCircle, Plus, Trash2, Settings, 
-  Save, X, CheckCircle, Lock, Unlock, Brain, Video
-} from 'lucide-react';
+import { useState } from "react";
+import type { ReactNode } from "react";
+import {
+  X,
+  Clock,
+  Trash2,
+  Shield,
+  Eye,
+  Users,
+  Mic,
+  Lock,
+  Video,
+  AlertCircle,
+  Wifi,
+  CheckCircle,
+} from "lucide-react";
 
-// Type definitions
-interface ExamData {
-  title: string;
+interface ExamFormData {
+  examTitle: string;
+  selectedClass: string;
   description: string;
-  duration: number;
-  totalMarks: number;
-  passingMarks: number;
+  duration: string;
+  totalMarks: string;
   startDate: string;
   startTime: string;
   endDate: string;
   endTime: string;
-  allowedAttempts: number;
-  showResults: string;
-  shuffleQuestions: boolean;
-  shuffleAnswers: boolean;
-}
-
-interface ProctoringSettings {
-  aiProctoring: boolean;
-  liveProctoring: boolean;
-  eyeTracking: boolean;
-  multipleFaceDetection: boolean;
-  speakerRecognition: boolean;
-  recordAndReview: boolean;
-  lockdownBrowser: boolean;
-  objectDetection: boolean;
-  idVerification: boolean;
-  dualCamera: boolean;
-  realTimeAlert: boolean;
-  securityLevel: 'low' | 'medium' | 'high';
+  instructions: string;
 }
 
 interface Question {
-  id: number;
+  id: string;
   type: string;
-  question: string;
-  points: number;
+  text: string;
   options: string[];
-  correctAnswer: number;
+  marks: string;
+  correctAnswer?: number;
 }
 
-interface ToggleItemProps {
-  icon: React.ReactNode;
+interface QuestionOption {
+  value: string;
   label: string;
-  description: string;
-  checked: boolean;
-  onChange: () => void;
 }
 
-const CreateExamPage: React.FC = () => {
+interface SecurityFeature {
+  id: string;
+  name: string;
+  description: string;
+  recommended: boolean;
+  enabled: boolean;
+  icon: ReactNode;
+}
+
+interface Step {
+  number: number;
+  label: string;
+}
+
+export default function CreateExam() {
   const [currentStep, setCurrentStep] = useState<number>(1);
-  const [examData, setExamData] = useState<ExamData>({
-    title: '',
-    description: '',
-    duration: 60,
-    totalMarks: 100,
-    passingMarks: 50,
-    startDate: '',
-    startTime: '',
-    endDate: '',
-    endTime: '',
-    allowedAttempts: 1,
-    showResults: 'immediate',
-    shuffleQuestions: false,
-    shuffleAnswers: false,
+  const [formData, setFormData] = useState<ExamFormData>({
+    examTitle: "",
+    selectedClass: "",
+    description: "",
+    duration: "60",
+    totalMarks: "100",
+    startDate: "",
+    startTime: "",
+    endDate: "",
+    endTime: "",
+    instructions: "",
   });
+  const [questions, setQuestions] = useState<Question[]>([
+    {
+      id: "1",
+      type: "multiple-choice",
+      text: "",
+      options: ["", "", "", ""],
+      marks: "1",
+      correctAnswer: undefined,
+    },
+  ]);
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof ExamFormData, string>>
+  >({});
 
-  const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings>({
-    aiProctoring: true,
-    liveProctoring: false,
-    eyeTracking: true,
-    multipleFaceDetection: true,
-    speakerRecognition: false,
-    recordAndReview: true,
-    lockdownBrowser: true,
-    objectDetection: false,
-    idVerification: true,
-    dualCamera: false,
-    realTimeAlert: true,
-    securityLevel: 'medium'
-  });
+  const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>([
+    {
+      id: "1",
+      name: "AI Proctoring",
+      description: "Automated behavior analysis and anomaly detection",
+      recommended: true,
+      enabled: true,
+      icon: <Shield className="w-5 h-5 text-blue-500" />,
+    },
+    {
+      id: "2",
+      name: "Live Proctoring",
+      description: "Real-time human monitoring during the exam",
+      recommended: false,
+      enabled: false,
+      icon: <Eye className="w-5 h-5 text-gray-400" />,
+    },
+    {
+      id: "3",
+      name: "Eye Tracking",
+      description: "Monitor eye movements and focus patterns",
+      recommended: true,
+      enabled: true,
+      icon: <Eye className="w-5 h-5 text-blue-500" />,
+    },
+    {
+      id: "4",
+      name: "Multiple Face Detection",
+      description: "Alert if multiple people are detected",
+      recommended: true,
+      enabled: true,
+      icon: <Users className="w-5 h-5 text-blue-500" />,
+    },
+    {
+      id: "5",
+      name: "Speaker Recognition",
+      description: "Detect unauthorized voices or conversations",
+      recommended: false,
+      enabled: false,
+      icon: <Mic className="w-5 h-5 text-gray-400" />,
+    },
+    {
+      id: "6",
+      name: "Lockdown Browser",
+      description: "Restrict access to other applications",
+      recommended: true,
+      enabled: true,
+      icon: <Lock className="w-5 h-5 text-blue-500" />,
+    },
+    {
+      id: "7",
+      name: "Record & Review",
+      description: "Record entire session for later review",
+      recommended: false,
+      enabled: false,
+      icon: <Video className="w-5 h-5 text-gray-400" />,
+    },
+    {
+      id: "8",
+      name: "Object Detection",
+      description: "Detect phones, notes, or unauthorized materials",
+      recommended: true,
+      enabled: true,
+      icon: <AlertCircle className="w-5 h-5 text-blue-500" />,
+    },
+    {
+      id: "9",
+      name: "Real-Time Alerts",
+      description: "Instant notifications for suspicious activity",
+      recommended: true,
+      enabled: true,
+      icon: <AlertCircle className="w-5 h-5 text-blue-500" />,
+    },
+    {
+      id: "10",
+      name: "Offline Exam Mode",
+      description: "Allow exams without internet connection",
+      recommended: false,
+      enabled: false,
+      icon: <Wifi className="w-5 h-5 text-gray-400" />,
+    },
+  ]);
 
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [showProctoringPanel, setShowProctoringPanel] = useState<boolean>(false);
+  const steps: Step[] = [
+    { number: 1, label: "Basic Info" },
+    { number: 2, label: "Questions" },
+    { number: 3, label: "Security Settings" },
+    { number: 4, label: "Review" },
+  ];
 
-  const addQuestion = (): void => {
-    setQuestions([...questions, {
-      id: Date.now(),
-      type: 'multiple-choice',
-      question: '',
-      points: 5,
-      options: ['', '', '', ''],
-      correctAnswer: 0
-    }]);
+  const questionTypes: QuestionOption[] = [
+    { value: "multiple-choice", label: "Multiple Choice" },
+    { value: "true-false", label: "True/False" },
+    { value: "short-answer", label: "Short Answer" },
+    { value: "essay", label: "Essay" },
+  ];
+
+  const handleInputChange = (field: keyof ExamFormData, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
   };
 
-  const removeQuestion = (id: number): void => {
-    setQuestions(questions.filter(q => q.id !== id));
-  };
-
-  const toggleProctoring = (setting: keyof ProctoringSettings): void => {
-    setProctoringSettings({
-      ...proctoringSettings,
-      [setting]: !proctoringSettings[setting]
-    });
-  };
-
-  const SecurityLevelIndicator: React.FC = () => {
-    const level = proctoringSettings.securityLevel;
-    const colors = {
-      low: 'from-green-400 to-green-600',
-      medium: 'from-yellow-400 to-orange-600',
-      high: 'from-red-400 to-red-600'
+  const handleAddQuestion = () => {
+    const newQuestion: Question = {
+      id: Date.now().toString(),
+      type: "multiple-choice",
+      text: "",
+      options: ["", "", "", ""],
+      marks: "1",
+      correctAnswer: undefined,
     };
-    return (
-      <div 
-        className={`bg-gradient-to-r ${colors[level]} text-white px-4 py-2 rounded-lg font-semibold text-sm`}
-        aria-label={`Security Level: ${level.toUpperCase()}`}
-      >
-        Security Level: {level.toUpperCase()}
-      </div>
+    setQuestions([...questions, newQuestion]);
+  };
+
+  const handleDeleteQuestion = (id: string) => {
+    setQuestions(questions.filter((q) => q.id !== id));
+  };
+
+  const handleQuestionChange = (
+    id: string,
+    field: "type" | "text" | "marks",
+    value: string
+  ) => {
+    setQuestions(
+      questions.map((q) => (q.id === id ? { ...q, [field]: value } : q))
     );
   };
 
-  const StepIndicator: React.FC = () => (
-    <div className="flex items-center justify-center mb-8">
-      {[1, 2, 3, 4].map((step) => (
-        <React.Fragment key={step}>
-          <div 
-            className={`flex items-center justify-center w-10 h-10 rounded-full font-bold transition-all ${
-              currentStep >= step 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-200 text-gray-500'
-            }`}
-            aria-label={`Step ${step} ${currentStep >= step ? 'completed' : 'not started'}`}
-          >
-            {step}
-          </div>
-          {step < 4 && (
-            <div 
-              className={`w-16 h-1 ${
-                currentStep > step ? 'bg-blue-600' : 'bg-gray-200'
-              }`}
-              aria-hidden="true"
-            ></div>
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
+  const handleOptionChange = (
+    questionId: string,
+    optionIndex: number,
+    value: string
+  ) => {
+    setQuestions(
+      questions.map((q) =>
+        q.id === questionId
+          ? {
+              ...q,
+              options: q.options.map((opt, idx) =>
+                idx === optionIndex ? value : opt
+              ),
+            }
+          : q
+      )
+    );
+  };
 
-  const ToggleItem: React.FC<ToggleItemProps> = ({ icon, label, description, checked, onChange }) => (
-    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
-      <div className="flex items-start gap-3 flex-1">
-        <div className="text-gray-600 mt-1" aria-hidden="true">{icon}</div>
-        <div className="flex-1">
-          <p className="font-medium text-gray-800 text-sm">{label}</p>
-          <p className="text-xs text-gray-500">{description}</p>
-        </div>
-      </div>
-      <label className="relative inline-block w-12 h-6 flex-shrink-0">
-        <input 
-          type="checkbox" 
-          className="peer sr-only" 
-          checked={checked}
-          onChange={onChange}
-          aria-label={`${label} - ${description}`}
-        />
-        <span className="absolute cursor-pointer inset-0 bg-gray-300 rounded-full transition peer-checked:bg-blue-600"></span>
-        <span className="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition peer-checked:translate-x-6"></span>
-      </label>
-    </div>
-  );
+  const handleCorrectAnswerChange = (questionId: string, optionIndex: number) => {
+    setQuestions(
+      questions.map((q) =>
+        q.id === questionId ? { ...q, correctAnswer: optionIndex } : q
+      )
+    );
+  };
 
-  const ProctoringPanel: React.FC = () => (
-    <motion.div 
-      className={`fixed top-0 right-0 h-full w-96 bg-white shadow-2xl transform transition-transform duration-300 z-50 overflow-y-auto ${
-        showProctoringPanel ? 'translate-x-0' : 'translate-x-full'
-      }`}
-      initial={{ x: '100%' }}
-      animate={{ x: showProctoringPanel ? 0 : '100%' }}
-      transition={{ duration: 0.3 }}
-      role="dialog"
-      aria-label="Proctoring Settings"
-    >
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Shield className="text-blue-600" size={28} aria-hidden="true" />
-            <h2 className="text-xl font-bold text-gray-800">Proctoring Settings</h2>
-          </div>
-          <button 
-            onClick={() => setShowProctoringPanel(false)}
-            className="text-gray-500 hover:text-gray-700"
-            aria-label="Close proctoring settings"
-          >
-            <X size={24} aria-hidden="true" />
-          </button>
-        </div>
+  const handleToggleSecurityFeature = (id: string) => {
+    setSecuritySettings((prev) =>
+      prev.map((feature) =>
+        feature.id === id ? { ...feature, enabled: !feature.enabled } : feature
+      )
+    );
+  };
 
-        <div className="mb-6">
-          <SecurityLevelIndicator />
-        </div>
+  const getActiveFeatures = () => {
+    return securitySettings.filter((f) => f.enabled).map((f) => f.name);
+  };
 
-        <div className="space-y-4">
-          <section aria-labelledby="ai-features-heading">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 id="ai-features-heading" className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                <Brain size={20} className="text-blue-600" aria-hidden="true" />
-                AI-Powered Features
-              </h3>
-              <div className="space-y-3">
-                <ToggleItem 
-                  icon={<Brain size={18} aria-hidden="true" />}
-                  label="AI Proctoring"
-                  description="Advanced behavioral analysis"
-                  checked={proctoringSettings.aiProctoring}
-                  onChange={() => toggleProctoring('aiProctoring')}
-                />
-                <ToggleItem 
-                  icon={<Eye size={18} aria-hidden="true" />}
-                  label="Eye Tracking"
-                  description="Monitor gaze patterns"
-                  checked={proctoringSettings.eyeTracking}
-                  onChange={() => toggleProctoring('eyeTracking')}
-                />
-                <ToggleItem 
-                  icon={<Users size={18} aria-hidden="true" />}
-                  label="Multiple Face Detection"
-                  description="Alert for multiple people"
-                  checked={proctoringSettings.multipleFaceDetection}
-                  onChange={() => toggleProctoring('multipleFaceDetection')}
-                />
-                <ToggleItem 
-                  icon={<Monitor size={18} aria-hidden="true" />}
-                  label="Object Detection"
-                  description="Detect phones and books"
-                  checked={proctoringSettings.objectDetection}
-                  onChange={() => toggleProctoring('objectDetection')}
-                />
-              </div>
-            </div>
-          </section>
+  const validateStep1 = (): boolean => {
+    const newErrors: Partial<Record<keyof ExamFormData, string>> = {};
 
-          <section aria-labelledby="recording-monitoring-heading">
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <h3 id="recording-monitoring-heading" className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                <Video size={20} className="text-purple-600" aria-hidden="true" />
-                Recording & Monitoring
-              </h3>
-              <div className="space-y-3">
-                <ToggleItem 
-                  icon={<Video size={18} aria-hidden="true" />}
-                  label="Live Proctoring"
-                  description="Real-time human monitoring"
-                  checked={proctoringSettings.liveProctoring}
-                  onChange={() => toggleProctoring('liveProctoring')}
-                />
-                <ToggleItem 
-                  icon={<Camera size={18} aria-hidden="true" />}
-                  label="Record & Review"
-                  description="Save session for later review"
-                  checked={proctoringSettings.recordAndReview}
-                  onChange={() => toggleProctoring('recordAndReview')}
-                />
-                <ToggleItem 
-                  icon={<Camera size={18} aria-hidden="true" />}
-                  label="Dual Camera"
-                  description="Use webcam + phone camera"
-                  checked={proctoringSettings.dualCamera}
-                  onChange={() => toggleProctoring('dualCamera')}
-                />
-              </div>
-            </div>
-          </section>
+    if (!formData.examTitle.trim()) {
+      newErrors.examTitle = "Exam title is required";
+    }
 
-          <section aria-labelledby="security-controls-heading">
-            <div className="bg-green-50 p-4 rounded-lg">
-              <h3 id="security-controls-heading" className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                <Lock size={20} className="text-green-600" aria-hidden="true" />
-                Security Controls
-              </h3>
-              <div className="space-y-3">
-                <ToggleItem 
-                  icon={<Lock size={18} aria-hidden="true" />}
-                  label="Lockdown Browser"
-                  description="Prevent tab switching"
-                  checked={proctoringSettings.lockdownBrowser}
-                  onChange={() => toggleProctoring('lockdownBrowser')}
-                />
-                <ToggleItem 
-                  icon={<CheckCircle size={18} aria-hidden="true" />}
-                  label="ID Verification"
-                  description="Verify student identity"
-                  checked={proctoringSettings.idVerification}
-                  onChange={() => toggleProctoring('idVerification')}
-                />
-                <ToggleItem 
-                  icon={<Mic size={18} aria-hidden="true" />}
-                  label="Speaker Recognition"
-                  description="Detect unauthorized voices"
-                  checked={proctoringSettings.speakerRecognition}
-                  onChange={() => toggleProctoring('speakerRecognition')}
-                />
-                <ToggleItem 
-                  icon={<AlertCircle size={18} aria-hidden="true" />}
-                  label="Real-time Alerts"
-                  description="Instant violation notifications"
-                  checked={proctoringSettings.realTimeAlert}
-                  onChange={() => toggleProctoring('realTimeAlert')}
-                />
-              </div>
-            </div>
-          </section>
+    if (!formData.selectedClass) {
+      newErrors.selectedClass = "Please select a class";
+    }
 
-          <section aria-labelledby="security-level-heading">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <label id="security-level-heading" className="block text-sm font-semibold text-gray-700 mb-2">
-                Security Level Preset
-              </label>
-              <select 
-                value={proctoringSettings.securityLevel}
-                onChange={(e) => setProctoringSettings({
-                  ...proctoringSettings, 
-                  securityLevel: e.target.value as 'low' | 'medium' | 'high'
-                })}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                aria-labelledby="security-level-heading"
-              >
-                <option value="low">Low - Basic Monitoring</option>
-                <option value="medium">Medium - Standard Security</option>
-                <option value="high">High - Maximum Security</option>
-              </select>
-            </div>
-          </section>
-        </div>
-      </div>
-    </motion.div>
-  );
+    if (!formData.duration || parseInt(formData.duration) <= 0) {
+      newErrors.duration = "Duration must be greater than 0";
+    }
 
-  const BasicInfoStep: React.FC = () => (
-    <motion.div 
-      className="space-y-6"
-      initial={{ opacity: 0, x: 100 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      <div>
-        <label htmlFor="exam-title" className="block text-sm font-semibold text-gray-700 mb-2">Exam Title *</label>
-        <input
-          id="exam-title"
-          type="text"
-          value={examData.title}
-          onChange={(e) => setExamData({...examData, title: e.target.value})}
-          placeholder="e.g., Midterm Exam - Data Structures"
-          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          aria-required="true"
-        />
-      </div>
+    if (!formData.totalMarks || parseInt(formData.totalMarks) <= 0) {
+      newErrors.totalMarks = "Total marks must be greater than 0";
+    }
 
-      <div>
-        <label htmlFor="exam-description" className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-        <textarea
-          id="exam-description"
-          value={examData.description}
-          onChange={(e) => setExamData({...examData, description: e.target.value})}
-          placeholder="Provide instructions and important notes for students..."
-          rows={4}
-          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-      </div>
+    if (!formData.startDate) {
+      newErrors.startDate = "Start date is required";
+    }
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="exam-duration" className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-            <Clock size={18} aria-hidden="true" />
-            Duration (minutes) *
-          </label>
-          <input
-            id="exam-duration"
-            type="number"
-            value={examData.duration}
-            onChange={(e) => setExamData({...examData, duration: parseInt(e.target.value) || 0})}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            aria-required="true"
-          />
-        </div>
+    if (!formData.startTime) {
+      newErrors.startTime = "Start time is required";
+    }
 
-        <div>
-          <label htmlFor="total-marks" className="block text-sm font-semibold text-gray-700 mb-2">Total Marks *</label>
-          <input
-            id="total-marks"
-            type="number"
-            value={examData.totalMarks}
-            onChange={(e) => setExamData({...examData, totalMarks: parseInt(e.target.value) || 0})}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            aria-required="true"
-          />
-        </div>
+    if (!formData.endDate) {
+      newErrors.endDate = "End date is required";
+    }
 
-        <div>
-          <label htmlFor="passing-marks" className="block text-sm font-semibold text-gray-700 mb-2">Passing Marks *</label>
-          <input
-            id="passing-marks"
-            type="number"
-            value={examData.passingMarks}
-            onChange={(e) => setExamData({...examData, passingMarks: parseInt(e.target.value) || 0})}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            aria-required="true"
-          />
-        </div>
+    if (!formData.endTime) {
+      newErrors.endTime = "End time is required";
+    }
 
-        <div>
-          <label htmlFor="allowed-attempts" className="block text-sm font-semibold text-gray-700 mb-2">Allowed Attempts</label>
-          <input
-            id="allowed-attempts"
-            type="number"
-            value={examData.allowedAttempts}
-            onChange={(e) => setExamData({...examData, allowedAttempts: parseInt(e.target.value) || 0})}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-      </div>
-    </motion.div>
-  );
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-  const SchedulingStep: React.FC = () => (
-    <motion.div 
-      className="space-y-6"
-      initial={{ opacity: 0, x: 100 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      <div className="bg-blue-50 p-4 rounded-lg mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <Calendar className="text-blue-600" size={24} aria-hidden="true" />
-          <h3 className="font-semibold text-gray-800">Exam Availability Window</h3>
-        </div>
-        <p className="text-sm text-gray-600">Set when students can start and must finish the exam</p>
-      </div>
+  const validateStep2 = (): boolean => {
+    if (questions.length === 0) {
+      alert("Please add at least one question");
+      return false;
+    }
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label htmlFor="start-date" className="block text-sm font-semibold text-gray-700 mb-2">Start Date *</label>
-          <input
-            id="start-date"
-            type="date"
-            value={examData.startDate}
-            onChange={(e) => setExamData({...examData, startDate: e.target.value})}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            aria-required="true"
-          />
-        </div>
+    for (const question of questions) {
+      if (!question.text.trim()) {
+        alert("Please fill in all question texts");
+        return false;
+      }
 
-        <div>
-          <label htmlFor="start-time" className="block text-sm font-semibold text-gray-700 mb-2">Start Time *</label>
-          <input
-            id="start-time"
-            type="time"
-            value={examData.startTime}
-            onChange={(e) => setExamData({...examData, startTime: e.target.value})}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            aria-required="true"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="end-date" className="block text-sm font-semibold text-gray-700 mb-2">End Date *</label>
-          <input
-            id="end-date"
-            type="date"
-            value={examData.endDate}
-            onChange={(e) => setExamData({...examData, endDate: e.target.value})}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            aria-required="true"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="end-time" className="block text-sm font-semibold text-gray-700 mb-2">End Time *</label>
-          <input
-            id="end-time"
-            type="time"
-            value={examData.endTime}
-            onChange={(e) => setExamData({...examData, endTime: e.target.value})}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            aria-required="true"
-          />
-        </div>
-      </div>
-
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="font-semibold text-gray-800 mb-4">Additional Settings</h3>
-        <div className="space-y-3">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={examData.shuffleQuestions}
-              onChange={(e) => setExamData({...examData, shuffleQuestions: e.target.checked})}
-              className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-              aria-label="Shuffle question order for each student"
-            />
-            <span className="text-gray-700">Shuffle question order for each student</span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={examData.shuffleAnswers}
-              onChange={(e) => setExamData({...examData, shuffleAnswers: e.target.checked})}
-              className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-              aria-label="Shuffle answer options"
-            />
-            <span className="text-gray-700">Shuffle answer options</span>
-          </label>
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="show-results" className="block text-sm font-semibold text-gray-700 mb-2">Show Results</label>
-        <select
-          id="show-results"
-          value={examData.showResults}
-          onChange={(e) => setExamData({...examData, showResults: e.target.value})}
-          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          aria-label="Select when to show exam results"
-        >
-          <option value="immediate">Immediately after submission</option>
-          <option value="after-deadline">After exam deadline</option>
-          <option value="manual">Manual release by instructor</option>
-          <option value="never">Never show results</option>
-        </select>
-      </div>
-    </motion.div>
-  );
-
-  const QuestionsStep: React.FC = () => {
-    const updateQuestion = (id: number, field: string, value: any) => {
-      setQuestions(questions.map(q => 
-        q.id === id ? { ...q, [field]: value } : q
-      ));
-    };
-
-    const updateOption = (questionId: number, optionIndex: number, value: string) => {
-      setQuestions(questions.map(q => {
-        if (q.id === questionId) {
-          const newOptions = [...q.options];
-          newOptions[optionIndex] = value;
-          return { ...q, options: newOptions };
+      if (question.type === "multiple-choice") {
+        const filledOptions = question.options.filter(
+          (opt) => opt.trim() !== ""
+        );
+        if (filledOptions.length < 2) {
+          alert("Multiple choice questions need at least 2 options");
+          return false;
         }
-        return q;
-      }));
-    };
+      }
+    }
 
-    return (
-      <motion.div 
-        className="space-y-4"
-        initial={{ opacity: 0, x: 100 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-800">Exam Questions</h3>
-          <button
-            onClick={addQuestion}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-            aria-label="Add new question"
-          >
-            <Plus size={20} aria-hidden="true" />
-            Add Question
-          </button>
-        </div>
-
-        {questions.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-            <FileText className="mx-auto text-gray-400 mb-3" size={48} aria-hidden="true" />
-            <p className="text-gray-600 mb-4">No questions added yet</p>
-            <button
-              onClick={addQuestion}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-              aria-label="Add your first question"
-            >
-              Add Your First Question
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {questions.map((q, index) => (
-              <div key={q.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-4">
-                  <h4 className="font-semibold text-gray-800">Question {index + 1}</h4>
-                  <button
-                    onClick={() => removeQuestion(q.id)}
-                    className="text-red-600 hover:text-red-700"
-                    aria-label={`Remove question ${index + 1}`}
-                  >
-                    <Trash2 size={20} aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  <label htmlFor={`question-${q.id}`} className="sr-only">
-                    Question {index + 1} text
-                  </label>
-                  <textarea
-                    id={`question-${q.id}`}
-                    value={q.question}
-                    onChange={(e) => updateQuestion(q.id, 'question', e.target.value)}
-                    placeholder="Enter your question here..."
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    rows={3}
-                  />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {q.options.map((opt, i) => (
-                      <div key={i}>
-                        <label htmlFor={`option-${q.id}-${i}`} className="sr-only">
-                          Option {i + 1} for question {index + 1}
-                        </label>
-                        <input
-                          id={`option-${q.id}-${i}`}
-                          type="text"
-                          value={opt}
-                          onChange={(e) => updateOption(q.id, i, e.target.value)}
-                          placeholder={`Option ${i + 1}`}
-                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <label htmlFor={`points-${q.id}`} className="text-sm text-gray-700">Points:</label>
-                    <input
-                      id={`points-${q.id}`}
-                      type="number"
-                      value={q.points}
-                      onChange={(e) => updateQuestion(q.id, 'points', parseInt(e.target.value) || 0)}
-                      className="w-20 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                    <label htmlFor={`correct-answer-${q.id}`} className="text-sm text-gray-700">Correct Answer:</label>
-                    <select 
-                      id={`correct-answer-${q.id}`}
-                      value={q.correctAnswer}
-                      onChange={(e) => updateQuestion(q.id, 'correctAnswer', parseInt(e.target.value))}
-                      className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      aria-label={`Select correct answer for question ${index + 1}`}
-                    >
-                      <option value="0">Option 1</option>
-                      <option value="1">Option 2</option>
-                      <option value="2">Option 3</option>
-                      <option value="3">Option 4</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </motion.div>
-    );
+    return true;
   };
 
-  const ReviewStep: React.FC = () => {
-    const activeFeatures = Object.entries(proctoringSettings)
-      .filter(([key, value]) => value === true && key !== 'securityLevel')
-      .map(([key]) => key.replace(/([A-Z])/g, ' $1').trim());
+  const handlePrevious = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
 
-    return (
-      <motion.div 
-        className="space-y-6"
-        initial={{ opacity: 0, x: 100 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="bg-gradient-to-r from-green-50 to-blue-50 p-6 rounded-lg border border-blue-200">
-          <div className="flex items-center gap-3 mb-3">
-            <CheckCircle className="text-green-600" size={32} aria-hidden="true" />
-            <h3 className="text-xl font-bold text-gray-800">Review Your Exam</h3>
-          </div>
-          <p className="text-gray-600">Please review all details before publishing the exam</p>
-        </div>
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (!validateStep1()) {
+        return;
+      }
+    }
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-              <FileText size={20} className="text-blue-600" aria-hidden="true" />
-              Basic Information
-            </h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Title:</span>
-                <span className="font-medium">{examData.title || 'Not set'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Duration:</span>
-                <span className="font-medium">{examData.duration} minutes</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Total Marks:</span>
-                <span className="font-medium">{examData.totalMarks}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Questions:</span>
-                <span className="font-medium">{questions.length}</span>
-              </div>
-            </div>
-          </div>
+    if (currentStep === 2) {
+      if (!validateStep2()) {
+        return;
+      }
+    }
 
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-              <Calendar size={20} className="text-purple-600" aria-hidden="true" />
-              Schedule
-            </h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Start:</span>
-                <span className="font-medium">{examData.startDate} {examData.startTime}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">End:</span>
-                <span className="font-medium">{examData.endDate} {examData.endTime}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Show Results:</span>
-                <span className="font-medium">{examData.showResults}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    if (currentStep === 4) {
+      handlePublish();
+    } else {
+      setCurrentStep(currentStep + 1);
+    }
+  };
 
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-            <Shield size={20} className="text-blue-600" aria-hidden="true" />
-            Proctoring Configuration
-          </h4>
-          <div className="mb-3">
-            <SecurityLevelIndicator />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {activeFeatures.map((feature, i) => (
-              <div key={i} className="bg-green-50 text-green-700 px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2">
-                <CheckCircle size={14} aria-hidden="true" />
-                {feature}
-              </div>
-            ))}
-          </div>
-        </div>
+  const handlePublish = () => {
+    const examData = {
+      ...formData,
+      questions,
+      securityFeatures: securitySettings.filter((f) => f.enabled),
+      totalQuestions: questions.length,
+      totalMarks: questions.reduce(
+        (sum, q) => sum + parseInt(q.marks || "0"),
+        0
+      ),
+    };
 
-        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="text-yellow-600 flex-shrink-0" size={24} aria-hidden="true" />
-            <div>
-              <h4 className="font-semibold text-gray-800 mb-1">Important Notes</h4>
-              <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
-                <li>Students will be notified about this exam via email</li>
-                <li>Proctoring features will be active during the exam</li>
-                <li>You can edit exam details until the start time</li>
-                <li>All violations will be recorded for review</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    );
+    console.log("Publishing exam:", examData);
+    alert("Exam published successfully!");
+  };
+
+  const handleClose = () => {
+    if (
+      window.confirm(
+        "Are you sure you want to close? All unsaved changes will be lost."
+      )
+    ) {
+      window.history.back();
+    }
+  };
+
+  const getTotalMarks = () => {
+    return questions.reduce((sum, q) => sum + parseInt(q.marks || "0"), 0);
   };
 
   return (
-    <motion.div 
-      className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
-    >
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <motion.div 
-          className="bg-white rounded-xl shadow-md p-6 mb-6"
-          initial={{ opacity: 0, y: -50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">Create New Exam</h1>
-              <p className="text-gray-600">Set up your exam with anti-cheating measures</p>
-            </div>
-            <button
-              onClick={() => setShowProctoringPanel(!showProctoringPanel)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-md"
-              aria-label={showProctoringPanel ? "Close proctoring settings" : "Open proctoring settings"}
-            >
-              <Shield size={20} aria-hidden="true" />
-              Proctoring Settings
-              {showProctoringPanel ? <X size={18} aria-hidden="true" /> : <Settings size={18} aria-hidden="true" />}
-            </button>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-lg max-w-3xl w-full p-8">
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Create New Exam
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Follow the steps to create and configure your exam
+            </p>
           </div>
-        </motion.div>
-
-        {/* Progress Steps */}
-        <motion.div 
-          className="bg-white rounded-xl shadow-md p-6 mb-6"
-          initial={{ opacity: 0, y: -30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
-        >
-          <StepIndicator />
-          <div className="flex justify-center gap-2 text-sm">
-            <span className={currentStep >= 1 ? 'text-blue-600 font-semibold' : 'text-gray-500'}>Basic Info</span>
-            <span className="text-gray-400" aria-hidden="true">→</span>
-            <span className={currentStep >= 2 ? 'text-blue-600 font-semibold' : 'text-gray-500'}>Scheduling</span>
-            <span className="text-gray-400" aria-hidden="true">→</span>
-            <span className={currentStep >= 3 ? 'text-blue-600 font-semibold' : 'text-gray-500'}>Questions</span>
-            <span className="text-gray-400" aria-hidden="true">→</span>
-            <span className={currentStep >= 4 ? 'text-blue-600 font-semibold' : 'text-gray-500'}>Review</span>
-          </div>
-        </motion.div>
-
-        {/* Main Content */}
-        <motion.div 
-          className="bg-white rounded-xl shadow-md p-6 mb-6"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-        >
-          {currentStep === 1 && <BasicInfoStep />}
-          {currentStep === 2 && <SchedulingStep />}
-          {currentStep === 3 && <QuestionsStep />}
-          {currentStep === 4 && <ReviewStep />}
-        </motion.div>
-
-        {/* Navigation Buttons */}
-        <motion.div 
-          className="flex items-center justify-between"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-        >
           <button
-            onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+            onClick={handleClose}
+            className="text-gray-400 hover:text-gray-600 text-2xl font-light"
+            aria-label="Close exam creation"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="flex items-center justify-center mb-8 gap-2">
+          {steps.map((step, index) => (
+            <div key={step.number} className="flex items-center gap-2">
+              <div className="flex  flex-col items-center">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors ${
+                    step.number === currentStep
+                      ? "bg-blue-500 text-white"
+                      : step.number < currentStep
+                      ? "bg-blue-500 text-white"
+                      : "bg-gray-200 text-gray-600"
+                  }`}
+                  aria-label={`Step ${step.number}: ${step.label}`}
+                >
+                  {step.number < currentStep ? "✓" : step.number}
+                </div>
+                <span className="text-xs text-gray-600 mt-2 text-center max-w-20 whitespace-nowrap">
+                  {step.label}
+                </span>
+              </div>
+              {index < steps.length - 1 && (
+                <div
+                  className={`w-8 sm:w-20 h-1 transition-colors ${
+                    step.number < currentStep ? "bg-blue-500" : "bg-gray-200"
+                  }`}
+                  aria-hidden="true"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {currentStep === 1 && (
+          <div className="space-y-5">
+            <div>
+              <label
+                htmlFor="examTitle"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Exam Title <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="examTitle"
+                type="text"
+                placeholder="e.g., Midterm Exam - Data Structure"
+                value={formData.examTitle}
+                onChange={(e) => handleInputChange("examTitle", e.target.value)}
+                className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                  errors.examTitle
+                    ? "border-red-300 focus:ring-red-500"
+                    : "border-gray-300 focus:ring-blue-500"
+                }`}
+                aria-required="true"
+                aria-describedby={
+                  errors.examTitle ? "examTitle-error" : undefined
+                }
+              />
+              {errors.examTitle && (
+                <p id="examTitle-error" className="mt-1 text-sm text-red-600">
+                  {errors.examTitle}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="selectedClass"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Select Class <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="selectedClass"
+                value={formData.selectedClass}
+                onChange={(e) =>
+                  handleInputChange("selectedClass", e.target.value)
+                }
+                className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent bg-white ${
+                  errors.selectedClass
+                    ? "border-red-300 focus:ring-red-500"
+                    : "border-gray-300 focus:ring-blue-500"
+                }`}
+                aria-required="true"
+                aria-describedby={
+                  errors.selectedClass ? "selectedClass-error" : undefined
+                }
+              >
+                <option value="">Choose a class...</option>
+                <option value="class-10">Class 10</option>
+                <option value="class-11">Class 11</option>
+                <option value="class-12">Class 12</option>
+              </select>
+              {errors.selectedClass && (
+                <p
+                  id="selectedClass-error"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {errors.selectedClass}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="description"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Description
+              </label>
+              <textarea
+                id="description"
+                placeholder="Brief description of the exam content..."
+                value={formData.description}
+                onChange={(e) =>
+                  handleInputChange("description", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                rows={4}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="duration"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Duration (Minutes) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="duration"
+                  type="number"
+                  min="1"
+                  value={formData.duration}
+                  onChange={(e) =>
+                    handleInputChange("duration", e.target.value)
+                  }
+                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                    errors.duration
+                      ? "border-red-300 focus:ring-red-500"
+                      : "border-gray-300 focus:ring-blue-500"
+                  }`}
+                  aria-required="true"
+                  aria-describedby={
+                    errors.duration ? "duration-error" : undefined
+                  }
+                />
+                {errors.duration && (
+                  <p id="duration-error" className="mt-1 text-sm text-red-600">
+                    {errors.duration}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label
+                  htmlFor="totalMarks"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Total Marks <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="totalMarks"
+                  type="number"
+                  min="1"
+                  value={formData.totalMarks}
+                  onChange={(e) =>
+                    handleInputChange("totalMarks", e.target.value)
+                  }
+                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                    errors.totalMarks
+                      ? "border-red-300 focus:ring-red-500"
+                      : "border-gray-300 focus:ring-blue-500"
+                  }`}
+                  aria-required="true"
+                  aria-describedby={
+                    errors.totalMarks ? "totalMarks-error" : undefined
+                  }
+                />
+                {errors.totalMarks && (
+                  <p
+                    id="totalMarks-error"
+                    className="mt-1 text-sm text-red-600"
+                  >
+                    {errors.totalMarks}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="startDate"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Start Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="startDate"
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) =>
+                    handleInputChange("startDate", e.target.value)
+                  }
+                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                    errors.startDate
+                      ? "border-red-300 focus:ring-red-500"
+                      : "border-gray-300 focus:ring-blue-500"
+                  }`}
+                  aria-required="true"
+                  aria-describedby={
+                    errors.startDate ? "startDate-error" : undefined
+                  }
+                />
+                {errors.startDate && (
+                  <p id="startDate-error" className="mt-1 text-sm text-red-600">
+                    {errors.startDate}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label
+                  htmlFor="startTime"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  Start Time <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="startTime"
+                    type="time"
+                    value={formData.startTime}
+                    onChange={(e) =>
+                      handleInputChange("startTime", e.target.value)
+                    }
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                      errors.startTime
+                        ? "border-red-300 focus:ring-red-500"
+                        : "border-gray-300 focus:ring-blue-500"
+                    }`}
+                    aria-required="true"
+                    aria-describedby={
+                      errors.startTime ? "startTime-error" : undefined
+                    }
+                  />
+                </div>
+                {errors.startTime && (
+                  <p id="startTime-error" className="mt-1 text-sm text-red-600">
+                    {errors.startTime}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="endDate"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  End Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="endDate"
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) => handleInputChange("endDate", e.target.value)}
+                  className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                    errors.endDate
+                      ? "border-red-300 focus:ring-red-500"
+                      : "border-gray-300 focus:ring-blue-500"
+                  }`}
+                  aria-required="true"
+                  aria-describedby={
+                    errors.endDate ? "endDate-error" : undefined
+                  }
+                />
+                {errors.endDate && (
+                  <p id="endDate-error" className="mt-1 text-sm text-red-600">
+                    {errors.endDate}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label
+                  htmlFor="endTime"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
+                  End Time <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="endTime"
+                    type="time"
+                    value={formData.endTime}
+                    onChange={(e) =>
+                      handleInputChange("endTime", e.target.value)
+                    }
+                    className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                      errors.endTime
+                        ? "border-red-300 focus:ring-red-500"
+                        : "border-gray-300 focus:ring-blue-500"
+                    }`}
+                    aria-required="true"
+                    aria-describedby={
+                      errors.endTime ? "endTime-error" : undefined
+                    }
+                  />
+                </div>
+                {errors.endTime && (
+                  <p id="endTime-error" className="mt-1 text-sm text-red-600">
+                    {errors.endTime}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="instructions"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Instructions for Students
+              </label>
+              <textarea
+                id="instructions"
+                placeholder="Enter exam instructions, rules, and guidelines..."
+                value={formData.instructions}
+                onChange={(e) =>
+                  handleInputChange("instructions", e.target.value)
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                rows={3}
+              />
+            </div>
+          </div>
+        )}
+
+        {currentStep === 2 && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Exam Questions
+              </h2>
+              <button
+                onClick={handleAddQuestion}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                aria-label="Add new question"
+              >
+                + Add Question
+              </button>
+            </div>
+
+            {questions.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-blue-600" />
+                  <span className="font-medium text-gray-900">
+                    Total Questions: {questions.length}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="font-medium text-gray-900">
+                    Total Marks: {getTotalMarks()}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {questions.length === 0 ? (
+              <div className="text-center py-12 border border-gray-200 rounded-md bg-gray-50">
+                <p className="text-gray-600 mb-4">No questions added yet</p>
+                <button
+                  onClick={handleAddQuestion}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                  aria-label="Add your first question"
+                >
+                  + Add Your First Question
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4 ">
+                {questions.map((question, index) => (
+                  <div
+                    key={question.id}
+                    className="border border-gray-300  rounded-md p-4"
+                  >
+                    <div className="flex items-start gap-4 mb-4">
+                      <div
+                        className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold text-sm"
+                        aria-label={`Question ${index + 1}`}
+                      >
+                        {index + 1}
+                      </div>
+                      <div className="flex-1 flex gap-3 items-center">
+                        <label
+                          htmlFor={`question-type-${question.id}`}
+                          className="sr-only"
+                        >
+                          Question type
+                        </label>
+                        <select
+                          id={`question-type-${question.id}`}
+                          value={question.type}
+                          onChange={(e) =>
+                            handleQuestionChange(
+                              question.id,
+                              "type",
+                              e.target.value
+                            )
+                          }
+                          className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                          aria-label={`Question type for question ${index + 1}`}
+                        >
+                          {questionTypes.map((type) => (
+                            <option key={type.value} value={type.value}>
+                              {type.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex items-center gap-1">
+                          <label
+                            htmlFor={`question-marks-${question.id}`}
+                            className="text-sm text-gray-500"
+                          >
+                            Marks:
+                          </label>
+                          <input
+                            id={`question-marks-${question.id}`}
+                            type="number"
+                            min="1"
+                            value={question.marks}
+                            onChange={(e) =>
+                              handleQuestionChange(
+                                question.id,
+                                "marks",
+                                e.target.value
+                              )
+                            }
+                            className="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            aria-label={`Marks for question ${index + 1}`}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteQuestion(question.id)}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                        aria-label={`Delete question ${index + 1}`}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+
+                    <label
+                      htmlFor={`question-text-${question.id}`}
+                      className="sr-only"
+                    >
+                      Question text
+                    </label>
+                    <textarea
+                      id={`question-text-${question.id}`}
+                      value={question.text}
+                      onChange={(e) =>
+                        handleQuestionChange(
+                          question.id,
+                          "text",
+                          e.target.value
+                        )
+                      }
+                      placeholder="Enter your question here..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-4"
+                      rows={3}
+                      aria-label={`Question text for question ${index + 1}`}
+                    />
+
+                    {question.type === "multiple-choice" && (
+                      <fieldset className="space-y-2 ml-8">
+                        <legend className="sr-only">
+                          Options for question {index + 1}
+                        </legend>
+                        {question.options.map((option, optIdx) => (
+                          <div key={optIdx} className="flex items-center gap-3">
+                            <input
+                              type="radio"
+                              id={`option-radio-${question.id}-${optIdx}`}
+                              name={`question-${question.id}`}
+                              checked={question.correctAnswer === optIdx}
+                              onChange={() => handleCorrectAnswerChange(question.id, optIdx)}
+                              className="w-4 h-4 cursor-pointer"
+                              aria-label={`Mark option ${optIdx + 1} as correct`}
+                            />
+                            <label
+                              htmlFor={`option-input-${question.id}-${optIdx}`}
+                              className="sr-only"
+                            >
+                              Option {optIdx + 1} text
+                            </label>
+                            <input
+                              id={`option-input-${question.id}-${optIdx}`}
+                              type="text"
+                              value={option}
+                              onChange={(e) =>
+                                handleOptionChange(
+                                  question.id,
+                                  optIdx,
+                                  e.target.value
+                                )
+                              }
+                              placeholder={`Option ${optIdx + 1}`}
+                              className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              aria-label={`Text for option ${optIdx + 1}`}
+                            />
+                          </div>
+                        ))}
+                      </fieldset>
+                    )}
+
+                    {question.type === "true-false" && (
+                      <fieldset className="space-y-2 ml-8">
+                        <legend className="sr-only">
+                          True/False options for question {index + 1}
+                        </legend>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            id={`true-${question.id}`}
+                            name={`tf-${question.id}`}
+                            checked={question.correctAnswer === 0}
+                            onChange={() => handleCorrectAnswerChange(question.id, 0)}
+                            className="w-4 h-4 cursor-pointer"
+                          />
+                          <label
+                            htmlFor={`true-${question.id}`}
+                            className="text-sm text-gray-600"
+                          >
+                            True
+                          </label>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            id={`false-${question.id}`}
+                            name={`tf-${question.id}`}
+                            checked={question.correctAnswer === 1}
+                            onChange={() => handleCorrectAnswerChange(question.id, 1)}
+                            className="w-4 h-4 cursor-pointer"
+                          />
+                          <label
+                            htmlFor={`false-${question.id}`}
+                            className="text-sm text-gray-600"
+                          >
+                            False
+                          </label>
+                        </div>
+                      </fieldset>
+                    )}
+
+                    {(question.type === "short-answer" ||
+                      question.type === "essay") && (
+                      <div className="ml-8 p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600">
+                        Student will provide their own answer
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentStep === 3 && (
+          <div className="space-y-4">
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg p-6 flex items-start gap-4">
+              <Shield
+                className="w-8 h-8 flex-shrink-0 mt-1"
+                aria-hidden="true"
+              />
+              <div>
+                <h2 className="text-xl font-bold">
+                  Anti-Cheating Configuration
+                </h2>
+                <p className="text-sm text-blue-100 mt-1">
+                  Configure proctoring features based on your exam requirements
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 max-h-96 overflow-y-auto" role="list">
+              {securitySettings.map((feature) => (
+                <div
+                  key={feature.id}
+                  className="border border-gray-200 rounded-lg p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  role="listitem"
+                >
+                  <div className="flex items-start gap-4 flex-1">
+                    <div className="flex-shrink-0 mt-1" aria-hidden="true">
+                      {feature.icon}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-900">
+                          {feature.name}
+                        </h3>
+                        {feature.recommended && (
+                          <span
+                            className="inline-block px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded"
+                            aria-label="Recommended feature"
+                          >
+                            Recommended
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {feature.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex-shrink-0 ml-4">
+                    <button
+                      onClick={() => handleToggleSecurityFeature(feature.id)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        feature.enabled ? "bg-blue-500" : "bg-gray-300"
+                      }`}
+                      aria-label={`${feature.enabled ? "Disable" : "Enable"} ${
+                        feature.name
+                      }`}
+                      {...(feature.enabled ? { "aria-pressed": true } : {})}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          feature.enabled ? "translate-x-6" : "translate-x-1"
+                        }`}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {getActiveFeatures().length > 0 && (
+              <div
+                className="bg-blue-50 border border-blue-200 rounded-lg p-4"
+                role="region"
+                aria-label="Active features summary"
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle
+                    className="w-5 h-5 text-blue-600"
+                    aria-hidden="true"
+                  />
+                  <h3 className="font-semibold text-gray-900">
+                    Active Features Summary
+                  </h3>
+                </div>
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="list"
+                  aria-label="Active features list"
+                >
+                  {getActiveFeatures().map((feature, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-block px-3 py-1 bg-blue-200 text-blue-800 text-xs font-medium rounded-full"
+                      role="listitem"
+                    >
+                      {feature}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentStep === 4 && (
+          <div className="space-y-4">
+            <div className="bg-green-600 text-white rounded-lg p-6 flex items-start gap-4">
+              <div>
+                <h2 className="text-xl font-bold">Review Your Exam</h2>
+                <p className="text-sm text-green-100 mt-1">
+                  Please review all details before publishing
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="border border-gray-300 rounded-lg p-6"
+              role="region"
+              aria-label="Exam details"
+            >
+              <h3 className="font-bold text-gray-900 mb-4">Exam Details</h3>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Title</p>
+                  <p className="font-semibold text-gray-900">
+                    {formData.examTitle || "Not specified"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Class</p>
+                  <p className="font-semibold text-gray-900">
+                    {formData.selectedClass || "Not selected"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Duration</p>
+                  <p className="font-semibold text-gray-900">
+                    {formData.duration} minutes
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Total Marks</p>
+                  <p className="font-semibold text-gray-900">
+                    {getTotalMarks()} (Calculated from questions)
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">
+                    Start Date & Time
+                  </p>
+                  <p className="font-semibold text-gray-900">
+                    {formData.startDate && formData.startTime
+                      ? `${formData.startDate} ${formData.startTime}`
+                      : "Not specified"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">End Date & Time</p>
+                  <p className="font-semibold text-gray-900">
+                    {formData.endDate && formData.endTime
+                      ? `${formData.endDate} ${formData.endTime}`
+                      : "Not specified"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="border border-gray-300 rounded-lg p-6"
+              role="region"
+              aria-label="Questions summary"
+            >
+              <h3 className="font-bold text-gray-900 mb-4">Questions</h3>
+              <p className="text-sm text-gray-600">
+                Total Questions: {questions.length}
+              </p>
+              <p className="text-sm text-gray-600 mt-1">
+                Total Marks: {getTotalMarks()}
+              </p>
+            </div>
+
+            <div
+              className="border border-gray-300 rounded-lg p-6"
+              role="region"
+              aria-label="Security settings"
+            >
+              <h3 className="font-bold text-gray-900 mb-4">
+                Security Settings
+              </h3>
+              <div
+                className="flex flex-wrap gap-2"
+                role="list"
+                aria-label="Active security features"
+              >
+                {getActiveFeatures().length > 0 ? (
+                  getActiveFeatures().map((feature, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-block px-3 py-1 bg-blue-100 text-blue-700 text-sm font-medium rounded-full"
+                      role="listitem"
+                    >
+                      {feature}
+                    </span>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    No security features enabled
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
+          <button
+            onClick={handlePrevious}
             disabled={currentStep === 1}
-            className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+            className={`px-6 py-2 rounded-md font-medium transition-colors ${
               currentStep === 1
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-gray-600 text-white hover:bg-gray-700'
+                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
             }`}
             aria-label="Go to previous step"
           >
             Previous
           </button>
-
-          <div className="flex gap-3">
-            <button
-              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-              aria-label="Save exam as draft"
-            >
-              Save as Draft
-            </button>
-            
-            {currentStep < 4 ? (
-              <button
-                onClick={() => setCurrentStep(Math.min(4, currentStep + 1))}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2"
-                aria-label="Go to next step"
-              >
-                Next Step
-                <CheckCircle size={20} aria-hidden="true" />
-              </button>
-            ) : (
-              <button
-                className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all flex items-center gap-2 shadow-md"
-                aria-label="Publish exam"
-              >
-                <Save size={20} aria-hidden="true" />
-                Publish Exam
-              </button>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Proctoring Panel */}
-        <ProctoringPanel />
-
-        {/* Backdrop */}
-        {showProctoringPanel && (
-          <motion.div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-40"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowProctoringPanel(false)}
-            aria-hidden="true"
-          ></motion.div>
-        )}
+          <button
+            onClick={handleNextStep}
+            className={`px-6 py-2 rounded-md font-medium text-white transition-colors ${
+              currentStep === 4
+                ? "bg-green-600 hover:bg-green-700"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
+            aria-label={currentStep === 4 ? "Publish exam" : "Go to next step"}
+          >
+            {currentStep === 4 ? "Publish Exam" : "Next Step"}
+          </button>
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
-};
-
-export default CreateExamPage;
+}
