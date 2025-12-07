@@ -89,6 +89,43 @@ const ClassesInstructor = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showCreateClassModal]);
+  
+  useEffect(() => {
+    console.log("ClassesInstructor component mounted/updated");
+  }, []);
+
+  // منع جميع الأزرار من التسبب في refresh للصفحة
+  useEffect(() => {
+    const preventButtonSubmit = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const button = target.closest('button');
+      
+      if (button && !button.hasAttribute('type')) {
+        button.setAttribute('type', 'button');
+      }
+    };
+
+    document.addEventListener('click', preventButtonSubmit, true);
+    
+    return () => {
+      document.removeEventListener('click', preventButtonSubmit, true);
+    };
+  }, []);
+
+  // منع submit للصفحة بأكملها
+  useEffect(() => {
+    const preventFormSubmit = (e: SubmitEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+
+    document.addEventListener('submit', preventFormSubmit, true);
+    
+    return () => {
+      document.removeEventListener('submit', preventFormSubmit, true);
+    };
+  }, []);
 
   // Prevent body scroll when modal is open
   useEffect(() => {
@@ -209,18 +246,25 @@ const ClassesInstructor = () => {
     navigate("/classes-instructor");
   };
 
-  const handleCreateClass = () => {
+  const handleCreateClass = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setShowCreateClassModal(true);
   };
-   const handleCreateExam = () => {
+  
+  const handleCreateExam = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     navigate('/CreateExam');
   };
+  
   const handleEditExam = (examId: number) => {
-  navigate(`/edit-exam/${examId}`);
-};
-const handleViewResults = (examId: number) => {
-  navigate(`/exam-results/${examId}`);
-};
+    navigate(`/edit-exam/${examId}`);
+  };
+  
+  const handleViewResults = (examId: number) => {
+    navigate(`/exam-results/${examId}`);
+  };
 
   const handleCloseModal = () => {
     setShowCreateClassModal(false);
@@ -230,10 +274,10 @@ const handleViewResults = (examId: number) => {
     setNumberOfStudents(1);
     setClassDescription("");
   };
-const handleViewProfile = (studentId: string) => {
+  
+  const handleViewProfile = (studentId: string) => {
     navigate(`/instructor/student-profile/${studentId}`);
   };
-
 
   const handleSubmitClass = (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,8 +310,13 @@ const handleViewProfile = (studentId: string) => {
       <div className="relative" ref={notificationRef}>
         <button 
           title="Notifications" 
+          type="button"
           className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors"
-          onClick={() => setShowNotifications(!showNotifications)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setShowNotifications(!showNotifications);
+          }}
         >
           <Bell size={20} className="sm:w-6 sm:h-6" />
           {unreadCount > 0 && (
@@ -306,7 +355,15 @@ const handleViewProfile = (studentId: string) => {
                         <h4 className="font-semibold text-gray-800 text-sm">
                           {notification.title}
                         </h4>
-                        <button title='close' className="text-gray-400 hover:text-gray-600">
+                        <button 
+                          title='close' 
+                          type="button"
+                          className="text-gray-400 hover:text-gray-600"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
                           <X size={14} />
                         </button>
                       </div>
@@ -323,7 +380,14 @@ const handleViewProfile = (studentId: string) => {
             </div>
             
             <div className="px-4 py-2 bg-gray-50 text-center">
-              <button className="text-blue-600 text-sm font-medium hover:text-blue-700">
+              <button 
+                type="button"
+                className="text-blue-600 text-sm font-medium hover:text-blue-700"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+              >
                 View all notifications
               </button>
             </div>
@@ -368,99 +432,114 @@ const handleViewProfile = (studentId: string) => {
   );
 
   const StudentsTab = ({ students }: { students: Student[] }) => (
-  <div className="space-y-4">
-    {students.map((student) => (
-      <div key={student.id} className="bg-white border p-4 rounded-lg shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
-            S{student.id}
-          </div>
-          <div>
-            <h4 className="font-semibold text-gray-800">{student.name}</h4>
-            <p className="text-gray-500 text-sm">ID: {student.studentId}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-sm text-gray-500">Avg Score</p>
-            <p className="text-xl font-bold text-gray-800">{student.avgScore}%</p>
-          </div>
-          <button 
-            onClick={() => handleViewProfile(student.studentId)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            View Profile
-          </button>
-        </div>
-      </div>
-    ))}
-  </div>
-);
-
-
-
-const ExamsTab = ({ exams }: { exams: Exam[] }) => (
-  <div className="space-y-4">
-    <div className="flex justify-between items-center mb-4">
-      <h3 className="font-semibold text-gray-800 text-lg">Manage Exams</h3>
-      <button 
-        onClick={handleCreateExam}
-        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-      >
-        <Plus size={18} />
-        Create New Exam
-      </button>
-    </div>
-
-    {exams.map((exam) => (
-      <div key={exam.id} className="bg-white border p-4 rounded-lg shadow-sm">
-        <div className="flex justify-between items-center">
-          <div>
-            <h4 className="font-semibold text-gray-800">{exam.name}</h4>
-            <div className="text-gray-600 text-sm flex gap-4 mt-1">
-              <span className="flex items-center gap-1">
-                <Calendar size={14} />
-                {exam.date}
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock size={14} />
-                {exam.duration}
-              </span>
+    <div className="space-y-4">
+      {students.map((student) => (
+        <div key={student.id} className="bg-white border p-4 rounded-lg shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+              S{student.id}
+            </div>
+            <div>
+              <h4 className="font-semibold text-gray-800">{student.name}</h4>
+              <p className="text-gray-500 text-sm">ID: {student.studentId}</p>
             </div>
           </div>
-
-          <div className="flex items-center gap-3">
-            {exam.status === "upcoming" ? (
-              <>
-                <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-sm">
-                  Upcoming
-                </span>
-                <button 
-                  onClick={() => handleEditExam(exam.id)} // تم التعديل هنا
-                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  Edit
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm">
-                  Completed
-                </span>
-                <button 
-   onClick={() => handleViewResults(exam.id)}
-   className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-  View Results
-</button>
-              
-              </>
-            )}
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm text-gray-500">Avg Score</p>
+              <p className="text-xl font-bold text-gray-800">{student.avgScore}%</p>
+            </div>
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleViewProfile(student.studentId);
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              View Profile
+            </button>
           </div>
         </div>
+      ))}
+    </div>
+  );
+
+  const ExamsTab = ({ exams }: { exams: Exam[] }) => (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-semibold text-gray-800 text-lg">Manage Exams</h3>
+        <button 
+          type="button"
+          onClick={handleCreateExam}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+        >
+          <Plus size={18} />
+          Create New Exam
+        </button>
       </div>
-    ))}
-  </div>
-);
+
+      {exams.map((exam) => (
+        <div key={exam.id} className="bg-white border p-4 rounded-lg shadow-sm">
+          <div className="flex justify-between items-center">
+            <div>
+              <h4 className="font-semibold text-gray-800">{exam.name}</h4>
+              <div className="text-gray-600 text-sm flex gap-4 mt-1">
+                <span className="flex items-center gap-1">
+                  <Calendar size={14} />
+                  {exam.date}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock size={14} />
+                  {exam.duration}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {exam.status === "upcoming" ? (
+                <>
+                  <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-sm">
+                    Upcoming
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleEditExam(exam.id);
+                    }}
+                    className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    Edit
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm">
+                    Completed
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleViewResults(exam.id);
+                    }}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    View Results
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   const ProctoringTab = () => (
     <div className="space-y-4">
       <div className="bg-red-50 p-4 rounded-lg border border-red-200">
@@ -471,10 +550,16 @@ const ExamsTab = ({ exams }: { exams: Exam[] }) => (
             <p className="text-gray-600 text-sm mb-3">8 incidents require review</p>
           
             <button 
-  onClick={() => navigate('/review-incidents')}
-  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
-  Review Incidents
-</button>
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate('/review-incidents');
+              }}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Review Incidents
+            </button>
           </div>
         </div>
       </div>
@@ -485,7 +570,14 @@ const ExamsTab = ({ exams }: { exams: Exam[] }) => (
           <div className="flex-1">
             <h3 className="font-semibold text-gray-800 mb-1">Live Monitoring</h3>
             <p className="text-gray-600 text-sm mb-3">1 active exam with 12 students</p>
-            <button className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+            >
               Monitor Now
             </button>
           </div>
@@ -551,7 +643,12 @@ const ExamsTab = ({ exams }: { exams: Exam[] }) => (
             <p className="text-gray-600">Dr. Ahmed Hassan</p>
           </div>
           <button 
-            onClick={handleBackToList} 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleBackToList();
+            }}
             className="text-gray-600 hover:text-gray-800 flex items-center gap-2"
           >
             ← Back
@@ -569,7 +666,12 @@ const ExamsTab = ({ exams }: { exams: Exam[] }) => (
           ].map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => handleTabChange(id)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleTabChange(id);
+              }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold whitespace-nowrap ${
                 activeTab === id 
                   ? "bg-blue-600 text-white shadow-md" 
@@ -597,7 +699,11 @@ const ExamsTab = ({ exams }: { exams: Exam[] }) => (
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          onClick={() => handleClassClick(cls)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleClassClick(cls);
+          }}
           className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer transform hover:scale-105"
         >
           <div className={`h-2 ${cls.color}`}></div>
@@ -642,7 +748,13 @@ const ExamsTab = ({ exams }: { exams: Exam[] }) => (
             </div>
 
             <button 
+              type="button"
               className={`w-full ${cls.color} text-white py-2 rounded-lg font-semibold mt-4 hover:opacity-90 transition-opacity`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleClassClick(cls);
+              }}
             >
               Manage Class
             </button>
@@ -653,110 +765,174 @@ const ExamsTab = ({ exams }: { exams: Exam[] }) => (
   );
 
   // Create Class Modal Component
- // Create Class Modal Component
-// Create Class Modal Component
-// Create Class Modal Component
-// Create Class Modal Component - تصميم مضغوط
-const CreateClassModal = () => {
-  if (!showCreateClassModal) return null;
+  const CreateClassModal = () => {
+    if (!showCreateClassModal) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-      <motion.div
-        ref={modalRef}
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.2 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
+    const handleModalClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+    };
+
+    const handleInputChange = (field: string, value: string | number) => {
+      switch(field) {
+        case 'className':
+          setClassName(value as string);
+          break;
+        case 'subject':
+          setSubject(value as string);
+          break;
+        case 'numberOfStudents':
+          setNumberOfStudents(value as number);
+          break;
+        case 'classDescription':
+          setClassDescription(value as string);
+          break;
+      }
+    };
+
+    const handleCreate = (e?: React.MouseEvent | React.KeyboardEvent) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      // التحقق من الصحة
+      if (!className.trim()) {
+        alert("Class name is required");
+        return;
+      }
+      
+      if (!subject.trim()) {
+        alert("Subject is required");
+        return;
+      }
+      
+      if (numberOfStudents < 1) {
+        alert("Number of students must be at least 1");
+        return;
+      }
+      
+      console.log("Creating class:", { className, subject, numberOfStudents, classDescription });
+      handleCloseModal();
+    };
+
+    // دالة لمنع Enter من عمل refresh
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleCreate(e);
+      }
+    };
+
+    return (
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
+        onClick={handleCloseModal}
       >
-        {/* الهيدر */}
-        <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="text-2xl">🏫</div>
-            <h2 className="text-xl font-bold">Create New Class</h2>
-          </div>
-          <button
-            onClick={handleCloseModal}
-            className="text-white hover:bg-blue-700 p-1 rounded-lg transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* المحتوى - مضغوط بدون حاجة للscroll */}
-        <form onSubmit={handleSubmitClass} className="p-6 space-y-4 flex-1 overflow-hidden">
-          {/* Class Name */}
-          <div>
-            <label className="block text-gray-800 font-semibold mb-1 text-sm">
-              Class Name *
-            </label>
-            <input
-              type="text"
-              value={className}
-              onChange={(e) => setClassName(e.target.value)}
-              placeholder="e.g., Data structure & Algorithms"
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-            />
+        <motion.div
+          ref={modalRef}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2 }}
+          className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
+          onClick={handleModalClick}
+        >
+          {/* الهيدر */}
+          <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl">🏫</div>
+              <h2 className="text-xl font-bold">Create New Class</h2>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleCloseModal();
+              }}
+              className="text-white hover:bg-blue-700 p-1 rounded-lg transition-colors"
+            >
+              <X size={20} />
+            </button>
           </div>
 
-          {/* Subject and Number of Students */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* المحتوى */}
+          <div className="p-6 space-y-4 flex-1 overflow-hidden">
+            {/* Class Name */}
             <div>
               <label className="block text-gray-800 font-semibold mb-1 text-sm">
-                Subject *
+                Class Name *
               </label>
               <input
                 type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="e.g., Computer Science"
-                required
+                value={className}
+                onChange={(e) => handleInputChange('className', e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="e.g., Data structure & Algorithms"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
             </div>
 
-            <div>
+            {/* Subject and Number of Students */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-800 font-semibold mb-1 text-sm">
+                  Subject *
+                </label>
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => handleInputChange('subject', e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="e.g., Computer Science"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-800 font-semibold mb-1 text-sm">
+                  Number of Students *
+                </label>
+                <input
+                  type="number"
+                  value={numberOfStudents}
+                  onChange={(e) => handleInputChange('numberOfStudents', parseInt(e.target.value))}
+                  onKeyDown={handleKeyDown}
+                  min="1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Class Description */}
+            <div className="flex-1">
               <label className="block text-gray-800 font-semibold mb-1 text-sm">
-                Number of Students *
+                Class Description
               </label>
-              <input
-                type="number"
-                value={numberOfStudents}
-                onChange={(e) => setNumberOfStudents(parseInt(e.target.value))}
-                min="1"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              <textarea
+                value={classDescription}
+                onChange={(e) => handleInputChange('classDescription', e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Brief description of the class..."
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
               />
             </div>
-          </div>
 
-          {/* Class Description */}
-          <div className="flex-1">
-            <label className="block text-gray-800 font-semibold mb-1 text-sm">
-              Class Description
-            </label>
-            <textarea
-              value={classDescription}
-              onChange={(e) => setClassDescription(e.target.value)}
-              placeholder="Brief description of the class..."
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
-            />
+            {/* Submit Button */}
+            <button
+              type="button"
+              onClick={(e) => handleCreate(e)}
+              className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors mt-2"
+            >
+              Create Class
+            </button>
           </div>
+        </motion.div>
+      </div>
+    );
+  };
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors mt-2"
-          >
-            Create Class
-          </button>
-        </form>
-      </motion.div>
-    </div>
-  );
-};
   return (
     <div className="w-full pt-20 min-h-screen bg-[#E3F0FE]">
       <div className="min-h-screen bg-background p-6">
@@ -783,6 +959,7 @@ const CreateClassModal = () => {
                   <NotificationDropdown />
                   {!selectedClass && (
                     <button 
+                      type="button"
                       onClick={handleCreateClass}
                       className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm sm:text-base"
                     >
