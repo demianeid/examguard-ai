@@ -215,6 +215,12 @@ const ClassesInstructor = () => {
    const handleCreateExam = () => {
     navigate('/CreateExam');
   };
+  const handleEditExam = (examId: number) => {
+  navigate(`/edit-exam/${examId}`);
+};
+const handleViewResults = (examId: number) => {
+  navigate(`/exam-results/${examId}`);
+};
 
   const handleCloseModal = () => {
     setShowCreateClassModal(false);
@@ -391,7 +397,9 @@ const handleViewProfile = (studentId: string) => {
   </div>
 );
 
-  const ExamsTab = ({ exams }: { exams: Exam[] }) => (
+
+
+const ExamsTab = ({ exams }: { exams: Exam[] }) => (
   <div className="space-y-4">
     <div className="flex justify-between items-center mb-4">
       <h3 className="font-semibold text-gray-800 text-lg">Manage Exams</h3>
@@ -404,50 +412,55 @@ const handleViewProfile = (studentId: string) => {
       </button>
     </div>
 
-      {exams.map((exam) => (
-        <div key={exam.id} className="bg-white border p-4 rounded-lg shadow-sm">
-          <div className="flex justify-between items-center">
-            <div>
-              <h4 className="font-semibold text-gray-800">{exam.name}</h4>
-              <div className="text-gray-600 text-sm flex gap-4 mt-1">
-                <span className="flex items-center gap-1">
-                  <Calendar size={14} />
-                  {exam.date}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock size={14} />
-                  {exam.duration}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {exam.status === "upcoming" ? (
-                <>
-                  <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-sm">
-                    Upcoming
-                  </span>
-                  <button className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
-                    Edit
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm">
-                    Completed
-                  </span>
-                  <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                    View Results
-                  </button>
-                </>
-              )}
+    {exams.map((exam) => (
+      <div key={exam.id} className="bg-white border p-4 rounded-lg shadow-sm">
+        <div className="flex justify-between items-center">
+          <div>
+            <h4 className="font-semibold text-gray-800">{exam.name}</h4>
+            <div className="text-gray-600 text-sm flex gap-4 mt-1">
+              <span className="flex items-center gap-1">
+                <Calendar size={14} />
+                {exam.date}
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock size={14} />
+                {exam.duration}
+              </span>
             </div>
           </div>
-        </div>
-      ))}
-    </div>
-  );
 
+          <div className="flex items-center gap-3">
+            {exam.status === "upcoming" ? (
+              <>
+                <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-sm">
+                  Upcoming
+                </span>
+                <button 
+                  onClick={() => handleEditExam(exam.id)} // تم التعديل هنا
+                  className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Edit
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm">
+                  Completed
+                </span>
+                <button 
+   onClick={() => handleViewResults(exam.id)}
+   className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+  View Results
+</button>
+              
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+);
   const ProctoringTab = () => (
     <div className="space-y-4">
       <div className="bg-red-50 p-4 rounded-lg border border-red-200">
@@ -456,9 +469,12 @@ const handleViewProfile = (studentId: string) => {
           <div className="flex-1">
             <h3 className="font-semibold text-gray-800 mb-1">Flagged Incidents</h3>
             <p className="text-gray-600 text-sm mb-3">8 incidents require review</p>
-            <button className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
-              Review Incidents
-            </button>
+          
+            <button 
+  onClick={() => navigate('/review-incidents')}
+  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
+  Review Incidents
+</button>
           </div>
         </div>
       </div>
