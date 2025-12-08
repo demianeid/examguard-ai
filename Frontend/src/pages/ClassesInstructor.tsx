@@ -1,5 +1,5 @@
 import Header from '../components/Header';
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import React, { useState, useEffect, useRef } from "react";
 import {
@@ -9,7 +9,6 @@ import {
   FileText,
   Bell,
   Calendar,
-  Award,
   X,
   AlertCircle,
   CheckCircle,
@@ -18,10 +17,11 @@ import {
   TrendingUp,
   Eye,
   Plus,
-  BarChart3
+  BarChart3,
+  School
 } from "lucide-react";
 
-// Types
+// --- Types ---
 interface ClassType {
   id: number;
   name: string;
@@ -56,31 +56,190 @@ interface Student {
   avgScore: number;
 }
 
+interface CreateClassModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: NewClassData) => void;
+}
+
+interface NewClassData {
+  name: string;
+  subject: string;
+  students: string;
+  description: string;
+}
+
+// --- Helper Components ---
+
+const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose, onSubmit }) => {
+  const [formData, setFormData] = useState<NewClassData>({
+    name: "",
+    subject: "",
+    students: "",
+    description: ""
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(formData);
+    setFormData({ name: "", subject: "", students: "", description: "" }); // Reset
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal Content */}
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-[#1A80F6] px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-white">
+            <span className="text-2xl">🏫</span>
+            <h2 className="text-xl font-bold">Class Information</h2>
+          </div>
+          <button 
+          title='close'
+            onClick={onClose}
+            className="text-white/80 hover:text-white transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* Class Name */}
+          <div className="space-y-1">
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+              Class Name *
+            </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              required
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="e.g., Data structure & Algorithms"
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Subject */}
+            <div className="space-y-1">
+              <label htmlFor="subject" className="block text-sm font-medium text-gray-700">
+                Subject *
+              </label>
+              <input
+                type="text"
+                id="subject"
+                name="subject"
+                required
+                value={formData.subject}
+                onChange={handleChange}
+                placeholder="e.g., Computer Science"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+              />
+            </div>
+
+            {/* Number of Students */}
+            <div className="space-y-1">
+              <label htmlFor="students" className="block text-sm font-medium text-gray-700">
+                Number of Students *
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  id="students"
+                  name="students"
+                  required
+                  min="1"
+                  value={formData.students}
+                  onChange={handleChange}
+                  placeholder="1"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow appearance-none"
+                />
+                 {/* Custom arrows for number input styling match */}
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 pointer-events-none text-gray-500">
+                   <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className="rotate-180"><path d="M5 6L0 0H10L5 6Z"/></svg>
+                   <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 6L0 0H10L5 6Z"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1">
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+              Class Description
+            </label>
+            <div className="relative">
+              <textarea
+                id="description"
+                name="description"
+                rows={4}
+                value={formData.description}
+                onChange={handleChange}
+                placeholder="Brief description of the class..."
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow resize-none"
+              />
+              <div className="absolute right-2 bottom-2 pointer-events-none text-gray-400">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M11 11L11 1M11 11L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            className="w-full bg-[#1A80F6] hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition-colors duration-200 mt-2 shadow-lg shadow-blue-500/30"
+          >
+            Create Class
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
+
+// --- Main Component ---
+
 const ClassesInstructor = () => {
   const { classId, tab } = useParams<{ classId?: string; tab?: string }>();
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState<string>("");
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
-  const [showCreateClassModal, setShowCreateClassModal] = useState<boolean>(false);
+  const [isCreateClassModalOpen, setIsCreateClassModalOpen] = useState<boolean>(false);
   const notificationRef = useRef<HTMLDivElement>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
   
-  // Form states for Create Class
-  const [className, setClassName] = useState<string>("");
-  const [subject, setSubject] = useState<string>("");
-  const [numberOfStudents, setNumberOfStudents] = useState<number>(1);
-  const [classDescription, setClassDescription] = useState<string>("");
-
-  // Close notifications and modal when clicking outside
+  // Close notifications when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
-      }
-      
-      // Close modal when clicking outside
-      if (modalRef.current && showCreateClassModal && !modalRef.current.contains(event.target as Node)) {
-        setShowCreateClassModal(false);
       }
     };
 
@@ -88,13 +247,9 @@ const ClassesInstructor = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showCreateClassModal]);
-  
-  useEffect(() => {
-    console.log("ClassesInstructor component mounted/updated");
   }, []);
-
-  // منع جميع الأزرار من التسبب في refresh للصفحة
+  
+  // Prevent default button submits
   useEffect(() => {
     const preventButtonSubmit = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -111,34 +266,6 @@ const ClassesInstructor = () => {
       document.removeEventListener('click', preventButtonSubmit, true);
     };
   }, []);
-
-  // منع submit للصفحة بأكملها
-  useEffect(() => {
-    const preventFormSubmit = (e: SubmitEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    };
-
-    document.addEventListener('submit', preventFormSubmit, true);
-    
-    return () => {
-      document.removeEventListener('submit', preventFormSubmit, true);
-    };
-  }, []);
-
-  // Prevent body scroll when modal is open
-  useEffect(() => {
-    if (showCreateClassModal) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [showCreateClassModal]);
 
   // Sample notifications data
   const notifications: NotificationItem[] = [
@@ -176,7 +303,7 @@ const ClassesInstructor = () => {
     }
   ];
 
-  const instructorClasses: ClassType[] = [
+  const [instructorClasses, setInstructorClasses] = useState<ClassType[]>([
     {
       id: 1,
       name: "Software Engineering",
@@ -193,7 +320,7 @@ const ClassesInstructor = () => {
       activeExams: 4,
       pendingReviews: 6,
       avgScore: 82,
-      color: "bg-d3"
+      color: "bg-secondary"
     },
     {
       id: 3,
@@ -202,9 +329,9 @@ const ClassesInstructor = () => {
       activeExams: 1,
       pendingReviews: 3,
       avgScore: 75,
-      color: "bg-secondary"
+      color: "bg-d3"
     }
-  ];
+  ]);
 
   // Sample exams data
   const exams: Exam[] = [
@@ -225,7 +352,6 @@ const ClassesInstructor = () => {
   const selectedClass = classId ? instructorClasses.find(cls => cls.id === parseInt(classId)) : null;
   const activeTab = tab || "overview";
 
-  // Update URL when class or tab changes
   useEffect(() => {
     if (classId && !selectedClass) {
       navigate("/classes-instructor");
@@ -246,10 +372,26 @@ const ClassesInstructor = () => {
     navigate("/classes-instructor");
   };
 
-  const handleCreateClass = (e: React.MouseEvent) => {
+  const handleCreateClassClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setShowCreateClassModal(true);
+    setIsCreateClassModalOpen(true);
+  };
+
+  const handleCreateClassSubmit = (data: NewClassData) => {
+    // Simulate creating a new class
+    const newClass: ClassType = {
+      id: Math.max(...instructorClasses.map(c => c.id)) + 1,
+      name: data.name,
+      students: parseInt(data.students) || 0,
+      activeExams: 0,
+      pendingReviews: 0,
+      avgScore: 0,
+      color: "bg-emerald-600" // Assign a default color
+    };
+    
+    setInstructorClasses([...instructorClasses, newClass]);
+    setIsCreateClassModalOpen(false);
   };
   
   const handleCreateExam = (e: React.MouseEvent) => {
@@ -265,28 +407,11 @@ const ClassesInstructor = () => {
   const handleViewResults = (examId: number) => {
     navigate(`/exam-results/${examId}`);
   };
-
-  const handleCloseModal = () => {
-    setShowCreateClassModal(false);
-    // Reset form
-    setClassName("");
-    setSubject("");
-    setNumberOfStudents(1);
-    setClassDescription("");
-  };
   
   const handleViewProfile = (studentId: string) => {
     navigate(`/instructor/student-profile/${studentId}`);
   };
 
-  const handleSubmitClass = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Create class logic
-    console.log("Creating class:", { className, subject, numberOfStudents, classDescription });
-    handleCloseModal();
-  };
-
-  // Get notification icon based on type
   const getNotificationIcon = (type: string) => {
     switch(type) {
       case "exam":
@@ -607,7 +732,6 @@ const ClassesInstructor = () => {
     </div>
   );
 
-  // Render tab content based on activeTab
   const renderTabContent = () => {
     if (!selectedClass) return null;
 
@@ -627,7 +751,6 @@ const ClassesInstructor = () => {
     }
   };
 
-  // Class Details Component
   const ClassDetails = () => {
     if (!selectedClass) return null;
 
@@ -651,7 +774,6 @@ const ClassesInstructor = () => {
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {[
             { id: "overview", label: "Overview", icon: BookOpen },
@@ -680,13 +802,11 @@ const ClassesInstructor = () => {
           ))}
         </div>
 
-        {/* Tab Content */}
         {renderTabContent()}
       </div>
     );
   };
 
-  // Classes List Component
   const ClassesList = () => (
     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
       {instructorClasses.map((cls) => (
@@ -760,175 +880,6 @@ const ClassesInstructor = () => {
     </div>
   );
 
-  // Create Class Modal Component
-  const CreateClassModal = () => {
-    if (!showCreateClassModal) return null;
-
-    const handleModalClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-    };
-
-    const handleInputChange = (field: string, value: string | number) => {
-      switch(field) {
-        case 'className':
-          setClassName(value as string);
-          break;
-        case 'subject':
-          setSubject(value as string);
-          break;
-        case 'numberOfStudents':
-          setNumberOfStudents(value as number);
-          break;
-        case 'classDescription':
-          setClassDescription(value as string);
-          break;
-      }
-    };
-
-    const handleCreate = (e?: React.MouseEvent | React.KeyboardEvent) => {
-      if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      
-      // التحقق من الصحة
-      if (!className.trim()) {
-        alert("Class name is required");
-        return;
-      }
-      
-      if (!subject.trim()) {
-        alert("Subject is required");
-        return;
-      }
-      
-      if (numberOfStudents < 1) {
-        alert("Number of students must be at least 1");
-        return;
-      }
-      
-      console.log("Creating class:", { className, subject, numberOfStudents, classDescription });
-      handleCloseModal();
-    };
-
-    // دالة لمنع Enter من عمل refresh
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        e.stopPropagation();
-        handleCreate(e);
-      }
-    };
-
-    return (
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4"
-        onClick={handleCloseModal}
-      >
-        <motion.div
-          ref={modalRef}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.2 }}
-          className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
-          onClick={handleModalClick}
-        >
-          {/* الهيدر */}
-          <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="text-2xl">🏫</div>
-              <h2 className="text-xl font-bold">Create New Class</h2>
-            </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleCloseModal();
-              }}
-              className="text-white hover:bg-blue-700 p-1 rounded-lg transition-colors"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* المحتوى */}
-          <div className="p-6 space-y-4 flex-1 overflow-hidden">
-            {/* Class Name */}
-            <div>
-              <label className="block text-gray-800 font-semibold mb-1 text-sm">
-                Class Name *
-              </label>
-              <input
-                type="text"
-                value={className}
-                onChange={(e) => handleInputChange('className', e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="e.g., Data structure & Algorithms"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              />
-            </div>
-
-            {/* Subject and Number of Students */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-gray-800 font-semibold mb-1 text-sm">
-                  Subject *
-                </label>
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={(e) => handleInputChange('subject', e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="e.g., Computer Science"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-800 font-semibold mb-1 text-sm">
-                  Number of Students *
-                </label>
-                <input
-                  type="number"
-                  value={numberOfStudents}
-                  onChange={(e) => handleInputChange('numberOfStudents', parseInt(e.target.value))}
-                  onKeyDown={handleKeyDown}
-                  min="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                />
-              </div>
-            </div>
-
-            {/* Class Description */}
-            <div className="flex-1">
-              <label className="block text-gray-800 font-semibold mb-1 text-sm">
-                Class Description
-              </label>
-              <textarea
-                value={classDescription}
-                onChange={(e) => handleInputChange('classDescription', e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Brief description of the class..."
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
-              />
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="button"
-              onClick={(e) => handleCreate(e)}
-              className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors mt-2"
-            >
-              Create Class
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  };
-
   return (
     <div className="w-full pt-20 min-h-screen bg-[#E3F0FE]">
       <div className="min-h-screen bg-background p-6">
@@ -956,7 +907,7 @@ const ClassesInstructor = () => {
                   {!selectedClass && (
                     <button 
                       type="button"
-                      onClick={handleCreateClass}
+                      onClick={handleCreateClassClick}
                       className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm sm:text-base"
                     >
                       <Plus size={18} />
@@ -972,9 +923,17 @@ const ClassesInstructor = () => {
           {selectedClass ? <ClassDetails /> : <ClassesList />}
         </div>
       </div>
-      
-      {/* Create Class Modal */}
-      <CreateClassModal />
+
+      {/* Modals */}
+      <AnimatePresence>
+        {isCreateClassModalOpen && (
+          <CreateClassModal 
+            isOpen={isCreateClassModalOpen} 
+            onClose={() => setIsCreateClassModalOpen(false)} 
+            onSubmit={handleCreateClassSubmit} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

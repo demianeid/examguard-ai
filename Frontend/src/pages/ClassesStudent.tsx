@@ -1,5 +1,4 @@
 import Header from '../components/Header'
-import { motion } from "framer-motion";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import React, { useState, useEffect, useRef } from "react";
 import {
@@ -214,12 +213,7 @@ const ClassesStudent = () => {
         </button>
 
         {showNotifications && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl z-50 overflow-hidden"
-          >
+          <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl z-50 overflow-hidden">
             <div className="bg-blue-600 text-white px-4 py-3 flex justify-between items-center">
               <h3 className="font-semibold">Notifications</h3>
               <span className="bg-white text-blue-600 text-xs px-2 py-1 rounded-full">
@@ -265,7 +259,7 @@ const ClassesStudent = () => {
                 View all notifications
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
       </div>
     );
@@ -457,13 +451,10 @@ const ClassesStudent = () => {
   const ClassesList = () => (
     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
       {studentClasses.map((cls) => (
-        <motion.div
+        <div
           key={cls.id}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
           onClick={() => handleClassClick(cls)}
-          className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer transform hover:scale-105"
+          className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
         >
           <div className={`h-2 bg-gradient-to-r ${cls.color}`}></div>
 
@@ -515,7 +506,7 @@ const ClassesStudent = () => {
               View Details
             </button>
           </div>
-        </motion.div>
+        </div>
       ))}
     </div>
   );
