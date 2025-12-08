@@ -180,11 +180,7 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose, on
                   placeholder="1"
                   className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow appearance-none"
                 />
-                 {/* Custom arrows for number input styling match */}
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 pointer-events-none text-gray-500">
-                   <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className="rotate-180"><path d="M5 6L0 0H10L5 6Z"/></svg>
-                   <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 6L0 0H10L5 6Z"/></svg>
-                </div>
+                 
               </div>
             </div>
           </div>
@@ -204,11 +200,7 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose, on
                 placeholder="Brief description of the class..."
                 className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow resize-none"
               />
-              <div className="absolute right-2 bottom-2 pointer-events-none text-gray-400">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M11 11L11 1M11 11L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </div>
+           
             </div>
           </div>
 
@@ -432,11 +424,11 @@ const ClassesInstructor = () => {
     const unreadCount = notifications.filter(n => !n.isRead).length;
 
     return (
-      <div className="relative" ref={notificationRef}>
+      <div className="relative"  ref={notificationRef}>
         <button 
           title="Notifications" 
           type="button"
-          className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors"
+          className="relative p-2  text-gray-600 hover:text-gray-800 transition-colors"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -454,7 +446,7 @@ const ClassesInstructor = () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
-            className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl z-50 overflow-hidden"
+            className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl z-50 overflow-hidden"
           >
             <div className="bg-blue-600 text-white px-4 py-3 flex justify-between items-center">
               <h3 className="font-semibold">Notifications</h3>

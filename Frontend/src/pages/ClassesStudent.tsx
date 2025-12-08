@@ -213,7 +213,7 @@ const ClassesStudent = () => {
         </button>
 
         {showNotifications && (
-          <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl z-50 overflow-hidden">
+          <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl z-50 overflow-hidden">
             <div className="bg-blue-600 text-white px-4 py-3 flex justify-between items-center">
               <h3 className="font-semibold">Notifications</h3>
               <span className="bg-white text-blue-600 text-xs px-2 py-1 rounded-full">
