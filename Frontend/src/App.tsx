@@ -22,6 +22,7 @@ import Settings from "./pages/Setting";
 import AccountStudentInstructorView from "./pages/AccountStudentInstructorView";
 import EditExam from './pages/EditExam';
 import ReviewIncidents from "./pages/ReviewIncidents";
+import LiveProctoring from "./pages/LiveProctoring";
 function App() {
   const location = useLocation();
 
@@ -68,6 +69,7 @@ function App() {
       <Route path="/exam-results/:examId" element={<ExamResults />} />
       <Route path="StartExam" element={<StartExam />} />
       <Route path="/review-incidents" element={<ReviewIncidents />} />
+      <Route path="/live-proctoring" element={<LiveProctoring />} />
     </Routes>
   );
 }

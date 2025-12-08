@@ -571,11 +571,7 @@ const ClassesInstructor = () => {
             <h3 className="font-semibold text-gray-800 mb-1">Live Monitoring</h3>
             <p className="text-gray-600 text-sm mb-3">1 active exam with 12 students</p>
             <button 
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
+              onClick={() => navigate('/live-proctoring')}
               className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
             >
               Monitor Now

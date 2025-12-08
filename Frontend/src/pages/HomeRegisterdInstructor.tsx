@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Play, Pause } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Variants } from 'framer-motion';
@@ -8,6 +9,10 @@ import Header from '../components/Header'
 const HeroSection: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
+  const navigate = useNavigate();
+  const handleGoToClasses = () => {
+  navigate('/classes-instructor');
+};
 
   // Animation variants
   const containerVariants: Variants = {
@@ -169,6 +174,7 @@ const HeroSection: React.FC = () => {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8, delay: 0.6 }}
               type="button"
+                onClick={handleGoToClasses}
             >
               Go To Classes
               <motion.div
