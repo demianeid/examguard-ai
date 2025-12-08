@@ -234,8 +234,8 @@ const Header: React.FC<HeaderProps> = ({
       className={`fixed top-0 left-0 w-full z-[9999] transition-all duration-300 ease-in-out
         ${
           isScrolled
-            ? "bg-p1/80 backdrop-blur-md shadow-lg px-5 sm:px-20 py-4" // Added blur and transparency
-            : "bg-background px-5 sm:px-20 py-4"
+            ? "bg-p1/80 backdrop-blur-md shadow-lg px-5 sm:px-20 py-3" // Added blur and transparency
+            : "bg-background px-5 sm:px-20 py-3"
         }
       `}
     >
@@ -248,7 +248,7 @@ const Header: React.FC<HeaderProps> = ({
           <img 
             src={currentLogo} // Use dynamic logo based on scroll state
             alt="ExamGuard Logo" 
-            className="h-9 sm:h-10 w-auto object-contain transition-all duration-300"
+            className="h-9 sm:h-9 w-auto object-contain transition-all duration-300"
           />
         </Link>
 
@@ -371,7 +371,7 @@ const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Desktop Nav Links */}
-        <div className="hidden lg:flex lg:order-1 mx-auto">
+        <div className="hidden lg:flex lg:order-1 text-sm mx-auto">
           <ul className="flex items-center gap-1">
             {navItems.map((item, index) => (
               <li key={index}>
