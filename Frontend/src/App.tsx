@@ -23,6 +23,9 @@ import AccountStudentInstructorView from "./pages/AccountStudentInstructorView";
 import EditExam from './pages/EditExam';
 import ReviewIncidents from "./pages/ReviewIncidents";
 import LiveProctoring from "./pages/LiveProctoring";
+import OfflineMode from "./pages/OfflineMode";
+import Roi from "./pages/Roi";
+import MonitoringOffline from "./pages/MonitoringOffline";
 function App() {
   const location = useLocation();
 
@@ -70,6 +73,9 @@ function App() {
       <Route path="StartExam" element={<StartExam />} />
       <Route path="/review-incidents" element={<ReviewIncidents />} />
       <Route path="/live-proctoring" element={<LiveProctoring />} />
+      <Route path="OfflineMode" element={<OfflineMode />} />
+      <Route path="Roi" element={<Roi />} />
+      <Route path="MonitoringOffline" element={<MonitoringOffline />} />
     </Routes>
   );
 }

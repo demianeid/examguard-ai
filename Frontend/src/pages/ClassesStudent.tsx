@@ -459,7 +459,7 @@ const ClassesStudent = () => {
           <div className={`h-2 bg-gradient-to-r ${cls.color}`}></div>
 
           <div className="p-6">
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-4 ">
               <div>
                 <h3 className="text-xl font-bold text-gray-800 mb-2">{cls.name}</h3>
                 <p className="text-gray-600 text-sm flex items-center gap-2">

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { HashLink } from "react-router-hash-link";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Link } from "react-router-dom";
-import { LogOut, Settings, User } from "lucide-react";
+import { LogOut, Settings, User, WifiOff } from "lucide-react"; // Added WifiOff icon
 import { useUser } from '../context/UserContext';
 
 // Logo URLs
@@ -61,6 +61,7 @@ const Header: React.FC<HeaderProps> = ({
     if (location.pathname === "/home-instructor" || 
         location.pathname === "/account-instructor" ||
         location.pathname === "/classes-instructor" ||
+        location.pathname === "/offline-mode" || // Added offline mode detection
         location.pathname.startsWith("/classes-instructor/")) {
       setUserType('instructor');
     } else if (location.pathname === "/home" || 
@@ -96,7 +97,8 @@ const Header: React.FC<HeaderProps> = ({
         home: "/#home",
         features: "/#features",
         howItWorks: "/#howitworks",
-        contact: "/#contact"
+        contact: "/#contact",
+        offlineMode: "/#offline-mode" // For non-registered users
       };
     }
 
@@ -109,7 +111,8 @@ const Header: React.FC<HeaderProps> = ({
       features: "/features",
       howItWorks: "/how-it-works",
       contact: "/contact",
-      classes: classesPath  // هنا الفرق - كل واحد هيروح للصفحة الخاصة بيه
+      classes: classesPath,
+      offlineMode: userType === 'instructor' ? "/OfflineMode" : undefined // Only for instructors
     };
   };
 
@@ -121,18 +124,36 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   // Navigation items based on user status AND user type
-  const navItems = isRegistered ? [
-    { name: "Home", path: ensurePath(paths.home) },
-    { name: "Features", path: ensurePath(paths.features) },
-    { name: "How It Works", path: ensurePath(paths.howItWorks) },
-    { name: "Contact", path: ensurePath(paths.contact) },
-    { name: "Classes", path: ensurePath(paths.classes) }  // هنا الـ path يتغير حسب userType
-  ] : [
-    { name: "Home", path: ensurePath(paths.home) },
-    { name: "Features", path: ensurePath(paths.features) },
-    { name: "How It Works", path: ensurePath(paths.howItWorks) },
-    { name: "Contact", path: ensurePath(paths.contact) }
-  ];
+  const getNavItems = () => {
+    if (isRegistered) {
+      const items = [
+        { name: "Home", path: ensurePath(paths.home) },
+        { name: "Features", path: ensurePath(paths.features) },
+        { name: "How It Works", path: ensurePath(paths.howItWorks) },
+        { name: "Contact", path: ensurePath(paths.contact) },
+        { name: "Classes", path: ensurePath(paths.classes) }
+      ];
+      
+      // Add Offline Mode only for instructors
+      if (userType === 'instructor' && paths.offlineMode) {
+        items.push({ 
+          name: "Offline Mode", 
+          path: paths.offlineMode,
+        });
+      }
+      
+      return items;
+    } else {
+      return [
+        { name: "Home", path: ensurePath(paths.home) },
+        { name: "Features", path: ensurePath(paths.features) },
+        { name: "How It Works", path: ensurePath(paths.howItWorks) },
+        { name: "Contact", path: ensurePath(paths.contact) }
+      ];
+    }
+  };
+
+  const navItems = getNavItems();
 
   const navigate = useNavigate();
 
@@ -159,7 +180,7 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   // Render navigation link based on type
-  const renderNavLink = (item: { name: string; path: string }, isMobile: boolean = false) => {
+  const renderNavLink = (item: { name: string; path: string; icon?: React.ReactNode }, isMobile: boolean = false) => {
     const baseClasses = isMobile 
       ? `block text-center px-3.5 py-2 font-semibold transition-colors ${
           isScrolled
@@ -170,6 +191,13 @@ const Header: React.FC<HeaderProps> = ({
           isScrolled ? "text-white" : "text-gray-900"
         }`;
 
+    const content = (
+      <>
+        {item.icon && item.icon}
+        {item.name}
+      </>
+    );
+
     if (isRegistered) {
       return (
         <Link
@@ -177,7 +205,7 @@ const Header: React.FC<HeaderProps> = ({
           className={baseClasses}
           onClick={() => isMobile && setIsMenuOpen(false)}
         >
-          {item.name}
+          {content}
           {!isMobile && (
             <span
               className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
@@ -197,7 +225,7 @@ const Header: React.FC<HeaderProps> = ({
             className={baseClasses}
             onClick={() => isMobile && setIsMenuOpen(false)}
           >
-            {item.name}
+            {content}
             {!isMobile && (
               <span
                 className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
@@ -215,7 +243,7 @@ const Header: React.FC<HeaderProps> = ({
             className={baseClasses}
             onClick={() => isMobile && setIsMenuOpen(false)}
           >
-            {item.name}
+            {content}
             {!isMobile && (
               <span
                 className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
