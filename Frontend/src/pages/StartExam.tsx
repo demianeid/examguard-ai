@@ -1,38 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Clock, FileText, CheckCircle, Circle, ChevronLeft, ChevronRight, Settings, Camera, Mic, Wifi, Monitor, Flag, AlertTriangle, Send } from 'lucide-react';
-
-interface Question {
-  en: string;
-  ar: string;
-  options: { en: string; ar: string; }[];
-  points: number;
-}
-
-interface SystemCheck {
-  icon: React.ComponentType<any>;
-  title: string;
-  description: string;
-  status: string;
-}
+import { Clock, FileText, CheckCircle, ChevronLeft, ChevronRight, Settings, Camera, Mic, Wifi, Monitor, Flag, AlertTriangle, Send } from 'lucide-react';
 
 const ExamInterface: React.FC = () => {
   const [currentView, setCurrentView] = useState<'rules' | 'system-check' | 'exam'>('rules');
   const [agreedToRules, setAgreedToRules] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState(6402); // 01:46:42
+  const [timeRemaining, setTimeRemaining] = useState(6402);
   const [language, setLanguage] = useState<'en' | 'ar'>('en');
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  
+  const [systemCheckStatus, setSystemCheckStatus] = useState<{[key: string]: 'checking' | 'success' | 'failed'}>({
+    camera: 'checking',
+    microphone: 'checking',
+    internet: 'checking',
+    browser: 'checking',
+    screen: 'checking'
+  });
+  const [checkingComplete, setCheckingComplete] = useState(false);
 
-  // ==== AI Proctoring Refs & State ====
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [violationScore, setViolationScore] = useState(0);
   const [proctorAlerts, setProctorAlerts] = useState<string[]>([]);
 
-  // ==== Questions + Answers + Flags ====
-  const questions: Question[] = [
+  const questions = [
     {
       en: "What is the time complexity of binary search in a sorted array?",
       ar: "ما هي التعقيد الزمني للبحث الثنائي في مصفوفة مرتبة؟",
@@ -71,7 +64,6 @@ const ExamInterface: React.FC = () => {
   const [answers, setAnswers] = useState<(number | null)[]>(Array(20).fill(null));
   const [flagged, setFlagged] = useState<boolean[]>(Array(20).fill(false));
 
-  // ==== Exam Rules + System Check ====
   const examRules = [
     "You must remain in camera view at all times during the exam",
     "Looking away from screen for extended periods will trigger warnings",
@@ -84,19 +76,64 @@ const ExamInterface: React.FC = () => {
     "Auto-submit will occur when time expires"
   ];
 
-  const systemChecks: SystemCheck[] = [
-    { icon: Camera, title: 'Camera Access', description: 'Camera detected and working properly', status: 'success' },
-    { icon: Mic, title: 'Microphone Access', description: 'Microphone is functioning correctly', status: 'success' },
-    { icon: Wifi, title: 'Internet Connection', description: 'Strong internet connection (45 Mbps)', status: 'success' },
-    { icon: Monitor, title: 'Browser Compatibility', description: 'Browser is compatible and up to date', status: 'success' },
-    { icon: Monitor, title: 'Screen Sharing', description: 'Screen sharing permissions granted', status: 'success' }
-  ];
-
   const answeredCount = answers.filter(a => a !== null).length;
   const unansweredCount = 20 - answeredCount;
   const flaggedCount = flagged.filter(f => f).length;
 
-  // ==== Timer ====
+  useEffect(() => {
+    if (currentView === 'system-check') {
+      setSystemCheckStatus({
+        camera: 'checking',
+        microphone: 'checking',
+        internet: 'checking',
+        browser: 'checking',
+        screen: 'checking'
+      });
+      setCheckingComplete(false);
+
+      setTimeout(async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach(track => track.stop());
+          setSystemCheckStatus(prev => ({ ...prev, camera: 'success' }));
+        } catch {
+          setSystemCheckStatus(prev => ({ ...prev, camera: 'failed' }));
+        }
+      }, 1000);
+
+      setTimeout(async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+          setSystemCheckStatus(prev => ({ ...prev, microphone: 'success' }));
+        } catch {
+          setSystemCheckStatus(prev => ({ ...prev, microphone: 'failed' }));
+        }
+      }, 2000);
+
+      setTimeout(() => {
+        const isOnline = navigator.onLine;
+        setSystemCheckStatus(prev => ({ ...prev, internet: isOnline ? 'success' : 'failed' }));
+      }, 3000);
+
+      setTimeout(() => {
+        setSystemCheckStatus(prev => ({ ...prev, browser: 'success' }));
+      }, 4000);
+
+      setTimeout(async () => {
+        try {
+          const stream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
+          stream.getTracks().forEach((track: any) => track.stop());
+          setSystemCheckStatus(prev => ({ ...prev, screen: 'success' }));
+        } catch {
+          setSystemCheckStatus(prev => ({ ...prev, screen: 'failed' }));
+        } finally {
+          setCheckingComplete(true);
+        }
+      }, 5000);
+    }
+  }, [currentView]);
+
   useEffect(() => {
     if (currentView === 'exam') {
       const timer = setInterval(() => {
@@ -151,7 +188,99 @@ const ExamInterface: React.FC = () => {
     alert('Exam submitted successfully!');
   };
 
-  // ==== AI Proctoring: Open Camera + WebSocket ====
+  const retrySystemCheck = async () => {
+    setCheckingComplete(false);
+    setSystemCheckStatus({
+      camera: 'checking',
+      microphone: 'checking',
+      internet: 'checking',
+      browser: 'checking',
+      screen: 'checking'
+    });
+    
+    const retryChecks = async () => {
+      try {
+        // Camera check
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach(track => track.stop());
+          setSystemCheckStatus(prev => ({ ...prev, camera: 'success' }));
+        } catch {
+          setSystemCheckStatus(prev => ({ ...prev, camera: 'failed' }));
+        }
+        
+        // Microphone check
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+          setSystemCheckStatus(prev => ({ ...prev, microphone: 'success' }));
+        } catch {
+          setSystemCheckStatus(prev => ({ ...prev, microphone: 'failed' }));
+        }
+        
+        // Internet check
+        const isOnline = navigator.onLine;
+        setSystemCheckStatus(prev => ({ ...prev, internet: isOnline ? 'success' : 'failed' }));
+        
+        // Browser check - always success for modern browsers
+        setSystemCheckStatus(prev => ({ ...prev, browser: 'success' }));
+        
+        // Screen sharing check
+        try {
+          const stream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
+          stream.getTracks().forEach((track: any) => track.stop());
+          setSystemCheckStatus(prev => ({ ...prev, screen: 'success' }));
+        } catch {
+          setSystemCheckStatus(prev => ({ ...prev, screen: 'failed' }));
+        }
+      } finally {
+        setCheckingComplete(true);
+      }
+    };
+    
+    setTimeout(retryChecks, 500);
+  };
+
+  const retrySpecificCheck = async (checkKey: string) => {
+    setSystemCheckStatus(prev => ({ ...prev, [checkKey]: 'checking' }));
+    
+    switch(checkKey) {
+      case 'camera':
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach(track => track.stop());
+          setSystemCheckStatus(prev => ({ ...prev, camera: 'success' }));
+        } catch {
+          setSystemCheckStatus(prev => ({ ...prev, camera: 'failed' }));
+        }
+        break;
+      case 'microphone':
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+          setSystemCheckStatus(prev => ({ ...prev, microphone: 'success' }));
+        } catch {
+          setSystemCheckStatus(prev => ({ ...prev, microphone: 'failed' }));
+        }
+        break;
+      case 'internet':
+        const isOnline = navigator.onLine;
+        setSystemCheckStatus(prev => ({ ...prev, internet: isOnline ? 'success' : 'failed' }));
+        break;
+      case 'screen':
+        try {
+          const stream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
+          stream.getTracks().forEach((track: any) => track.stop());
+          setSystemCheckStatus(prev => ({ ...prev, screen: 'success' }));
+        } catch {
+          setSystemCheckStatus(prev => ({ ...prev, screen: 'failed' }));
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
   useEffect(() => {
     if (currentView !== 'exam') return;
 
@@ -159,8 +288,6 @@ const ExamInterface: React.FC = () => {
       .then(stream => { if(videoRef.current) videoRef.current.srcObject = stream; })
       .catch(()=>console.error("Camera access denied"));
 
-    // Note: WebSocket connection would fail in this demo without a real backend
-    // Simulating proctoring alerts for demonstration
     const mockAlerts = setInterval(() => {
       const randomAlert = Math.random();
       if (randomAlert > 0.7) {
@@ -177,25 +304,6 @@ const ExamInterface: React.FC = () => {
     };
   }, [currentView]);
 
-  const sendFrameToAI = () => {
-    if(!videoRef.current || !canvasRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    const ctx = canvasRef.current.getContext("2d");
-    if(!ctx) return;
-    canvasRef.current.width=320;
-    canvasRef.current.height=240;
-    ctx.drawImage(videoRef.current,0,0,320,240);
-    const frameBase64 = canvasRef.current.toDataURL("image/jpeg");
-    wsRef.current.send(JSON.stringify({frame:frameBase64,timestamp:Date.now()}));
-  };
-
-  // ==== Send frame every 3 seconds ====
-  useEffect(()=>{
-    if(currentView!=='exam') return;
-    const interval = setInterval(()=>sendFrameToAI(),3000);
-    return ()=>clearInterval(interval);
-  },[currentView]);
-
-  // ==== Auto Submit if violation score exceeds threshold ====
   useEffect(()=>{
     if(violationScore >= 10){
       alert("Exam auto-submitted due to violations");
@@ -203,18 +311,15 @@ const ExamInterface: React.FC = () => {
     }
   },[violationScore]);
 
-  // Rules Interface Component (Default View)
   if (currentView === 'rules') {
     return (
       <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
         <div className="max-w-5xl mx-auto">
-          {/* Back Button */}
           <button onClick={() => console.log('Back')} className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6 transition-colors">
             <ChevronLeft size={20} />
             <span>Back</span>
           </button>
 
-          {/* Main Header Card */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-8 mb-6 shadow-lg text-white">
             <h1 className="text-2xl sm:text-3xl font-bold mb-2">
               Midterm Exam - Data Structures & Algorithms
@@ -256,7 +361,6 @@ const ExamInterface: React.FC = () => {
             </div>
           </div>
 
-          {/* Exam Schedule Card */}
           <div className="bg-white rounded-xl p-6 mb-6 shadow-md">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-purple-100 p-2 rounded-lg">
@@ -280,7 +384,6 @@ const ExamInterface: React.FC = () => {
             </div>
           </div>
 
-          {/* Exam Rules Card */}
           <div className="bg-white rounded-xl p-6 mb-6 shadow-md">
             <div className="flex items-center gap-3 mb-4">
               <div className="bg-orange-100 p-2 rounded-lg">
@@ -299,7 +402,6 @@ const ExamInterface: React.FC = () => {
             </div>
           </div>
 
-          {/* Agreement Checkbox */}
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
@@ -319,7 +421,6 @@ const ExamInterface: React.FC = () => {
             </label>
           </div>
 
-          {/* Proceed Button */}
           <button
             onClick={() => setCurrentView('system-check')}
             disabled={!agreedToRules}
@@ -337,12 +438,60 @@ const ExamInterface: React.FC = () => {
     );
   }
 
-  // System Check Component
   if (currentView === 'system-check') {
+    const systemChecks = [
+      { 
+        key: 'camera',
+        icon: Camera, 
+        title: 'Camera Access', 
+        checkingDesc: 'Checking camera permissions...',
+        successDesc: 'Camera detected and working properly',
+        failedDesc: 'Camera access denied',
+        troubleshooting: 'Allow camera access in browser settings and ensure no other app is using the camera'
+      },
+      { 
+        key: 'microphone',
+        icon: Mic, 
+        title: 'Microphone Access', 
+        checkingDesc: 'Testing microphone...',
+        successDesc: 'Microphone is functioning correctly',
+        failedDesc: 'Microphone not accessible',
+        troubleshooting: 'Check microphone permissions and ensure it\'s not muted'
+      },
+      { 
+        key: 'internet',
+        icon: Wifi, 
+        title: 'Internet Connection', 
+        checkingDesc: 'Testing connection speed...',
+        successDesc: 'Strong internet connection detected',
+        failedDesc: 'Weak or unstable connection',
+        troubleshooting: 'Check your internet connection and try again'
+      },
+      { 
+        key: 'browser',
+        icon: Monitor, 
+        title: 'Browser Compatibility', 
+        checkingDesc: 'Verifying browser version...',
+        successDesc: 'Browser is compatible and up to date',
+        failedDesc: 'Browser not supported',
+        troubleshooting: 'Use the latest version of Chrome, Firefox, or Edge'
+      },
+      { 
+        key: 'screen',
+        icon: Monitor, 
+        title: 'Screen Sharing', 
+        checkingDesc: 'Requesting screen sharing permissions...',
+        successDesc: 'Screen sharing permissions granted',
+        failedDesc: 'Screen sharing permission denied',
+        troubleshooting: 'Allow screen sharing when prompted by your browser'
+      }
+    ];
+
+    const allChecksSuccess = Object.values(systemCheckStatus).every(status => status === 'success');
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 p-8 flex items-center justify-center">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-3xl w-full">
-          {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <div className="bg-blue-100 p-3 rounded-full">
@@ -362,54 +511,143 @@ const ExamInterface: React.FC = () => {
             </button>
           </div>
 
-          {/* Check Items */}
           <div className="space-y-3 mb-6">
-            {systemChecks.map((check, index) => {
+            {systemChecks.map((check) => {
               const IconComponent = check.icon;
+              const status = systemCheckStatus[check.key];
+              
               return (
                 <div
-                  key={index}
-                  className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between"
+                  key={check.key}
+                  className={`rounded-xl p-4 flex items-center justify-between border transition-all ${
+                    status === 'success' 
+                      ? 'bg-green-50 border-green-200' 
+                      : status === 'failed'
+                      ? 'bg-red-50 border-red-200'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}
                 >
                   <div className="flex items-center gap-4">
-                    <IconComponent className="w-6 h-6 text-gray-700" />
+                    <IconComponent className={`w-6 h-6 ${
+                      status === 'checking' ? 'text-gray-400 animate-pulse' : 'text-gray-700'
+                    }`} />
                     <div>
                       <h3 className="font-semibold text-gray-900">{check.title}</h3>
-                      <p className="text-sm text-gray-600">{check.description}</p>
+                      <p className="text-sm text-gray-600">
+                        {status === 'checking' && check.checkingDesc}
+                        {status === 'success' && check.successDesc}
+                        {status === 'failed' && check.failedDesc}
+                      </p>
+                      {status === 'failed' && (
+                        <p className="text-xs text-gray-500 mt-1">{check.troubleshooting}</p>
+                      )}
                     </div>
                   </div>
-                  <CheckCircle className="w-6 h-6 text-green-600" />
+                  
+                  <div className="flex items-center gap-3">
+                    {status === 'checking' && (
+                      <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {status === 'success' && (
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                    )}
+                    {status === 'failed' && (
+                      <>
+                        <AlertTriangle className="w-6 h-6 text-red-600" />
+                        <button
+                          onClick={() => retrySpecificCheck(check.key)}
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline px-2 py-1 rounded hover:bg-blue-50"
+                        >
+                          Retry
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Success Message */}
-          <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-4">
-            <div className="flex items-center gap-3 mb-4">
-              <CheckCircle className="w-8 h-8 text-green-600" />
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">All Systems Ready!</h2>
-                <p className="text-green-700">Your device meets all requirements to start the exam</p>
+          {checkingComplete && allChecksSuccess && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-4 animate-fadeIn">
+              <div className="flex items-center gap-3 mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">All Systems Ready!</h2>
+                  <p className="text-green-700">Your device meets all requirements to start the exam</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setCurrentView('exam')}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-colors"
+              >
+                <Clock className="w-5 h-5" />
+                Start Exam Now
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
+          
+          {checkingComplete && !allChecksSuccess && (
+            <div className="space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-4 animate-fadeIn">
+                <div className="flex items-center gap-3 mb-4">
+                  <AlertTriangle className="w-8 h-8 text-red-600" />
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">System Check Failed</h2>
+                    <p className="text-red-700">Please fix the issues above before starting the exam</p>
+                  </div>
+                </div>
+                
+                <div className="mb-4 p-3 bg-white rounded-lg">
+                  <h3 className="font-semibold text-gray-900 mb-2">Failed Checks:</h3>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    {Object.entries(systemCheckStatus).map(([key, status]) => 
+                      status === 'failed' && (
+                        <li key={key} className="flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-red-500" />
+                          <span className="capitalize">{key}: Permission denied or device not found</span>
+                        </li>
+                      )
+                    )}
+                  </ul>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setCurrentView('rules')}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-colors"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                  Back to Rules
+                </button>
+                <button 
+                  onClick={retrySystemCheck}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-colors"
+                >
+                  <Settings className="w-5 h-5" />
+                  Retry System Check
+                </button>
               </div>
             </div>
-
-            {/* Start Button */}
-            <button 
-              onClick={() => setCurrentView('exam')}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-colors"
-            >
-              <Clock className="w-5 h-5" />
-              Start Exam Now
-              <ChevronRight size={20} />
-            </button>
-          </div>
+          )}
         </div>
+        
+        <style>{`
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .animate-fadeIn {
+            animation: fadeIn 0.5s ease-out;
+          }
+        `}</style>
       </div>
     );
   }
 
-  // Exam Interface Component
   if (currentView === 'exam') {
     const currentQ = questions[currentQuestion];
     const translations = {
@@ -453,11 +691,9 @@ const ExamInterface: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="max-w-7xl mx-auto">
-          {/* AI Proctoring Elements (hidden video/canvas) */}
           <video ref={videoRef} autoPlay muted hidden />
           <canvas ref={canvasRef} hidden />
 
-          {/* Header */}
           <div className="bg-blue-600 text-white rounded-xl p-6 mb-6 flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold mb-1">{t.title}</h1>
@@ -472,7 +708,6 @@ const ExamInterface: React.FC = () => {
             </div>
           </div>
 
-          {/* AI Proctoring Alerts */}
           {proctorAlerts.length > 0 && (
             <div className="bg-red-100 border border-red-400 text-red-800 px-4 py-2 rounded-md mb-4 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
@@ -482,7 +717,6 @@ const ExamInterface: React.FC = () => {
           <div className="text-sm text-red-600 mb-4">Violation Score: {violationScore} / 10</div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Question Section */}
             <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -494,7 +728,7 @@ const ExamInterface: React.FC = () => {
                   </span>
                 </div>
                 <button
-                 title='flag'
+                title='flag'
                   onClick={toggleFlag}
                   className={`p-2 rounded-lg transition-colors ${
                     flagged[currentQuestion] 
@@ -510,9 +744,8 @@ const ExamInterface: React.FC = () => {
                 {currentQ[language]}
               </h2>
 
-              {/* Options */}
               <div className="space-y-3 mb-8">
-                {currentQ.options.map((option, index) => (
+                {currentQ.options.map((option: any, index: number) => (
                   <button
                     key={index}
                     onClick={() => handleAnswerSelect(index)}
@@ -539,7 +772,6 @@ const ExamInterface: React.FC = () => {
                 ))}
               </div>
 
-              {/* Navigation Buttons */}
               <div className="flex justify-between">
                 <button
                   onClick={handlePrevious}
@@ -563,7 +795,6 @@ const ExamInterface: React.FC = () => {
               </div>
             </div>
 
-            {/* Navigation Panel */}
             <div className="bg-white rounded-xl p-6 shadow-sm flex flex-col" style={{ height: 'calc(100vh - 200px)' }}>
               <h3 className="font-semibold text-gray-900 mb-4">{t.navigation}</h3>
               <div className="grid grid-cols-4 gap-2 mb-6 flex-shrink-0">
@@ -594,7 +825,6 @@ const ExamInterface: React.FC = () => {
                 })}
               </div>
 
-              {/* Legend */}
               <div className="space-y-2 text-sm mt-auto">
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 bg-green-500 rounded" />
@@ -612,7 +842,6 @@ const ExamInterface: React.FC = () => {
             </div>
           </div>
 
-          {/* Submit Modal */}
           {showSubmitModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
