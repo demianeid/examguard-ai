@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Clock, FileText, CheckCircle, Circle, ChevronLeft, ChevronRight, Settings, Camera, Mic, Wifi, Monitor, Flag, AlertTriangle, Send } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
 
 interface Question {
   en: string;
@@ -17,16 +16,22 @@ interface SystemCheck {
 }
 
 const ExamInterface: React.FC = () => {
-  const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<'rules' | 'system-check' | 'exam'>('rules');
   const [agreedToRules, setAgreedToRules] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState(6402); // 01:46:42 in seconds
+  const [timeRemaining, setTimeRemaining] = useState(6402); // 01:46:42
   const [language, setLanguage] = useState<'en' | 'ar'>('en');
   const [showSubmitModal, setShowSubmitModal] = useState(false);
 
-  // Questions data with translations
+  // ==== AI Proctoring Refs & State ====
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const [violationScore, setViolationScore] = useState(0);
+  const [proctorAlerts, setProctorAlerts] = useState<string[]>([]);
+
+  // ==== Questions + Answers + Flags ====
   const questions: Question[] = [
     {
       en: "What is the time complexity of binary search in a sorted array?",
@@ -50,7 +55,6 @@ const ExamInterface: React.FC = () => {
       ],
       points: 5
     },
-    // Add more questions to reach 20
     ...Array(18).fill(null).map((_, i) => ({
       en: `Sample Question ${i + 3}`,
       ar: `سؤال نموذجي ${i + 3}`,
@@ -67,6 +71,7 @@ const ExamInterface: React.FC = () => {
   const [answers, setAnswers] = useState<(number | null)[]>(Array(20).fill(null));
   const [flagged, setFlagged] = useState<boolean[]>(Array(20).fill(false));
 
+  // ==== Exam Rules + System Check ====
   const examRules = [
     "You must remain in camera view at all times during the exam",
     "Looking away from screen for extended periods will trigger warnings",
@@ -80,44 +85,18 @@ const ExamInterface: React.FC = () => {
   ];
 
   const systemChecks: SystemCheck[] = [
-    {
-      icon: Camera,
-      title: 'Camera Access',
-      description: 'Camera detected and working properly',
-      status: 'success'
-    },
-    {
-      icon: Mic,
-      title: 'Microphone Access',
-      description: 'Microphone is functioning correctly',
-      status: 'success'
-    },
-    {
-      icon: Wifi,
-      title: 'Internet Connection',
-      description: 'Strong internet connection (45 Mbps)',
-      status: 'success'
-    },
-    {
-      icon: Monitor,
-      title: 'Browser Compatibility',
-      description: 'Browser is compatible and up to date',
-      status: 'success'
-    },
-    {
-      icon: Monitor,
-      title: 'Screen Sharing',
-      description: 'Screen sharing permissions granted',
-      status: 'success'
-    }
+    { icon: Camera, title: 'Camera Access', description: 'Camera detected and working properly', status: 'success' },
+    { icon: Mic, title: 'Microphone Access', description: 'Microphone is functioning correctly', status: 'success' },
+    { icon: Wifi, title: 'Internet Connection', description: 'Strong internet connection (45 Mbps)', status: 'success' },
+    { icon: Monitor, title: 'Browser Compatibility', description: 'Browser is compatible and up to date', status: 'success' },
+    { icon: Monitor, title: 'Screen Sharing', description: 'Screen sharing permissions granted', status: 'success' }
   ];
 
-  // Calculate counts for the modal
-  const answeredCount = answers.filter(answer => answer !== null).length;
+  const answeredCount = answers.filter(a => a !== null).length;
   const unansweredCount = 20 - answeredCount;
-  const flaggedCount = flagged.filter(flag => flag).length;
+  const flaggedCount = flagged.filter(f => f).length;
 
-  // Timer countdown
+  // ==== Timer ====
   useEffect(() => {
     if (currentView === 'exam') {
       const timer = setInterval(() => {
@@ -127,11 +106,11 @@ const ExamInterface: React.FC = () => {
     }
   }, [currentView]);
 
-  const formatTime = (seconds: number): string => {
+  const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    return `${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
   };
 
   const handleAnswerSelect = (index: number) => {
@@ -155,32 +134,208 @@ const ExamInterface: React.FC = () => {
     }
   };
 
-  const handleSubmitConfirm = () => {
-    // Handle exam submission logic here
-    console.log('Exam submitted with answers:', answers);
-    
-    // Store the exam completion status in localStorage
-    const completedExams = JSON.parse(localStorage.getItem('completedExams') || '[]');
-    if (!completedExams.includes(1)) { // Assuming exam ID is 1
-      completedExams.push(1);
-      localStorage.setItem('completedExams', JSON.stringify(completedExams));
-    }
-    
-    // Navigate to classes page with exams tab
-    navigate('/classes/1/exams');
-  };
-
   const toggleFlag = () => {
     const newFlagged = [...flagged];
     newFlagged[currentQuestion] = !newFlagged[currentQuestion];
     setFlagged(newFlagged);
   };
 
-  const getQuestionStatus = (index: number): 'answered' | 'flagged' | 'unanswered' => {
+  const getQuestionStatus = (index: number): 'answered'|'flagged'|'unanswered' => {
     if (answers[index] !== null) return 'answered';
     if (flagged[index]) return 'flagged';
     return 'unanswered';
   };
+
+  const handleSubmitConfirm = () => {
+    console.log('Exam submitted:', answers);
+    alert('Exam submitted successfully!');
+  };
+
+  // ==== AI Proctoring: Open Camera + WebSocket ====
+  useEffect(() => {
+    if (currentView !== 'exam') return;
+
+    navigator.mediaDevices.getUserMedia({ video:true })
+      .then(stream => { if(videoRef.current) videoRef.current.srcObject = stream; })
+      .catch(()=>console.error("Camera access denied"));
+
+    // Note: WebSocket connection would fail in this demo without a real backend
+    // Simulating proctoring alerts for demonstration
+    const mockAlerts = setInterval(() => {
+      const randomAlert = Math.random();
+      if (randomAlert > 0.7) {
+        const alerts = ['Face not detected', 'Multiple faces detected', 'Looking away from screen'];
+        const randomAlertMsg = alerts[Math.floor(Math.random() * alerts.length)];
+        setProctorAlerts([randomAlertMsg]);
+        setViolationScore(prev => prev + 1);
+      }
+    }, 8000);
+
+    return () => {
+      clearInterval(mockAlerts);
+      wsRef.current?.close();
+    };
+  }, [currentView]);
+
+  const sendFrameToAI = () => {
+    if(!videoRef.current || !canvasRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if(!ctx) return;
+    canvasRef.current.width=320;
+    canvasRef.current.height=240;
+    ctx.drawImage(videoRef.current,0,0,320,240);
+    const frameBase64 = canvasRef.current.toDataURL("image/jpeg");
+    wsRef.current.send(JSON.stringify({frame:frameBase64,timestamp:Date.now()}));
+  };
+
+  // ==== Send frame every 3 seconds ====
+  useEffect(()=>{
+    if(currentView!=='exam') return;
+    const interval = setInterval(()=>sendFrameToAI(),3000);
+    return ()=>clearInterval(interval);
+  },[currentView]);
+
+  // ==== Auto Submit if violation score exceeds threshold ====
+  useEffect(()=>{
+    if(violationScore >= 10){
+      alert("Exam auto-submitted due to violations");
+      handleSubmitConfirm();
+    }
+  },[violationScore]);
+
+  // Rules Interface Component (Default View)
+  if (currentView === 'rules') {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+        <div className="max-w-5xl mx-auto">
+          {/* Back Button */}
+          <button onClick={() => console.log('Back')} className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6 transition-colors">
+            <ChevronLeft size={20} />
+            <span>Back</span>
+          </button>
+
+          {/* Main Header Card */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-8 mb-6 shadow-lg text-white">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">
+              Midterm Exam - Data Structures & Algorithms
+            </h1>
+            <p className="text-blue-100 mb-6">CS201 • Dr. Ahmed Hassan</p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2 text-blue-100">
+                  <Clock size={18} />
+                  <span className="text-sm">Duration</span>
+                </div>
+                <p className="text-2xl font-bold">120 minutes</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2 text-blue-100">
+                  <FileText size={18} />
+                  <span className="text-sm">Total Questions</span>
+                </div>
+                <p className="text-2xl font-bold">20</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2 text-blue-100">
+                  <FileText size={18} />
+                  <span className="text-sm">Total Marks</span>
+                </div>
+                <p className="text-2xl font-bold">100</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2 text-blue-100">
+                  <CheckCircle size={18} />
+                  <span className="text-sm">Passing</span>
+                </div>
+                <p className="text-2xl font-bold">50</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Exam Schedule Card */}
+          <div className="bg-white rounded-xl p-6 mb-6 shadow-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-purple-100 p-2 rounded-lg">
+                <Clock className="text-purple-600" size={24} />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800">Exam Schedule</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Date & Time</p>
+                <p className="font-bold text-gray-900">October 15, 2025</p>
+                <p className="text-gray-600">10:00 AM</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Exam Window</p>
+                <p className="font-bold text-gray-900">2 Hours Available</p>
+                <p className="text-gray-600 text-sm">Must complete within 120 minutes</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Exam Rules Card */}
+          <div className="bg-white rounded-xl p-6 mb-6 shadow-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-orange-100 p-2 rounded-lg">
+                <FileText className="text-orange-600" size={24} />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800">Exam Rules & Guidelines</h2>
+            </div>
+
+            <div className="space-y-3">
+              {examRules.map((rule, index) => (
+                <div key={index} className="flex items-start gap-3">
+                  <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
+                  <p className="text-gray-700 text-sm">{rule}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Agreement Checkbox */}
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreedToRules}
+                onChange={(e) => setAgreedToRules(e.target.checked)}
+                className="mt-1 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <div>
+                <p className="font-semibold text-gray-900 mb-2">
+                  I have read and agree to all the exam rules and guidelines
+                </p>
+                <p className="text-sm text-gray-600">
+                  By checking this box, you acknowledge that you understand the proctoring requirements and agree to follow all exam rules. Violations may result in exam cancellation and disciplinary action.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Proceed Button */}
+          <button
+            onClick={() => setCurrentView('system-check')}
+            disabled={!agreedToRules}
+            className={`w-full py-4 px-6 rounded-xl font-semibold text-white text-lg flex items-center justify-center gap-2 transition-all ${
+              agreedToRules
+                ? 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl'
+                : 'bg-gray-400 cursor-not-allowed'
+            }`}
+          >
+            Proceed To System Check
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // System Check Component
   if (currentView === 'system-check') {
@@ -191,7 +346,7 @@ const ExamInterface: React.FC = () => {
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
               <div className="bg-blue-100 p-3 rounded-full">
-                <Settings className="w-8 h-8 text-blue-600 animate-spin-slow" />
+                <Settings className="w-8 h-8 text-blue-600 animate-spin" style={{animation: 'spin 3s linear infinite'}} />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">System Check</h1>
@@ -201,7 +356,6 @@ const ExamInterface: React.FC = () => {
             <button 
               onClick={() => setCurrentView('rules')}
               className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
-              title="Back to rules"
             >
               <ChevronLeft size={20} />
               <span>Back</span>
@@ -244,7 +398,6 @@ const ExamInterface: React.FC = () => {
             <button 
               onClick={() => setCurrentView('exam')}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-colors"
-              title="Start exam now"
             >
               <Clock className="w-5 h-5" />
               Start Exam Now
@@ -252,20 +405,6 @@ const ExamInterface: React.FC = () => {
             </button>
           </div>
         </div>
-
-        <style>{`
-          @keyframes spin-slow {
-            from {
-              transform: rotate(0deg);
-            }
-            to {
-              transform: rotate(360deg);
-            }
-          }
-          .animate-spin-slow {
-            animation: spin-slow 3s linear infinite;
-          }
-        `}</style>
       </div>
     );
   }
@@ -314,6 +453,10 @@ const ExamInterface: React.FC = () => {
     return (
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="max-w-7xl mx-auto">
+          {/* AI Proctoring Elements (hidden video/canvas) */}
+          <video ref={videoRef} autoPlay muted hidden />
+          <canvas ref={canvasRef} hidden />
+
           {/* Header */}
           <div className="bg-blue-600 text-white rounded-xl p-6 mb-6 flex justify-between items-center">
             <div>
@@ -329,6 +472,15 @@ const ExamInterface: React.FC = () => {
             </div>
           </div>
 
+          {/* AI Proctoring Alerts */}
+          {proctorAlerts.length > 0 && (
+            <div className="bg-red-100 border border-red-400 text-red-800 px-4 py-2 rounded-md mb-4 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" />
+              <span>AI Alert: {proctorAlerts[0]}</span>
+            </div>
+          )}
+          <div className="text-sm text-red-600 mb-4">Violation Score: {violationScore} / 10</div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Question Section */}
             <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm">
@@ -342,13 +494,13 @@ const ExamInterface: React.FC = () => {
                   </span>
                 </div>
                 <button
+                 title='flag'
                   onClick={toggleFlag}
                   className={`p-2 rounded-lg transition-colors ${
                     flagged[currentQuestion] 
                       ? 'bg-yellow-100 text-yellow-700' 
                       : 'bg-gray-100 text-gray-400 hover:text-gray-600'
                   }`}
-                  title={flagged[currentQuestion] ? "Unflag question" : "Flag question"}
                 >
                   <Flag className="w-5 h-5" fill={flagged[currentQuestion] ? 'currentColor' : 'none'} />
                 </button>
@@ -370,7 +522,6 @@ const ExamInterface: React.FC = () => {
                         : 'border-gray-200 hover:border-gray-300 bg-white'
                     }`}
                     dir={language === 'ar' ? 'rtl' : 'ltr'}
-                    title={`Select option ${index + 1}`}
                   >
                     <div className="flex items-center gap-3">
                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
@@ -394,7 +545,6 @@ const ExamInterface: React.FC = () => {
                   onClick={handlePrevious}
                   disabled={currentQuestion === 0}
                   className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Previous question"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   {t.previous}
@@ -406,7 +556,6 @@ const ExamInterface: React.FC = () => {
                       ? 'bg-green-600 hover:bg-green-700' 
                       : 'bg-blue-600 hover:bg-blue-700'
                   }`}
-                  title={isLastQuestion ? "Submit exam" : "Next question"}
                 >
                   {isLastQuestion ? t.submit : t.next}
                   <ChevronRight className="w-4 h-4" />
@@ -415,7 +564,7 @@ const ExamInterface: React.FC = () => {
             </div>
 
             {/* Navigation Panel */}
-            <div className="bg-white rounded-xl p-6 shadow-sm flex flex-col" style={{ height: 'calc(100vh - 100px)' }}>
+            <div className="bg-white rounded-xl p-6 shadow-sm flex flex-col" style={{ height: 'calc(100vh - 200px)' }}>
               <h3 className="font-semibold text-gray-900 mb-4">{t.navigation}</h3>
               <div className="grid grid-cols-4 gap-2 mb-6 flex-shrink-0">
                 {Array.from({ length: 20 }, (_, i) => {
@@ -438,7 +587,6 @@ const ExamInterface: React.FC = () => {
                           ? 'bg-yellow-400 text-gray-900 hover:bg-yellow-500'
                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
-                      title={`Question ${i + 1} - ${status}`}
                     >
                       {i + 1}
                     </button>
@@ -530,138 +678,7 @@ const ExamInterface: React.FC = () => {
     );
   }
 
-  // Rules Interface Component (Default View)
-  return (
-    <div className="min-h-screen bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-5xl mx-auto">
-        {/* Back Button */}
-        <Link to="/classes/1/exams" className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6 transition-colors">
-          <ChevronLeft size={20} />
-          <span>Back</span>
-        </Link>
-
-        {/* Main Header Card */}
-        <div className="bg-gradient-to-r from-primary to-secondary rounded-2xl p-8 mb-6 shadow-lg text-white">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2">
-            Midterm Exam - Data Structures & Algorithms
-          </h1>
-          <p className="text-blue-100 mb-6">CS201 • Dr. Ahmed Hassan</p>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2 text-blue-100">
-                <Clock size={18} />
-                <span className="text-sm">Duration</span>
-              </div>
-              <p className="text-2xl font-bold">120 minutes</p>
-            </div>
-
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2 text-blue-100">
-                <FileText size={18} />
-                <span className="text-sm">Total Questions</span>
-              </div>
-              <p className="text-2xl font-bold">20</p>
-            </div>
-
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2 text-blue-100">
-                <FileText size={18} />
-                <span className="text-sm">Total Marks</span>
-              </div>
-              <p className="text-2xl font-bold">100</p>
-            </div>
-
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2 text-blue-100">
-                <CheckCircle size={18} />
-                <span className="text-sm">Passing</span>
-              </div>
-              <p className="text-2xl font-bold">50</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Exam Schedule Card */}
-        <div className="bg-white rounded-xl p-6 mb-6 shadow-md">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-purple-100 p-2 rounded-lg">
-              <Clock className="text-purple-600" size={24} />
-            </div>
-            <h2 className="text-xl font-bold text-gray-800">Exam Schedule</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Date & Time</p>
-              <p className="font-bold text-gray-900">October 15, 2025</p>
-              <p className="text-gray-600">10:00 AM</p>
-            </div>
-
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Exam Window</p>
-              <p className="font-bold text-gray-900">2 Hours Available</p>
-              <p className="text-gray-600 text-sm">Must complete within 120 minutes</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Exam Rules Card */}
-        <div className="bg-white rounded-xl p-6 mb-6 shadow-md">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-orange-100 p-2 rounded-lg">
-              <FileText className="text-orange-600" size={24} />
-            </div>
-            <h2 className="text-xl font-bold text-gray-800">Exam Rules & Guidelines</h2>
-          </div>
-
-          <div className="space-y-3">
-            {examRules.map((rule, index) => (
-              <div key={index} className="flex items-start gap-3">
-                <CheckCircle className="text-green-500 flex-shrink-0 mt-0.5" size={20} />
-                <p className="text-gray-700 text-sm">{rule}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Agreement Checkbox */}
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={agreedToRules}
-              onChange={(e) => setAgreedToRules(e.target.checked)}
-              className="mt-1 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <div>
-              <p className="font-semibold text-gray-900 mb-2">
-                I have read and agree to all the exam rules and guidelines
-              </p>
-              <p className="text-sm text-gray-600">
-                By checking this box, you acknowledge that you understand the proctoring requirements and agree to follow all exam rules. Violations may result in exam cancellation and disciplinary action.
-              </p>
-            </div>
-          </label>
-        </div>
-
-        {/* Proceed Button */}
-        <button
-          onClick={() => setCurrentView('system-check')}
-          disabled={!agreedToRules}
-          className={`w-full py-4 px-6 rounded-xl font-semibold text-white text-lg flex items-center justify-center gap-2 transition-all ${
-            agreedToRules
-              ? 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl'
-              : 'bg-gray-400 cursor-not-allowed'
-          }`}
-          title={agreedToRules ? "Proceed to system check" : "Please agree to the rules first"}
-        >
-          Proceed To System Check
-          <ChevronRight size={20} />
-        </button>
-      </div>
-    </div>
-  );
+  return null;
 };
 
 export default ExamInterface;
