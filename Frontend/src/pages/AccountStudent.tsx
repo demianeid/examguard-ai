@@ -28,7 +28,7 @@ const AccountStudent: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen bg-[#E8F1FA]">
-      // في صفحة AccountStudent.tsx
+
 <Header 
   showAccount={true} 
   isRegistered={true} 
