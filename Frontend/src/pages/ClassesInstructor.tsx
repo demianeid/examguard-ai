@@ -515,38 +515,71 @@ const ClassesInstructor = () => {
   };
 
   // Tab Components
-  const OverviewTab = ({ cls }: { cls: ClassType }) => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <div className="flex items-center gap-3 mb-2">
-            <Calendar className="text-blue-600" size={24} />
-            <h3 className="font-semibold text-gray-800">Schedule</h3>
-          </div>
-          <p className="text-gray-600">Sunday, Tuesday - 10:00 AM</p>
-          <p className="text-gray-600">Thursday - 2:00 PM</p>
+const OverviewTab = ({ cls }: { cls: ClassType }) => (
+  <div className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Next Exam Section - Replacing Schedule */}
+      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+        <div className="flex items-center gap-3 mb-2">
+          <Calendar className="text-blue-600" size={24} />
+          <h3 className="font-semibold text-gray-800">Next Exam</h3>
         </div>
-
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-          <div className="flex items-center gap-3 mb-2">
-            <Clock className="text-green-600" size={24} />
-            <h3 className="font-semibold text-gray-800">Next Class</h3>
-          </div>
-          <p className="text-gray-600">Thursday, Oct 10</p>
-          <p className="text-gray-600">2:00 PM - 4:00 PM</p>
-        </div>
+        <p className="text-gray-600 font-medium">Midterm Exam</p>
+        <p className="text-gray-600 text-sm">October 15, 2025</p>
+        <p className="text-gray-600 text-sm">10:00 AM - 12:00 PM</p>
+        <button 
+          type="button"
+          className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleTabChange("exams");
+          }}
+        >
+          View all exams →
+        </button>
       </div>
 
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="font-semibold text-gray-800 mb-3">Course Description</h3>
-        <p className="text-gray-600 leading-relaxed">
-          This course covers fundamental data structures and algorithms including arrays,
-          linked lists, trees, graphs, sorting, and searching algorithms. Students will learn 
-          to analyze algorithm complexity and implement efficient solutions.
-        </p>
+      {/* Number of Students Section - Replacing Next Class */}
+      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+        <div className="flex items-center gap-3 mb-2">
+          <Users className="text-green-600" size={24} />
+          <h3 className="font-semibold text-gray-800">Number of Students</h3>
+        </div>
+        <p className="text-3xl font-bold text-gray-800 mb-1">{cls.students}</p>
+        <p className="text-gray-600 text-sm">Enrolled students</p>
+        <div className="mt-2 text-sm">
+          <p className="text-gray-600">
+            <span className="font-medium">Active:</span> {Math.floor(cls.students * 0.85)} students
+          </p>
+          <p className="text-gray-600">
+            <span className="font-medium">Attendance:</span> 92%
+          </p>
+        </div>
+        <button 
+          type="button"
+          className="mt-3 text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleTabChange("students");
+          }}
+        >
+          View all students →
+        </button>
       </div>
     </div>
-  );
+
+    <div className="bg-gray-50 p-4 rounded-lg">
+      <h3 className="font-semibold text-gray-800 mb-3">Course Description</h3>
+      <p className="text-gray-600 leading-relaxed">
+        This course covers fundamental data structures and algorithms including arrays,
+        linked lists, trees, graphs, sorting, and searching algorithms. Students will learn 
+        to analyze algorithm complexity and implement efficient solutions.
+      </p>
+    </div>
+  </div>
+);
 
   const StudentsTab = ({ students }: { students: Student[] }) => (
     <div className="space-y-4">
