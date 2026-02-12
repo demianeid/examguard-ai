@@ -26,6 +26,8 @@ import LiveProctoring from "./pages/LiveProctoring";
 import OfflineMode from "./pages/OfflineMode";
 import Roi from "./pages/Roi";
 import MonitoringOffline from "./pages/MonitoringOffline";
+import CreateClass from "./pages/CreateClass";
+
 function App() {
   const location = useLocation();
 
@@ -56,7 +58,8 @@ function App() {
       <Route path="/account-instructor" element={<AccountInstructor />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/classes-instructor" element={<ClassesInstructor />} />
-       <Route path="/classes-instructor/:classId/:tab" element={<ClassesInstructor />} />
+<Route path="/classes-instructor/:classId/:tab" element={<ClassesInstructor />} />
+<Route path="/create-class" element={<CreateClass />} />
         <Route path="/classes" element={<ClassesStudent />}>
           <Route path=":classId" element={<ClassesStudent />}>
             <Route path=":tab" element={<ClassesStudent />} />

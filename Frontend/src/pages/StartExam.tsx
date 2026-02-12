@@ -24,6 +24,8 @@ const ExamInterface: React.FC = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const [violationScore, setViolationScore] = useState(0);
   const [proctorAlerts, setProctorAlerts] = useState<string[]>([]);
+  const [examTerminated, setExamTerminated] = useState(false);
+  const [terminationReason, setTerminationReason] = useState('');
 
   const questions = [
     {
@@ -73,7 +75,8 @@ const ExamInterface: React.FC = () => {
     "No communication with others during the exam",
     "Screen recording will be active throughout the exam",
     "You cannot pause the exam once started",
-    "Auto-submit will occur when time expires"
+    "Auto-submit will occur when time expires",
+    "Reaching 10 violation points will result in automatic exam termination"
   ];
 
   const answeredCount = answers.filter(a => a !== null).length;
@@ -188,6 +191,27 @@ const ExamInterface: React.FC = () => {
     alert('Exam submitted successfully!');
   };
 
+  // Function to handle exam termination
+  const terminateExam = (reason: string) => {
+    setExamTerminated(true);
+    setTerminationReason(reason);
+    
+    // Log the termination
+    console.log(`Exam terminated due to: ${reason}`);
+    console.log('Violation score reached:', violationScore);
+    console.log('Final answers:', answers);
+    
+    // In a real app, you would send this data to the server
+    // For now, we'll just show an alert and prevent further interaction
+  };
+
+  // Effect to check for violation score reaching 10
+  useEffect(() => {
+    if (violationScore >= 10 && currentView === 'exam' && !examTerminated) {
+      terminateExam("Excessive violations detected");
+    }
+  }, [violationScore, currentView, examTerminated]);
+
   const retrySystemCheck = async () => {
     setCheckingComplete(false);
     setSystemCheckStatus({
@@ -290,7 +314,7 @@ const ExamInterface: React.FC = () => {
 
     const mockAlerts = setInterval(() => {
       const randomAlert = Math.random();
-      if (randomAlert > 0.7) {
+      if (randomAlert > 0.7 && !examTerminated) {
         const alerts = ['Face not detected', 'Multiple faces detected', 'Looking away from screen'];
         const randomAlertMsg = alerts[Math.floor(Math.random() * alerts.length)];
         setProctorAlerts([randomAlertMsg]);
@@ -302,14 +326,7 @@ const ExamInterface: React.FC = () => {
       clearInterval(mockAlerts);
       wsRef.current?.close();
     };
-  }, [currentView]);
-
-  useEffect(()=>{
-    if(violationScore >= 10){
-      alert("Exam auto-submitted due to violations");
-      handleSubmitConfirm();
-    }
-  },[violationScore]);
+  }, [currentView, examTerminated]);
 
   if (currentView === 'rules') {
     return (
@@ -357,29 +374,6 @@ const ExamInterface: React.FC = () => {
                   <span className="text-sm">Passing</span>
                 </div>
                 <p className="text-2xl font-bold">50</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 mb-6 shadow-md">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="bg-purple-100 p-2 rounded-lg">
-                <Clock className="text-purple-600" size={24} />
-              </div>
-              <h2 className="text-xl font-bold text-gray-800">Exam Schedule</h2>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Date & Time</p>
-                <p className="font-bold text-gray-900">October 15, 2025</p>
-                <p className="text-gray-600">10:00 AM</p>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Exam Window</p>
-                <p className="font-bold text-gray-900">2 Hours Available</p>
-                <p className="text-gray-600 text-sm">Must complete within 120 minutes</p>
               </div>
             </div>
           </div>
@@ -688,6 +682,87 @@ const ExamInterface: React.FC = () => {
     const t = translations[language];
     const isLastQuestion = currentQuestion === 19;
 
+    // If exam is terminated, show termination screen
+    if (examTerminated) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 p-8 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full text-center">
+            <div className="mb-6 flex justify-center">
+              <div className="bg-red-100 p-4 rounded-full">
+                <AlertTriangle className="w-16 h-16 text-red-600" />
+              </div>
+            </div>
+            
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">Exam Terminated</h1>
+            
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+              <p className="text-lg text-gray-800 mb-4">
+                Your exam has been automatically terminated due to multiple violations of exam rules.
+              </p>
+              
+              <div className="space-y-3 text-left bg-white p-4 rounded-lg">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Violation Score:</span>
+                  <span className="font-bold text-red-600">10/10</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Questions Attempted:</span>
+                  <span className="font-bold text-blue-600">{answeredCount}/20</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Time Remaining:</span>
+                  <span className="font-bold text-gray-800">{formatTime(timeRemaining)}</span>
+                </div>
+              </div>
+              
+              <p className="text-sm text-gray-600 mt-4">
+                Reason: {terminationReason || "Excessive violations detected"}
+              </p>
+            </div>
+            
+            <div className="text-gray-700 mb-6">
+              <p className="mb-3">
+                The system detected multiple violations of exam rules, including:
+              </p>
+              <ul className="text-left space-y-2 mb-4">
+                <li className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span>Face not detected / Multiple faces</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span>Looking away from screen</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span>Other prohibited activities</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+              <p className="text-sm text-blue-800">
+                Your responses have been recorded and submitted to the exam administrator for review.
+                You will be notified about any further actions via your registered email.
+              </p>
+            </div>
+            
+            <button
+              onClick={() => {
+                // In a real app, this would redirect to dashboard or home
+                alert("Redirecting to dashboard...");
+                console.log("Final answers:", answers);
+                console.log("Violation score:", violationScore);
+              }}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-colors"
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="max-w-7xl mx-auto">
@@ -708,13 +783,32 @@ const ExamInterface: React.FC = () => {
             </div>
           </div>
 
-          {proctorAlerts.length > 0 && (
-            <div className="bg-red-100 border border-red-400 text-red-800 px-4 py-2 rounded-md mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
-              <span>AI Alert: {proctorAlerts[0]}</span>
+          <div className="flex justify-between items-center mb-4">
+            <div className="space-y-1">
+              {proctorAlerts.length > 0 && (
+                <div className="bg-red-100 border border-red-400 text-red-800 px-4 py-2 rounded-md flex items-center gap-2 animate-pulse">
+                  <AlertTriangle className="w-5 h-5" />
+                  <span>AI Alert: {proctorAlerts[0]}</span>
+                </div>
+              )}
             </div>
-          )}
-          <div className="text-sm text-red-600 mb-4">Violation Score: {violationScore} / 10</div>
+            
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-600">
+                Violation Score: 
+                <span className={`ml-2 font-bold ${violationScore >= 7 ? 'text-red-600' : violationScore >= 4 ? 'text-yellow-600' : 'text-green-600'}`}>
+                  {violationScore} / 10
+                </span>
+              </div>
+              
+              {violationScore >= 8 && (
+                <div className="bg-red-100 border border-red-300 text-red-800 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>Warning: High violation score</span>
+                </div>
+              )}
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm">
@@ -749,11 +843,12 @@ const ExamInterface: React.FC = () => {
                   <button
                     key={index}
                     onClick={() => handleAnswerSelect(index)}
+                    disabled={examTerminated}
                     className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
                       selectedAnswer === index
                         ? 'border-blue-600 bg-blue-50'
                         : 'border-gray-200 hover:border-gray-300 bg-white'
-                    }`}
+                    } ${examTerminated ? 'opacity-50 cursor-not-allowed' : ''}`}
                     dir={language === 'ar' ? 'rtl' : 'ltr'}
                   >
                     <div className="flex items-center gap-3">
@@ -775,7 +870,7 @@ const ExamInterface: React.FC = () => {
               <div className="flex justify-between">
                 <button
                   onClick={handlePrevious}
-                  disabled={currentQuestion === 0}
+                  disabled={currentQuestion === 0 || examTerminated}
                   className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -783,11 +878,12 @@ const ExamInterface: React.FC = () => {
                 </button>
                 <button
                   onClick={isLastQuestion ? () => setShowSubmitModal(true) : handleNext}
+                  disabled={examTerminated}
                   className={`flex items-center gap-2 px-6 py-3 rounded-lg text-white hover:bg-blue-700 transition-colors ${
                     isLastQuestion 
                       ? 'bg-green-600 hover:bg-green-700' 
                       : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
+                  } ${examTerminated ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {isLastQuestion ? t.submit : t.next}
                   <ChevronRight className="w-4 h-4" />
@@ -804,9 +900,12 @@ const ExamInterface: React.FC = () => {
                     <button
                       key={i}
                       onClick={() => {
-                        setCurrentQuestion(i);
-                        setSelectedAnswer(answers[i]);
+                        if (!examTerminated) {
+                          setCurrentQuestion(i);
+                          setSelectedAnswer(answers[i]);
+                        }
                       }}
+                      disabled={examTerminated}
                       className={`w-full aspect-square rounded-lg font-medium transition-all ${
                         i === currentQuestion
                           ? 'ring-2 ring-blue-600 ring-offset-2'
@@ -817,7 +916,7 @@ const ExamInterface: React.FC = () => {
                           : status === 'flagged'
                           ? 'bg-yellow-400 text-gray-900 hover:bg-yellow-500'
                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
+                      } ${examTerminated ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {i + 1}
                     </button>
@@ -839,6 +938,19 @@ const ExamInterface: React.FC = () => {
                   <span className="text-gray-600">{t.unanswered} ({unansweredCount})</span>
                 </div>
               </div>
+              
+              {/* Violation warning */}
+              {violationScore >= 8 && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertTriangle className="w-4 h-4 text-red-600" />
+                    <span className="text-sm font-medium text-red-800">Warning</span>
+                  </div>
+                  <p className="text-xs text-red-700">
+                    You have {10 - violationScore} violation points remaining before automatic termination.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -869,6 +981,12 @@ const ExamInterface: React.FC = () => {
                     <span className="text-gray-600">Flagged:</span>
                     <span className="font-semibold text-yellow-600">{flaggedCount}</span>
                   </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-600">Violation Score:</span>
+                    <span className={`font-semibold ${violationScore >= 7 ? 'text-red-600' : 'text-gray-900'}`}>
+                      {violationScore}/10
+                    </span>
+                  </div>
                 </div>
 
                 {unansweredCount > 0 && (
@@ -876,6 +994,15 @@ const ExamInterface: React.FC = () => {
                     <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
                     <p className="text-sm text-orange-800">
                       You have unanswered questions. Are you sure you want to submit?
+                    </p>
+                  </div>
+                )}
+
+                {violationScore >= 5 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-start gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-800">
+                      High violation score ({violationScore}/10) detected. This may affect your exam evaluation.
                     </p>
                   </div>
                 )}

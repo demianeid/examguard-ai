@@ -1,6 +1,6 @@
 import Header from '../components/Header';
 import { motion, AnimatePresence } from "framer-motion";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import React, { useState, useEffect, useRef } from "react";
 import {
   BookOpen,
@@ -18,7 +18,14 @@ import {
   Eye,
   Plus,
   BarChart3,
-  School
+  School,
+  Edit,
+  Copy,
+  Check,
+  FileEdit,
+  GraduationCap,
+  Sparkles,
+  Trash2
 } from "lucide-react";
 
 // --- Types ---
@@ -30,6 +37,9 @@ interface ClassType {
   pendingReviews: number;
   avgScore: number;
   color: string;
+  code: string;
+  subject?: string;
+  description?: string;
 }
 
 interface NotificationItem {
@@ -56,28 +66,169 @@ interface Student {
   avgScore: number;
 }
 
-interface CreateClassModalProps {
+interface EditClassModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: NewClassData) => void;
+  onSubmit: (data: EditClassData) => void;
+  onDelete?: () => void;
+  classData: ClassType | null;
 }
 
-interface NewClassData {
+interface EditClassData {
   name: string;
   subject: string;
   students: string;
   description: string;
 }
 
+// --- Ocean Blue Color Helper Functions ---
+const oceanGradients = [
+  'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]', // Bright Blue
+  'bg-gradient-to-r from-[#0E6AD0] to-[#3A80D2]', // Deep Blue
+  'bg-gradient-to-r from-[#2C8F8F] to-[#4CAF92]', // Teal
+  'bg-gradient-to-r from-[#00A8B5] to-[#00C2C7]', // Cyan
+  'bg-gradient-to-r from-[#1A5F8F] to-[#2E7DA2]', // Navy Blue
+  'bg-gradient-to-r from-[#006994] to-[#2196F3]'   // Ocean Blue
+];
+
+const oceanLightGradients = [
+  'bg-gradient-to-r from-blue-50 to-cyan-50',
+  'bg-gradient-to-r from-sky-50 to-indigo-50',
+  'bg-gradient-to-r from-teal-50 to-emerald-50',
+  'bg-gradient-to-r from-cyan-50 to-blue-50',
+  'bg-gradient-to-r from-sky-50 to-blue-50',
+  'bg-gradient-to-r from-blue-50 to-indigo-50'
+];
+
+const oceanBorderColors = [
+  'border-blue-200',
+  'border-indigo-200',
+  'border-teal-200',
+  'border-cyan-200',
+  'border-sky-200',
+  'border-blue-200'
+];
+
+const oceanTextColors = [
+  'text-[#1A80F6]',
+  'text-[#0E6AD0]',
+  'text-[#2C8F8F]',
+  'text-[#00A8B5]',
+  'text-[#1A5F8F]',
+  'text-[#006994]'
+];
+
+const oceanTextGradients = [
+  'from-[#1A80F6] to-[#4A90E2]',
+  'from-[#0E6AD0] to-[#3A80D2]',
+  'from-[#2C8F8F] to-[#4CAF92]',
+  'from-[#00A8B5] to-[#00C2C7]',
+  'from-[#1A5F8F] to-[#2E7DA2]',
+  'from-[#006994] to-[#2196F3]'
+];
+
+const getOceanColorIndex = (colorClass: string): number => {
+  const index = oceanGradients.findIndex(g => g === colorClass);
+  return index !== -1 ? index : 0;
+};
+
+const getGradientFromColor = (colorClass: string): string => {
+  const index = getOceanColorIndex(colorClass);
+  const hoverColors = [
+    'hover:from-[#0E6AD0] hover:to-[#3A80D2]',
+    'hover:from-[#0A5AB0] hover:to-[#2A70C2]',
+    'hover:from-[#1C7F7F] hover:to-[#3C9F82]',
+    'hover:from-[#0098A5] hover:to-[#00B2B7]',
+    'hover:from-[#0A4F7F] hover:to-[#1E6D92]',
+    'hover:from-[#005984] hover:to-[#1186E3]'
+  ];
+  return `${colorClass} ${hoverColors[index]}`;
+};
+
+const getLightColorFromGradient = (gradient: string): string => {
+  const index = getOceanColorIndex(gradient);
+  return oceanLightGradients[index];
+};
+
+const getBorderColorFromGradient = (gradient: string): string => {
+  const index = getOceanColorIndex(gradient);
+  return oceanBorderColors[index];
+};
+
+const getTextGradientFromColor = (gradient: string): string => {
+  const index = getOceanColorIndex(gradient);
+  return oceanTextGradients[index];
+};
+
+const getTextColorFromGradient = (gradient: string): string => {
+  const index = getOceanColorIndex(gradient);
+  return oceanTextColors[index];
+};
+
+const getButtonStylesFromColor = (gradient: string): string => {
+  const index = getOceanColorIndex(gradient);
+  const buttonStyles = [
+    'text-[#1A80F6] border-[#1A80F6] hover:bg-blue-50',
+    'text-[#0E6AD0] border-[#0E6AD0] hover:bg-indigo-50',
+    'text-[#2C8F8F] border-[#2C8F8F] hover:bg-teal-50',
+    'text-[#00A8B5] border-[#00A8B5] hover:bg-cyan-50',
+    'text-[#1A5F8F] border-[#1A5F8F] hover:bg-sky-50',
+    'text-[#006994] border-[#006994] hover:bg-blue-50'
+  ];
+  return buttonStyles[index];
+};
+
+const getHoverGradientFromColor = (gradient: string): string => {
+  const index = getOceanColorIndex(gradient);
+  const hoverGradients = [
+    'hover:from-[#0E6AD0] hover:to-[#3A80D2]',
+    'hover:from-[#0A5AB0] hover:to-[#2A70C2]',
+    'hover:from-[#1C7F7F] hover:to-[#3C9F82]',
+    'hover:from-[#0098A5] hover:to-[#00B2B7]',
+    'hover:from-[#0A4F7F] hover:to-[#1E6D92]',
+    'hover:from-[#005984] hover:to-[#1186E3]'
+  ];
+  return hoverGradients[index];
+};
+
+// Generate a random class code
+const generateClassCode = (): string => {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const numbers = '0123456789';
+  let code = '';
+  
+  for (let i = 0; i < 3; i++) {
+    code += letters.charAt(Math.floor(Math.random() * letters.length));
+  }
+  code += '-';
+  for (let i = 0; i < 4; i++) {
+    code += numbers.charAt(Math.floor(Math.random() * numbers.length));
+  }
+  
+  return code;
+};
+
 // --- Helper Components ---
 
-const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose, onSubmit }) => {
-  const [formData, setFormData] = useState<NewClassData>({
+const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubmit, onDelete, classData }) => {
+  const [formData, setFormData] = useState<EditClassData>({
     name: "",
     subject: "",
     students: "",
     description: ""
   });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (classData) {
+      setFormData({
+        name: classData.name,
+        subject: classData.subject || "",
+        students: classData.students.toString(),
+        description: classData.description || ""
+      });
+    }
+  }, [classData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -87,14 +238,28 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose, on
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
-    setFormData({ name: "", subject: "", students: "", description: "" }); // Reset
+  };
+
+  const handleDeleteClick = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (onDelete) {
+      onDelete();
+    }
+    setShowDeleteConfirm(false);
+    onClose();
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteConfirm(false);
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      {/* Backdrop */}
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -103,7 +268,6 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose, on
         onClick={onClose}
       />
 
-      {/* Modal Content */}
       <motion.div 
         initial={{ scale: 0.95, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -111,14 +275,13 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose, on
         className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="bg-[#1A80F6] px-6 py-4 flex items-center justify-between">
+        <div className={`px-6 py-4 flex items-center justify-between ${classData?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'}`}>
           <div className="flex items-center gap-3 text-white">
-            <span className="text-2xl">🏫</span>
-            <h2 className="text-xl font-bold">Class Information</h2>
+            <Edit size={24} />
+            <h2 className="text-xl font-bold">Edit Class</h2>
           </div>
           <button 
-          title='close'
+            title="Close modal"
             onClick={onClose}
             className="text-white/80 hover:text-white transition-colors"
           >
@@ -126,49 +289,73 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose, on
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Class Name */}
-          <div className="space-y-1">
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Class Name *
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              required
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="e.g., Data structure & Algorithms"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-            />
+        {showDeleteConfirm ? (
+          <div className="p-6">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                <Trash2 size={32} className="text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Delete Class?</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete "{classData?.name}"? This action cannot be undone and will remove all associated exams, assignments, and student data.
+              </p>
+              <div className="flex gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={handleDeleteCancel}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                  title="Cancel deletion"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirm}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-md hover:shadow-lg"
+                  title="Confirm delete class"
+                >
+                  Delete Class
+                </button>
+              </div>
+            </div>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Subject */}
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 space-y-5">
             <div className="space-y-1">
-              <label htmlFor="subject" className="block text-sm font-medium text-gray-700">
-                Subject *
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                Class Name *
               </label>
               <input
                 type="text"
-                id="subject"
-                name="subject"
+                id="name"
+                name="name"
                 required
-                value={formData.subject}
+                value={formData.name}
                 onChange={handleChange}
-                placeholder="e.g., Computer Science"
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent"
               />
             </div>
 
-            {/* Number of Students */}
-            <div className="space-y-1">
-              <label htmlFor="students" className="block text-sm font-medium text-gray-700">
-                Number of Students *
-              </label>
-              <div className="relative">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label htmlFor="subject" className="block text-sm font-medium text-gray-700">
+                  Subject *
+                </label>
+                <input
+                  type="text"
+                  id="subject"
+                  name="subject"
+                  required
+                  value={formData.subject}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="students" className="block text-sm font-medium text-gray-700">
+                  Number of Students *
+                </label>
                 <input
                   type="number"
                   id="students"
@@ -177,56 +364,136 @@ const CreateClassModal: React.FC<CreateClassModalProps> = ({ isOpen, onClose, on
                   min="1"
                   value={formData.students}
                   onChange={handleChange}
-                  placeholder="1"
-                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow appearance-none"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent"
                 />
-                 
               </div>
             </div>
-          </div>
 
-          {/* Description */}
-          <div className="space-y-1">
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-              Class Description
-            </label>
-            <div className="relative">
+            <div className="space-y-1">
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                Class Description
+              </label>
               <textarea
                 id="description"
                 name="description"
                 rows={4}
                 value={formData.description}
                 onChange={handleChange}
-                placeholder="Brief description of the class..."
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow resize-none"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent resize-none"
               />
-           
             </div>
-          </div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="w-full bg-[#1A80F6] hover:bg-blue-600 text-white font-semibold py-3 rounded-lg transition-colors duration-200 mt-2 shadow-lg shadow-blue-500/30"
-          >
-            Create Class
-          </button>
-        </form>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="submit"
+                className={`flex-1 ${classData?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-lg ${getHoverGradientFromColor(classData?.color || '')}`}
+                title="Save changes to class"
+              >
+                Save Changes
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleDeleteClick}
+                className="px-5 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg flex items-center gap-2"
+                title="Delete this class"
+              >
+                <Trash2 size={18} />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            </div>
+          </form>
+        )}
       </motion.div>
     </div>
   );
 };
-
 
 // --- Main Component ---
 
 const ClassesInstructor = () => {
   const { classId, tab } = useParams<{ classId?: string; tab?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
-  const [isCreateClassModalOpen, setIsCreateClassModalOpen] = useState<boolean>(false);
+  const [isEditClassModalOpen, setIsEditClassModalOpen] = useState<boolean>(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{show: boolean, classId: number | null, className: string}>({
+    show: false,
+    classId: null,
+    className: ''
+  });
   const notificationRef = useRef<HTMLDivElement>(null);
   
+  // Load classes from localStorage or use default
+  const [instructorClasses, setInstructorClasses] = useState<ClassType[]>(() => {
+    const savedClasses = localStorage.getItem('instructorClasses');
+    if (savedClasses) {
+      return JSON.parse(savedClasses);
+    }
+    // Default classes if no saved data
+    return [
+      {
+        id: 1,
+        name: "Software Engineering",
+        students: 38,
+        activeExams: 2,
+        pendingReviews: 8,
+        avgScore: 78,
+        color: oceanGradients[0],
+        code: generateClassCode(),
+        subject: "Computer Science",
+        description: "This course covers software development methodologies, project management, and quality assurance."
+      },
+      {
+        id: 2,
+        name: "Computer Networks",
+        students: 45,
+        activeExams: 4,
+        pendingReviews: 6,
+        avgScore: 82,
+        color: oceanGradients[1],
+        code: generateClassCode(),
+        subject: "Computer Science",
+        description: "Study of network architectures, protocols, and security."
+      },
+      {
+        id: 3,
+        name: "Data Structures & Algorithms",
+        students: 52,
+        activeExams: 1,
+        pendingReviews: 3,
+        avgScore: 75,
+        color: oceanGradients[2],
+        code: generateClassCode(),
+        subject: "Computer Science",
+        description: "This course covers fundamental data structures and algorithms including arrays, linked lists, trees, graphs, sorting, and searching algorithms."
+      }
+    ];
+  });
+
+  // Check for success message from navigation state
+  useEffect(() => {
+    if (location.state?.message) {
+      setSuccessMessage(location.state.message);
+      // Clear the message from location state
+      window.history.replaceState({}, document.title);
+      
+      // Auto-hide success message after 3 seconds
+      const timer = setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [location.state]);
+
+  // Save classes to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('instructorClasses', JSON.stringify(instructorClasses));
+  }, [instructorClasses]);
+
   // Close notifications when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -295,36 +562,6 @@ const ClassesInstructor = () => {
     }
   ];
 
-  const [instructorClasses, setInstructorClasses] = useState<ClassType[]>([
-    {
-      id: 1,
-      name: "Software Engineering",
-      students: 38,
-      activeExams: 2,
-      pendingReviews: 8,
-      avgScore: 78,
-      color: "bg-d2"
-    },
-    {
-      id: 2,
-      name: "Computer Networks",
-      students: 45,
-      activeExams: 4,
-      pendingReviews: 6,
-      avgScore: 82,
-      color: "bg-secondary"
-    },
-    {
-      id: 3,
-      name: "Data Structures & Algorithms",
-      students: 52,
-      activeExams: 1,
-      pendingReviews: 3,
-      avgScore: 75,
-      color: "bg-d3"
-    }
-  ]);
-
   // Sample exams data
   const exams: Exam[] = [
     { id: 1, name: "Midterm Exam", date: "2025-10-15", duration: "120 min", status: "upcoming" },
@@ -364,32 +601,72 @@ const ClassesInstructor = () => {
     navigate("/classes-instructor");
   };
 
+  const handleEditClassClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsEditClassModalOpen(true);
+  };
+
+  const handleEditClassSubmit = (data: EditClassData) => {
+    if (selectedClass) {
+      const updatedClasses = instructorClasses.map(cls => 
+        cls.id === selectedClass.id 
+          ? { 
+              ...cls, 
+              name: data.name,
+              subject: data.subject,
+              students: parseInt(data.students),
+              description: data.description
+            }
+          : cls
+      );
+      
+      setInstructorClasses(updatedClasses);
+      setIsEditClassModalOpen(false);
+      setSuccessMessage('Class updated successfully!');
+    }
+  };
+
+  const handleDeleteClass = (classId: number, className: string) => {
+    setDeleteConfirmation({
+      show: true,
+      classId,
+      className
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirmation.classId) {
+      // If we're currently viewing the class that's being deleted, navigate back to the list
+      if (selectedClass && selectedClass.id === deleteConfirmation.classId) {
+        navigate("/classes-instructor");
+      }
+      
+      const updatedClasses = instructorClasses.filter(cls => cls.id !== deleteConfirmation.classId);
+      setInstructorClasses(updatedClasses);
+      setSuccessMessage(`Class "${deleteConfirmation.className}" deleted successfully!`);
+    }
+    setDeleteConfirmation({ show: false, classId: null, className: '' });
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmation({ show: false, classId: null, className: '' });
+  };
+
   const handleCreateClassClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsCreateClassModalOpen(true);
-  };
-
-  const handleCreateClassSubmit = (data: NewClassData) => {
-    // Simulate creating a new class
-    const newClass: ClassType = {
-      id: Math.max(...instructorClasses.map(c => c.id)) + 1,
-      name: data.name,
-      students: parseInt(data.students) || 0,
-      activeExams: 0,
-      pendingReviews: 0,
-      avgScore: 0,
-      color: "bg-emerald-600" // Assign a default color
-    };
-    
-    setInstructorClasses([...instructorClasses, newClass]);
-    setIsCreateClassModalOpen(false);
+    navigate('/create-class');
   };
   
-  const handleCreateExam = (e: React.MouseEvent) => {
+  const handleCreateExam = (e: React.MouseEvent, classId?: number) => {
     e.preventDefault();
     e.stopPropagation();
-    navigate('/CreateExam');
+    if (classId) {
+      navigate(`/create-exam?classId=${classId}`);
+    } else {
+      navigate('/create-exam');
+    }
   };
   
   const handleEditExam = (examId: number) => {
@@ -402,6 +679,12 @@ const ClassesInstructor = () => {
   
   const handleViewProfile = (studentId: string) => {
     navigate(`/instructor/student-profile/${studentId}`);
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
   };
 
   const getNotificationIcon = (type: string) => {
@@ -424,11 +707,11 @@ const ClassesInstructor = () => {
     const unreadCount = notifications.filter(n => !n.isRead).length;
 
     return (
-      <div className="relative"  ref={notificationRef}>
+      <div className="relative" ref={notificationRef}>
         <button 
           title="Notifications" 
           type="button"
-          className="relative p-2  text-gray-600 hover:text-gray-800 transition-colors"
+          className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -448,9 +731,9 @@ const ClassesInstructor = () => {
             transition={{ duration: 0.2 }}
             className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl z-50 overflow-hidden"
           >
-            <div className="bg-blue-600 text-white px-4 py-3 flex justify-between items-center">
+            <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-4 py-3 flex justify-between items-center">
               <h3 className="font-semibold">Notifications</h3>
-              <span className="bg-white text-blue-600 text-xs px-2 py-1 rounded-full">
+              <span className="bg-white text-[#1A80F6] text-xs px-2 py-1 rounded-full">
                 {unreadCount} unread
               </span>
             </div>
@@ -473,7 +756,7 @@ const ClassesInstructor = () => {
                           {notification.title}
                         </h4>
                         <button 
-                          title='close' 
+                          title="Close notification" 
                           type="button"
                           className="text-gray-400 hover:text-gray-600"
                           onClick={(e) => {
@@ -499,11 +782,12 @@ const ClassesInstructor = () => {
             <div className="px-4 py-2 bg-gray-50 text-center">
               <button 
                 type="button"
-                className="text-blue-600 text-sm font-medium hover:text-blue-700"
+                className="text-[#1A80F6] text-sm font-medium hover:text-[#0E6AD0]"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                 }}
+                title="View all notifications"
               >
                 View all notifications
               </button>
@@ -515,78 +799,167 @@ const ClassesInstructor = () => {
   };
 
   // Tab Components
-const OverviewTab = ({ cls }: { cls: ClassType }) => (
-  <div className="space-y-6">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* Next Exam Section - Replacing Schedule */}
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-        <div className="flex items-center gap-3 mb-2">
-          <Calendar className="text-blue-600" size={24} />
-          <h3 className="font-semibold text-gray-800">Next Exam</h3>
-        </div>
-        <p className="text-gray-600 font-medium">Midterm Exam</p>
-        <p className="text-gray-600 text-sm">October 15, 2025</p>
-        <p className="text-gray-600 text-sm">10:00 AM - 12:00 PM</p>
-        <button 
-          type="button"
-          className="mt-3 text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleTabChange("exams");
-          }}
+  const OverviewTab = ({ cls }: { cls: ClassType }) => (
+    <div className="space-y-6">
+      {/* Success Message */}
+      {successMessage && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center justify-between"
         >
-          View all exams →
-        </button>
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} className="text-green-600" />
+            <span className="font-medium">{successMessage}</span>
+          </div>
+          <button 
+            title="Dismiss message" 
+            onClick={() => setSuccessMessage(null)} 
+            className="text-green-600 hover:text-green-800"
+          >
+            <X size={16} />
+          </button>
+        </motion.div>
+      )}
+
+      {/* Class Code Section */}
+      <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)}`}>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-full ${cls.color} flex items-center justify-center text-white shadow-lg`}>
+              <School size={24} />
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-gray-600">Class Code</h3>
+              <div className="flex items-center gap-2">
+                <p className={`text-3xl font-mono font-bold bg-gradient-to-r ${getTextGradientFromColor(cls.color)} bg-clip-text text-transparent`}>
+                  {cls.code}
+                </p>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => handleCopyCode(cls.code)}
+            className={`flex items-center gap-2 bg-white hover:bg-opacity-90 px-5 py-2.5 rounded-lg border transition-all duration-200 shadow-sm hover:shadow ${getButtonStylesFromColor(cls.color)}`}
+            title={copiedCode === cls.code ? "Copied!" : "Copy class code"}
+          >
+            {copiedCode === cls.code ? (
+              <>
+                <Check size={18} className="text-green-600" />
+                <span className="font-medium">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy size={18} />
+                <span className="font-medium">Copy Code</span>
+              </>
+            )}
+          </button>
+        </div>
+        <p className="text-sm text-gray-600 mt-3 ml-16">
+          Share this code with students to join your class
+        </p>
       </div>
 
-      {/* Number of Students Section - Replacing Next Class */}
-      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-        <div className="flex items-center gap-3 mb-2">
-          <Users className="text-green-600" size={24} />
-          <h3 className="font-semibold text-gray-800">Number of Students</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Next Exam Section */}
+        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-5 rounded-xl border border-blue-200 hover:shadow-md transition-shadow">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+              <Calendar className="text-[#1A80F6]" size={20} />
+            </div>
+            <h3 className="font-semibold text-gray-800">Next Exam</h3>
+          </div>
+          <p className="text-gray-800 font-medium text-lg">Midterm Exam</p>
+          <p className="text-gray-600 text-sm mt-1">October 15, 2025 · 10:00 AM</p>
+          <button 
+            type="button"
+            className={`mt-4 text-sm font-medium flex items-center gap-1 group ${getTextColorFromGradient(cls.color)}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleTabChange("exams");
+            }}
+            title="View all exams"
+          >
+            View all exams 
+            <span className="group-hover:translate-x-1 transition-transform">→</span>
+          </button>
         </div>
-        <p className="text-3xl font-bold text-gray-800 mb-1">{cls.students}</p>
-        <p className="text-gray-600 text-sm">Enrolled students</p>
-        <div className="mt-2 text-sm">
-          <p className="text-gray-600">
-            <span className="font-medium">Active:</span> {Math.floor(cls.students * 0.85)} students
-          </p>
-          <p className="text-gray-600">
-            <span className="font-medium">Attendance:</span> 92%
-          </p>
+
+        {/* Number of Students Section */}
+        <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)} hover:shadow-md transition-shadow`}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-10 h-10 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
+              <Users className={getTextColorFromGradient(cls.color)} size={20} />
+            </div>
+            <h3 className="font-semibold text-gray-800">Enrolled Students</h3>
+          </div>
+          <p className="text-3xl font-bold text-gray-800 mb-1">{cls.students}</p>
+          <p className="text-gray-600 text-sm">Active: {Math.floor(cls.students * 0.85)} students · 92% attendance</p>
+          <button 
+            type="button"
+            className={`mt-4 ${getTextColorFromGradient(cls.color)} hover:${getTextColorFromGradient(cls.color)} text-sm font-medium flex items-center gap-1 group`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleTabChange("students");
+            }}
+            title="View all students"
+          >
+            View all students
+            <span className="group-hover:translate-x-1 transition-transform">→</span>
+          </button>
         </div>
-        <button 
-          type="button"
-          className="mt-3 text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleTabChange("students");
-          }}
-        >
-          View all students →
-        </button>
+      </div>
+
+      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
+              <BookOpen size={16} className={getTextColorFromGradient(cls.color)} />
+            </div>
+            <h3 className="font-semibold text-gray-800 text-lg">Course Description</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleEditClassClick}
+              className={`flex items-center gap-2 ${cls.color} text-white px-4 py-2 rounded-lg ${getHoverGradientFromColor(cls.color)} transition-all duration-200 shadow-md hover:shadow-lg`}
+              title="Edit class details"
+            >
+              <Edit size={16} />
+              <span className="font-medium">Edit Class</span>
+            </button>
+            <button
+              onClick={() => handleDeleteClass(cls.id, cls.name)}
+              className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-md hover:shadow-lg"
+              title="Delete this class"
+            >
+              <Trash2 size={16} />
+              <span className="font-medium">Delete</span>
+            </button>
+          </div>
+        </div>
+        <p className="text-gray-600 leading-relaxed">
+          {cls.description || "No description provided."}
+        </p>
+        {cls.subject && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <span className="text-sm font-medium text-gray-500">Subject:</span>
+            <span className="ml-2 text-gray-800">{cls.subject}</span>
+          </div>
+        )}
       </div>
     </div>
-
-    <div className="bg-gray-50 p-4 rounded-lg">
-      <h3 className="font-semibold text-gray-800 mb-3">Course Description</h3>
-      <p className="text-gray-600 leading-relaxed">
-        This course covers fundamental data structures and algorithms including arrays,
-        linked lists, trees, graphs, sorting, and searching algorithms. Students will learn 
-        to analyze algorithm complexity and implement efficient solutions.
-      </p>
-    </div>
-  </div>
-);
+  );
 
   const StudentsTab = ({ students }: { students: Student[] }) => (
     <div className="space-y-4">
       {students.map((student) => (
         <div key={student.id} className="bg-white border p-4 rounded-lg shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+            <div className={`w-12 h-12 rounded-full ${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} flex items-center justify-center text-white font-bold shadow-md`}>
               S{student.id}
             </div>
             <div>
@@ -606,7 +979,8 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
                 e.stopPropagation();
                 handleViewProfile(student.studentId);
               }}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-4 py-2 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 shadow-md hover:shadow-lg`}
+              title={`View ${student.name}'s profile`}
             >
               View Profile
             </button>
@@ -622,26 +996,27 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
         <h3 className="font-semibold text-gray-800 text-lg">Manage Exams</h3>
         <button 
           type="button"
-          onClick={handleCreateExam}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          onClick={(e) => handleCreateExam(e, selectedClass?.id)}
+          className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-5 py-2.5 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg`}
+          title="Create a new exam"
         >
           <Plus size={18} />
-          Create New Exam
+          <span className="font-medium">Create New Exam</span>
         </button>
       </div>
 
       {exams.map((exam) => (
-        <div key={exam.id} className="bg-white border p-4 rounded-lg shadow-sm">
+        <div key={exam.id} className="bg-white border p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
           <div className="flex justify-between items-center">
             <div>
-              <h4 className="font-semibold text-gray-800">{exam.name}</h4>
-              <div className="text-gray-600 text-sm flex gap-4 mt-1">
-                <span className="flex items-center gap-1">
-                  <Calendar size={14} />
+              <h4 className="font-semibold text-gray-800 text-lg">{exam.name}</h4>
+              <div className="text-gray-600 text-sm flex gap-4 mt-2">
+                <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
+                  <Calendar size={14} className="text-gray-500" />
                   {exam.date}
                 </span>
-                <span className="flex items-center gap-1">
-                  <Clock size={14} />
+                <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
+                  <Clock size={14} className="text-gray-500" />
                   {exam.duration}
                 </span>
               </div>
@@ -650,7 +1025,7 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
             <div className="flex items-center gap-3">
               {exam.status === "upcoming" ? (
                 <>
-                  <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-sm">
+                  <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">
                     Upcoming
                   </span>
                   <button 
@@ -660,14 +1035,16 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
                       e.stopPropagation();
                       handleEditExam(exam.id);
                     }}
-                    className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
+                    className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                    title={`Edit ${exam.name}`}
                   >
+                    <FileEdit size={16} />
                     Edit
                   </button>
                 </>
               ) : (
                 <>
-                  <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm">
+                  <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">
                     Completed
                   </span>
                   <button 
@@ -677,8 +1054,10 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
                       e.stopPropagation();
                       handleViewResults(exam.id);
                     }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                    title={`View results for ${exam.name}`}
                   >
+                    <BarChart3 size={16} />
                     View Results
                   </button>
                 </>
@@ -692,12 +1071,14 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
 
   const ProctoringTab = () => (
     <div className="space-y-4">
-      <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="text-red-600 mt-1" size={24} />
+      <div className="bg-gradient-to-br from-red-50 to-orange-50 p-5 rounded-xl border border-red-200">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+            <AlertCircle className="text-red-600" size={24} />
+          </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-800 mb-1">Flagged Incidents</h3>
-            <p className="text-gray-600 text-sm mb-3">8 incidents require review</p>
+            <h3 className="font-semibold text-gray-800 text-lg mb-1">Flagged Incidents</h3>
+            <p className="text-gray-600 mb-3">8 incidents require review</p>
           
             <button 
               type="button"
@@ -706,24 +1087,30 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
                 e.stopPropagation();
                 navigate('/review-incidents');
               }}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+              className="bg-gradient-to-r from-red-600 to-orange-600 text-white px-5 py-2.5 rounded-lg hover:from-red-700 hover:to-orange-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+              title="Review flagged incidents"
             >
+              <Eye size={18} />
               Review Incidents
             </button>
           </div>
         </div>
       </div>
 
-      <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-        <div className="flex items-start gap-3">
-          <Eye className="text-green-600 mt-1" size={24} />
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-xl border border-green-200">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+            <Eye className="text-green-600" size={24} />
+          </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-800 mb-1">Live Monitoring</h3>
-            <p className="text-gray-600 text-sm mb-3">1 active exam with 12 students</p>
+            <h3 className="font-semibold text-gray-800 text-lg mb-1">Live Monitoring</h3>
+            <p className="text-gray-600 mb-3">1 active exam with 12 students</p>
             <button 
               onClick={() => navigate('/live-proctoring')}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-5 py-2.5 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+              title="Start live proctoring"
             >
+              <Eye size={18} />
               Monitor Now
             </button>
           </div>
@@ -733,26 +1120,38 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
   );
 
   const AnalyticsTab = () => (
-    <div className="space-y-4">
-      <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
-        <div className="mb-4">
-          <h3 className="text-sm text-gray-600">Average Score</h3>
-          <p className="text-4xl font-bold text-blue-600">78%</p>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border border-blue-200 hover:shadow-lg transition-shadow">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+            <TrendingUp className="text-[#1A80F6]" size={24} />
+          </div>
+          <h3 className="text-sm font-medium text-gray-600">Average Score</h3>
         </div>
+        <p className="text-4xl font-bold text-[#1A80F6]">78%</p>
+        <p className="text-sm text-gray-500 mt-2">↑ 5% from last exam</p>
       </div>
 
-      <div className="bg-green-50 p-6 rounded-lg border border-green-200">
-        <div className="mb-4">
-          <h3 className="text-sm text-gray-600">Pass Rate</h3>
-          <p className="text-4xl font-bold text-green-600">92%</p>
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200 hover:shadow-lg transition-shadow">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckCircle className="text-green-600" size={24} />
+          </div>
+          <h3 className="text-sm font-medium text-gray-600">Pass Rate</h3>
         </div>
+        <p className="text-4xl font-bold text-green-600">92%</p>
+        <p className="text-sm text-gray-500 mt-2">35 out of 38 students</p>
       </div>
 
-      <div className="bg-red-50 p-6 rounded-lg border border-red-200">
-        <div className="mb-4">
-          <h3 className="text-sm text-gray-600">Cheating Reports</h3>
-          <p className="text-4xl font-bold text-red-600">3</p>
+      <div className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-xl border border-red-200 hover:shadow-lg transition-shadow">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+            <AlertCircle className="text-red-600" size={24} />
+          </div>
+          <h3 className="text-sm font-medium text-gray-600">Cheating Reports</h3>
         </div>
+        <p className="text-4xl font-bold text-red-600">3</p>
+        <p className="text-sm text-gray-500 mt-2">2 pending review</p>
       </div>
     </div>
   );
@@ -781,22 +1180,35 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
 
     return (
       <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="flex justify-between mb-6">
+        <div className="flex justify-between items-start mb-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">{selectedClass.name}</h2>
-            <p className="text-gray-600">Dr. Ahmed Hassan</p>
+            <p className="text-gray-600 mt-1">Dr. Ahmed Hassan</p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`px-3 py-1 ${getLightColorFromGradient(selectedClass.color)} ${getTextColorFromGradient(selectedClass.color)} rounded-full text-sm font-medium`}>
+                {selectedClass.subject}
+              </span>
+            </div>
           </div>
-          <button 
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleBackToList();
-            }}
-            className="text-gray-600 hover:text-gray-800 flex items-center gap-2"
-          >
-            ← Back
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              type="button"
+              onClick={(e) => handleCreateExam(e, selectedClass.id)}
+              className={`${selectedClass.color} text-white px-5 py-2.5 rounded-lg ${getHoverGradientFromColor(selectedClass.color)} transition-all duration-200 flex items-center gap-2 shadow-lg`}
+              title="Create a new exam for this class"
+            >
+              <Sparkles size={18} />
+              <span className="font-semibold">Create Exam</span>
+            </button>
+            <button 
+              type="button"
+              onClick={handleBackToList}
+              className="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2"
+              title="Back to classes list"
+            >
+              ← Back
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
@@ -815,11 +1227,12 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
                 e.stopPropagation();
                 handleTabChange(id);
               }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold whitespace-nowrap ${
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-200 ${
                 activeTab === id 
-                  ? "bg-blue-600 text-white shadow-md" 
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? selectedClass.color + ' text-white shadow-md' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
+              title={`View ${label.toLowerCase()}`}
             >
               <Icon size={18} />
               {label}
@@ -840,12 +1253,7 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleClassClick(cls);
-          }}
-          className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer transform hover:scale-105"
+          className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden transform hover:scale-[1.02]"
         >
           <div className={`h-2 ${cls.color}`}></div>
 
@@ -853,77 +1261,186 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="text-xl font-bold text-gray-800 mb-2">{cls.name}</h3>
-                <div className="flex items-center gap-1 text-gray-600 text-sm">
-                  <BookOpen size={16} />
+                <div className="flex items-center gap-2 text-gray-600 text-sm bg-gray-50 px-3 py-1.5 rounded-lg">
+                  <School size={14} />
+                  <span className="font-mono font-medium">{cls.code}</span>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCopyCode(cls.code);
+                    }}
+                    className="text-gray-500 hover:text-gray-700 ml-1"
+                    title={copiedCode === cls.code ? "Copied!" : "Copy class code"}
+                  >
+                    {copiedCode === cls.code ? (
+                      <Check size={14} className="text-green-600" />
+                    ) : (
+                      <Copy size={14} />
+                    )}
+                  </button>
                 </div>
               </div>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDeleteClass(cls.id, cls.name);
+                }}
+                className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                title={`Delete ${cls.name}`}
+                aria-label={`Delete class ${cls.name}`}
+              >
+                <Trash2 size={18} />
+              </button>
             </div>
 
-            <div className="space-y-3 mb-3">
-              <div className="flex justify-between text-sm">
+            <div className="space-y-3 mb-4">
+              <div className="flex justify-between items-center">
                 <span className="flex items-center gap-2 text-gray-600">
-                  <Users size={16} /> {cls.students} Students
+                  <Users size={16} /> Students
                 </span>
+                <span className="font-semibold text-gray-900">{cls.students}</span>
               </div>
 
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between items-center">
                 <span className="flex items-center gap-2 text-gray-600">
                   <FileText size={16} /> Active Exams
                 </span>
                 <span className="font-semibold text-green-600">{cls.activeExams}</span>
               </div>
 
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between items-center">
                 <span className="flex items-center gap-2 text-gray-600">
                   <AlertCircle size={16} /> Pending Reviews
                 </span>
                 <span className="font-semibold text-red-600">{cls.pendingReviews}</span>
               </div>
 
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between items-center">
                 <span className="flex items-center gap-2 text-gray-600">
                   <BarChart3 size={16} /> Avg Score
                 </span>
-                <span className="font-semibold text-blue-600">{cls.avgScore}%</span>
+                <span className={`font-semibold ${getTextColorFromGradient(cls.color)}`}>{cls.avgScore}%</span>
               </div>
             </div>
 
-            <button 
-              type="button"
-              className={`w-full ${cls.color} text-white py-2 rounded-lg font-semibold mt-4 hover:opacity-90 transition-opacity`}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleClassClick(cls);
-              }}
-            >
-              Manage Class
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button 
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleClassClick(cls);
+                }}
+                className={`flex-1 py-2.5 rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg text-white ${getGradientFromColor(cls.color)}`}
+                title={`Manage ${cls.name}`}
+              >
+                Manage Class
+              </button>
+              <button 
+                type="button"
+                onClick={(e) => handleCreateExam(e, cls.id)}
+                className={`${cls.color} text-white px-4 py-2.5 rounded-lg font-semibold ${getHoverGradientFromColor(cls.color)} transition-all duration-200 flex items-center justify-center shadow-md hover:shadow-lg`}
+                title={`Create exam for ${cls.name}`}
+              >
+                <Plus size={18} />
+                <span className="ml-1 hidden sm:inline">Exam</span>
+              </button>
+            </div>
           </div>
         </motion.div>
       ))}
     </div>
   );
 
+  // Delete Confirmation Modal
+  const DeleteConfirmationModal = () => {
+    if (!deleteConfirmation.show) return null;
+
+    return (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={handleDeleteCancel}
+        />
+
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.95, opacity: 0, y: 20 }}
+          className="relative w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-6 py-5 bg-gradient-to-r from-red-600 to-red-700 text-white">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Trash2 size={24} />
+              Delete Class
+            </h2>
+          </div>
+
+          <div className="p-6">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                <AlertCircle size={40} className="text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Are you absolutely sure?</h3>
+              <p className="text-gray-600 mb-2">
+                This will permanently delete <span className="font-bold text-red-600">"{deleteConfirmation.className}"</span>.
+              </p>
+              <p className="text-gray-500 text-sm mb-6">
+                This action cannot be undone. All exams, assignments, student submissions, and class data will be lost.
+              </p>
+              
+              <div className="flex gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={handleDeleteCancel}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                  title="Cancel deletion"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-md hover:shadow-lg"
+                  title="Confirm delete class"
+                >
+                  Yes, Delete Class
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
+
   return (
-    <div className="w-full pt-20 min-h-screen bg-[#E3F0FE]">
-      <div className="min-h-screen bg-background p-6">
+    <div className="w-full pt-20 min-h-screen bg-gradient-to-br from-[#E3F0FE] to-[#F0F7FF]">
+      <div className="min-h-screen p-6">
         <Header fixed={true} showAccount={true} isRegistered={true} userType="instructor" />
 
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="bg-white rounded-xl shadow-md p-4 sm:p-6 mb-6">
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6 border border-white/50">
             <div className="flex flex-col gap-4">
               {/* Top Row */}
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3 sm:gap-4">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center text-white text-lg sm:text-xl font-bold">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] flex items-center justify-center text-white text-xl font-bold shadow-lg">
                     I
                   </div>
 
                   <div>
-                    <h1 className="text-xl sm:text-2xl font-bold">My Classes</h1>
-                    <p className="text-sm sm:text-base text-gray-600">Instructor name</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] bg-clip-text text-transparent">
+                      My Classes
+                    </h1>
+                    <p className="text-sm sm:text-base text-gray-600">Welcome back, Dr. Ahmed Hassan</p>
                   </div>
                 </div>
 
@@ -933,16 +1450,41 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
                     <button 
                       type="button"
                       onClick={handleCreateClassClick}
-                      className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm sm:text-base"
+                      className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-4 sm:px-5 py-2.5 rounded-lg hover:from-[#0E6AD0] hover:to-[#3A80D2] transition-all duration-200 flex items-center gap-2 text-sm sm:text-base shadow-lg shadow-blue-500/30"
+                      title="Create a new class"
                     >
                       <Plus size={18} />
-                      <span className="hidden sm:inline">Create Class</span>
+                      <span className="hidden sm:inline font-semibold">Create Class</span>
                     </button>
                   )}
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Success Message */}
+          <AnimatePresence>
+            {successMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="mb-6 bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-lg flex items-center justify-between shadow-md"
+              >
+                <div className="flex items-center gap-3">
+                  <CheckCircle size={20} className="text-green-600" />
+                  <span className="font-medium">{successMessage}</span>
+                </div>
+                <button 
+                  onClick={() => setSuccessMessage(null)} 
+                  className="text-green-600 hover:text-green-800"
+                  title="Dismiss message"
+                >
+                  <X size={18} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Main Content */}
           {selectedClass ? <ClassDetails /> : <ClassesList />}
@@ -951,13 +1493,17 @@ const OverviewTab = ({ cls }: { cls: ClassType }) => (
 
       {/* Modals */}
       <AnimatePresence>
-        {isCreateClassModalOpen && (
-          <CreateClassModal 
-            isOpen={isCreateClassModalOpen} 
-            onClose={() => setIsCreateClassModalOpen(false)} 
-            onSubmit={handleCreateClassSubmit} 
+        {isEditClassModalOpen && selectedClass && (
+          <EditClassModal 
+            isOpen={isEditClassModalOpen} 
+            onClose={() => setIsEditClassModalOpen(false)} 
+            onSubmit={handleEditClassSubmit} 
+            onDelete={() => handleDeleteClass(selectedClass.id, selectedClass.name)}
+            classData={selectedClass}
           />
         )}
+        
+        <DeleteConfirmationModal />
       </AnimatePresence>
     </div>
   );
