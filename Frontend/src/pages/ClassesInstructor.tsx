@@ -659,15 +659,15 @@ const ClassesInstructor = () => {
     navigate('/create-class');
   };
   
-  const handleCreateExam = (e: React.MouseEvent, classId?: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (classId) {
-      navigate(`/create-exam?classId=${classId}`);
-    } else {
-      navigate('/create-exam');
-    }
-  };
+const handleCreateExam = (e: React.MouseEvent, classId?: number) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (classId) {
+    navigate(`/CreateExam?classId=${classId}`);
+  } else {
+    navigate('/CreateExam');
+  }
+};
   
   const handleEditExam = (examId: number) => {
     navigate(`/edit-exam/${examId}`);
