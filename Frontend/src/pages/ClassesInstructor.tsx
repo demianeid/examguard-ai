@@ -25,7 +25,13 @@ import {
   FileEdit,
   GraduationCap,
   Sparkles,
-  Trash2
+  Trash2,
+  Filter,
+  MoreVertical,
+  Download,
+  Settings,
+  ChevronDown,
+  Search
 } from "lucide-react";
 
 // --- Types ---
@@ -49,6 +55,18 @@ interface NotificationItem {
   content: string;
   time: string;
   isRead: boolean;
+  priority?: "low" | "medium" | "high" | "critical";
+  metadata?: {
+    classId?: number;
+    className?: string;
+    examId?: number;
+    studentId?: string;
+    incidentId?: number;
+    pendingSubmissions?: number;
+    pendingReviews?: number;
+    version?: string;
+    docs?: string;
+  };
 }
 
 interface Exam {
@@ -409,13 +427,493 @@ const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubm
   );
 };
 
+// --- Enhanced Notification Dropdown Component ---
+const NotificationDropdown = () => {
+  const [filterType, setFilterType] = useState<string>("all");
+  const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const [showAll, setShowAll] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<number | null>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
+  
+  const [notifications, setNotifications] = useState<NotificationItem[]>([
+    {
+      id: 1,
+      type: "exam",
+      title: "Midterm Exam Scheduled",
+      content: "Software Engineering - Midterm exam scheduled for Oct 15 at 10:00 AM. 38 students enrolled.",
+      time: "1 hour ago",
+      isRead: false,
+      priority: "high",
+      metadata: { classId: 1, className: "Software Engineering", examId: 101 }
+    },
+    {
+      id: 2,
+      type: "system",
+      title: "Flagged Incident Detected",
+      content: "Student suspicious behavior detected during Quiz 3 in Computer Networks. Multiple tab switches recorded.",
+      time: "3 hours ago",
+      isRead: false,
+      priority: "critical",
+      metadata: { classId: 2, className: "Computer Networks", studentId: "2025045", incidentId: 345 }
+    },
+    {
+      id: 3,
+      type: "grade",
+      title: "Bulk Grading Complete",
+      content: "All 45 submissions for Data Structures Quiz 2 have been automatically graded. 3 flagged for review.",
+      time: "1 day ago",
+      isRead: true,
+      priority: "medium",
+      metadata: { classId: 3, className: "Data Structures", examId: 202, pendingReviews: 3 }
+    },
+    {
+      id: 4,
+      type: "announcement",
+      title: "New Proctoring Features",
+      content: "AI-powered behavior analysis and real-time flagging system now available. Update your exam settings.",
+      time: "2 days ago",
+      isRead: true,
+      priority: "low",
+      metadata: { version: "2.1.0", docs: "/docs/proctoring" }
+    },
+    {
+      id: 5,
+      type: "exam",
+      title: "Quiz Submission Reminder",
+      content: "Quiz 4 in Software Engineering closes tomorrow at 11:59 PM. 12 students haven't submitted.",
+      time: "5 hours ago",
+      isRead: false,
+      priority: "high",
+      metadata: { classId: 1, className: "Software Engineering", pendingSubmissions: 12 }
+    },
+    {
+      id: 6,
+      type: "grade",
+      title: "Grade Dispute Request",
+      content: "Student submitted a grade review request for Midterm Exam - Question 3.",
+      time: "6 hours ago",
+      isRead: false,
+      priority: "medium",
+      metadata: { classId: 1, studentId: "2025012", examId: 101 }
+    }
+  ]);
+
+  // Close notifications when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Simulate real-time notifications
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newNotification = getMockNotification();
+      if (newNotification) {
+        setNotifications(prev => [newNotification, ...prev]);
+        
+        // Show browser notification if permitted
+        if (Notification.permission === 'granted') {
+          new Notification('New Notification', {
+            body: newNotification.title,
+            icon: '/notification-icon.png'
+          });
+        }
+      }
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Request notification permission
+  useEffect(() => {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const getMockNotification = (): NotificationItem | null => {
+    const mockNotifications = [
+      {
+        id: Date.now(),
+        type: "exam" as const,
+        title: "Exam Started",
+        content: "Software Engineering Midterm exam has started. 38 students are currently taking the test.",
+        time: "Just now",
+        isRead: false,
+        priority: "high" as const,
+        metadata: { classId: 1, className: "Software Engineering", examId: 101 }
+      },
+      {
+        id: Date.now() + 1,
+        type: "system" as const,
+        title: "Auto-Proctoring Alert",
+        content: "Suspicious activity detected in Computer Networks exam.",
+        time: "Just now",
+        isRead: false,
+        priority: "critical" as const,
+        metadata: { classId: 2, className: "Computer Networks", incidentId: 346 }
+      }
+    ];
+    
+    return Math.random() > 0.7 ? mockNotifications[Math.floor(Math.random() * mockNotifications.length)] as NotificationItem : null;
+  };
+
+  const markAsRead = (notificationId: number) => {
+    setNotifications(prev => 
+      prev.map(notif => 
+        notif.id === notificationId ? { ...notif, isRead: true } : notif
+      )
+    );
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(prev => 
+      prev.map(notif => ({ ...notif, isRead: true }))
+    );
+  };
+
+  const deleteNotification = (notificationId: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+  };
+
+  const clearAllNotifications = () => {
+    if (window.confirm('Clear all notifications?')) {
+      setNotifications([]);
+    }
+  };
+
+  const getFilteredNotifications = () => {
+    const filtered = filterType === 'all' 
+      ? notifications 
+      : notifications.filter(n => n.type === filterType);
+    return showAll ? filtered : filtered.slice(0, 5);
+  };
+
+  const getPriorityColor = (priority: string = 'medium') => {
+    switch(priority) {
+      case 'critical': return 'bg-red-500';
+      case 'high': return 'bg-orange-500';
+      case 'medium': return 'bg-blue-500';
+      case 'low': return 'bg-gray-500';
+      default: return 'bg-blue-500';
+    }
+  };
+
+  const getNotificationIcon = (type: string, priority: string = 'medium') => {
+    const iconClasses = "p-1.5 rounded-lg";
+    switch(type) {
+      case "exam":
+        return <div className={`${iconClasses} bg-blue-100`}><Calendar className="text-blue-600" size={18} /></div>;
+      case "grade":
+        return <div className={`${iconClasses} bg-green-100`}><CheckCircle className="text-green-600" size={18} /></div>;
+      case "system":
+        return <div className={`${iconClasses} bg-red-100`}><AlertCircle className="text-red-600" size={18} /></div>;
+      case "announcement":
+        return <div className={`${iconClasses} bg-purple-100`}><Megaphone className="text-purple-600" size={18} /></div>;
+      default:
+        return <div className={`${iconClasses} bg-gray-100`}><Info className="text-gray-600" size={18} /></div>;
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  return (
+    <div className="relative" ref={notificationRef}>
+      <button 
+        title="Notifications" 
+        type="button"
+        className="relative p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 group"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowNotifications(!showNotifications);
+        }}
+      >
+        <Bell size={20} className="sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
+        {unreadCount > 0 && (
+          <>
+            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
+            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          </>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {showNotifications && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute right-0 mt-2 w-[32rem] max-w-[90vw] bg-white rounded-xl shadow-2xl z-50 overflow-hidden border border-gray-100"
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-5 py-4">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Bell size={20} className="animate-[bounce_2s_infinite]" />
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-300 rounded-full"></span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Notifications</h3>
+                    <p className="text-xs text-blue-100 mt-0.5">
+                      {unreadCount} unread · {notifications.length} total
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <button 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        markAllAsRead();
+                      }}
+                      className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                      title="Mark all as read"
+                    >
+                      <Check size={14} />
+                      Mark all read
+                    </button>
+                  )}
+                  <button 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowNotifications(false);
+                    }}
+                    className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+                    title="Close"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter tabs */}
+              <div className="flex gap-2 mt-4 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-white/30">
+                {['all', 'exam', 'grade', 'system', 'announcement'].map((type) => (
+                  <button
+                    key={type}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setFilterType(type);
+                    }}
+                    className={`
+                      px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-all
+                      ${filterType === type 
+                        ? 'bg-white text-[#1A80F6] shadow-md' 
+                        : 'bg-white/20 text-white hover:bg-white/30'
+                      }
+                    `}
+                  >
+                    {type}
+                    {type !== 'all' && (
+                      <span className="ml-1.5 px-1.5 py-0.5 bg-white/30 rounded-full text-[10px]">
+                        {notifications.filter(n => n.type === type).length}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Notifications List */}
+            <div className="max-h-[32rem] overflow-y-auto divide-y divide-gray-100">
+              {getFilteredNotifications().length > 0 ? (
+                getFilteredNotifications().map((notification, index) => (
+                  <motion.div
+                    key={notification.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`
+                      relative px-5 py-4 hover:bg-gray-50 cursor-pointer transition-all duration-200
+                      ${!notification.isRead ? 'bg-blue-50/50' : ''}
+                      ${selectedNotification === notification.id ? 'bg-blue-100/50' : ''}
+                    `}
+                    onClick={() => {
+                      markAsRead(notification.id);
+                      setSelectedNotification(notification.id);
+                    }}
+                  >
+                    {/* Priority indicator */}
+                    {notification.priority && ['critical', 'high'].includes(notification.priority) && (
+                      <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 ${getPriorityColor(notification.priority)} rounded-r-full`}></div>
+                    )}
+
+                    <div className="flex gap-4">
+                      {/* Icon */}
+                      <div className="flex-shrink-0">
+                        {getNotificationIcon(notification.type, notification.priority)}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start gap-2">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-semibold text-gray-900 text-sm">
+                                {notification.title}
+                              </h4>
+                              {!notification.isRead && (
+                                <span className="bg-[#1A80F6] text-white text-[10px] px-2 py-0.5 rounded-full">
+                                  New
+                                </span>
+                              )}
+                              {notification.priority === 'critical' && (
+                                <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                                  <AlertCircle size={10} />
+                                  Critical
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-600 text-sm mt-1 line-clamp-2">
+                              {notification.content}
+                            </p>
+                            
+                            {/* Metadata */}
+                            {notification.metadata && (
+                              <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 flex-wrap">
+                                {notification.metadata.className && (
+                                  <span className="bg-gray-100 px-2 py-0.5 rounded-full">
+                                    {notification.metadata.className}
+                                  </span>
+                                )}
+                                {notification.metadata.pendingSubmissions && (
+                                  <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">
+                                    {notification.metadata.pendingSubmissions} pending
+                                  </span>
+                                )}
+                                {notification.metadata.pendingReviews && (
+                                  <span className="bg-yellow-100 text-yellow-600 px-2 py-0.5 rounded-full">
+                                    {notification.metadata.pendingReviews} to review
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <span className="text-xs text-gray-400 whitespace-nowrap">
+                              {notification.time}
+                            </span>
+                            <button 
+                              title="Delete notification"
+                              type="button"
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              onClick={(e) => deleteNotification(notification.id, e)}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Quick actions */}
+                        {!notification.isRead && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                markAsRead(notification.id);
+                              }}
+                              className="text-xs text-[#1A80F6] hover:text-[#0E6AD0] flex items-center gap-1"
+                            >
+                              <Check size={12} />
+                              Mark as read
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              ) : (
+                <div className="px-5 py-12 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Bell size={24} className="text-gray-400" />
+                  </div>
+                  <p className="text-gray-500 font-medium">No notifications</p>
+                  <p className="text-gray-400 text-sm mt-1">
+                    {filterType !== 'all' 
+                      ? `No ${filterType} notifications found` 
+                      : 'You\'re all caught up!'}
+                  </p>
+                  {filterType !== 'all' && (
+                    <button
+                      onClick={() => setFilterType('all')}
+                      className="mt-4 text-[#1A80F6] text-sm hover:text-[#0E6AD0]"
+                    >
+                      View all notifications
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {notifications.length > 0 && (
+              <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowAll(!showAll);
+                  }}
+                  className="text-[#1A80F6] text-sm font-medium hover:text-[#0E6AD0] transition-colors flex items-center gap-1"
+                  title={showAll ? "Show less" : "View all notifications"}
+                >
+                  {showAll ? 'Show less' : 'View all notifications'}
+                  <ChevronDown size={14} className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {notifications.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      clearAllNotifications();
+                    }}
+                    className="text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                    title="Clear all notifications"
+                  >
+                    <Trash2 size={12} />
+                    Clear all
+                  </button>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 // --- Main Component ---
 
 const ClassesInstructor = () => {
   const { classId, tab } = useParams<{ classId?: string; tab?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const [showNotifications, setShowNotifications] = useState<boolean>(false);
   const [isEditClassModalOpen, setIsEditClassModalOpen] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -424,7 +922,6 @@ const ClassesInstructor = () => {
     classId: null,
     className: ''
   });
-  const notificationRef = useRef<HTMLDivElement>(null);
   
   // Load classes from localStorage or use default
   const [instructorClasses, setInstructorClasses] = useState<ClassType[]>(() => {
@@ -493,20 +990,6 @@ const ClassesInstructor = () => {
   useEffect(() => {
     localStorage.setItem('instructorClasses', JSON.stringify(instructorClasses));
   }, [instructorClasses]);
-
-  // Close notifications when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
   
   // Prevent default button submits
   useEffect(() => {
@@ -525,42 +1008,6 @@ const ClassesInstructor = () => {
       document.removeEventListener('click', preventButtonSubmit, true);
     };
   }, []);
-
-  // Sample notifications data
-  const notifications: NotificationItem[] = [
-    {
-      id: 1,
-      type: "exam",
-      title: "Exam Scheduled",
-      content: "Midterm Exam scheduled for Oct 15 at 10:00 AM",
-      time: "1 hour ago",
-      isRead: false
-    },
-    {
-      id: 2,
-      type: "system",
-      title: "Flagged Incident",
-      content: "Student suspicious behavior detected during Quiz 3",
-      time: "3 hours ago",
-      isRead: false
-    },
-    {
-      id: 3,
-      type: "grade",
-      title: "Grading Complete",
-      content: "All Quiz 2 submissions have been graded",
-      time: "1 day ago",
-      isRead: true
-    },
-    {
-      id: 4,
-      type: "announcement",
-      title: "System Update",
-      content: "New proctoring features available",
-      time: "2 days ago",
-      isRead: true
-    }
-  ];
 
   // Sample exams data
   const exams: Exam[] = [
@@ -659,15 +1106,15 @@ const ClassesInstructor = () => {
     navigate('/create-class');
   };
   
-const handleCreateExam = (e: React.MouseEvent, classId?: number) => {
-  e.preventDefault();
-  e.stopPropagation();
-  if (classId) {
-    navigate(`/CreateExam?classId=${classId}`);
-  } else {
-    navigate('/CreateExam');
-  }
-};
+  const handleCreateExam = (e: React.MouseEvent, classId?: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (classId) {
+      navigate(`/CreateExam?classId=${classId}`);
+    } else {
+      navigate('/CreateExam');
+    }
+  };
   
   const handleEditExam = (examId: number) => {
     navigate(`/edit-exam/${examId}`);
@@ -685,117 +1132,6 @@ const handleCreateExam = (e: React.MouseEvent, classId?: number) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
-  };
-
-  const getNotificationIcon = (type: string) => {
-    switch(type) {
-      case "exam":
-        return <Calendar className="text-blue-600" size={18} />;
-      case "grade":
-        return <CheckCircle className="text-green-600" size={18} />;
-      case "system":
-        return <AlertCircle className="text-red-600" size={18} />;
-      case "announcement":
-        return <Megaphone className="text-purple-600" size={18} />;
-      default:
-        return <Info className="text-gray-600" size={18} />;
-    }
-  };
-
-  // Notification Dropdown Component
-  const NotificationDropdown = () => {
-    const unreadCount = notifications.filter(n => !n.isRead).length;
-
-    return (
-      <div className="relative" ref={notificationRef}>
-        <button 
-          title="Notifications" 
-          type="button"
-          className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setShowNotifications(!showNotifications);
-          }}
-        >
-          <Bell size={20} className="sm:w-6 sm:h-6" />
-          {unreadCount > 0 && (
-            <span className="absolute top-0 right-0 bg-red-500 w-2 h-2 rounded-full"></span>
-          )}
-        </button>
-
-        {showNotifications && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-            className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl z-50 overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-4 py-3 flex justify-between items-center">
-              <h3 className="font-semibold">Notifications</h3>
-              <span className="bg-white text-[#1A80F6] text-xs px-2 py-1 rounded-full">
-                {unreadCount} unread
-              </span>
-            </div>
-            
-            <div className="max-h-96 overflow-y-auto">
-              {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
-                    !notification.isRead ? 'bg-blue-50' : ''
-                  }`}
-                >
-                  <div className="flex gap-3">
-                    <div className="mt-1">
-                      {getNotificationIcon(notification.type)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-semibold text-gray-800 text-sm">
-                          {notification.title}
-                        </h4>
-                        <button 
-                          title="Close notification" 
-                          type="button"
-                          className="text-gray-400 hover:text-gray-600"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                      <p className="text-gray-600 text-sm mt-1">
-                        {notification.content}
-                      </p>
-                      <p className="text-gray-500 text-xs mt-1">
-                        {notification.time}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="px-4 py-2 bg-gray-50 text-center">
-              <button 
-                type="button"
-                className="text-[#1A80F6] text-sm font-medium hover:text-[#0E6AD0]"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                title="View all notifications"
-              >
-                View all notifications
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </div>
-    );
   };
 
   // Tab Components
@@ -1508,5 +1844,34 @@ const handleCreateExam = (e: React.MouseEvent, classId?: number) => {
     </div>
   );
 };
+
+// Add global styles for animations
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes bounce-slow {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+  .animate-bounce-slow {
+    animation: bounce-slow 2s infinite;
+  }
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 2px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(255,255,255,0.1);
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.3);
+    border-radius: 10px;
+  }
+`;
+document.head.appendChild(style);
 
 export default ClassesInstructor;

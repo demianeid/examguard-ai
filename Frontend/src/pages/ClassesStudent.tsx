@@ -1,5 +1,6 @@
-import Header from '../components/Header'
+import Header from '../components/Header';
 import { Link, useParams, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import React, { useState, useEffect, useRef } from "react";
 import {
   BookOpen,
@@ -18,7 +19,9 @@ import {
   TrendingUp,
   Copy,
   Check,
-  Sparkles
+  Sparkles,
+  ChevronDown,
+  Trash2
 } from "lucide-react";
 
 // --- Types ---
@@ -51,6 +54,34 @@ interface NotificationItem {
   content: string;
   time: string;
   isRead: boolean;
+  priority?: "low" | "medium" | "high" | "critical";
+  metadata?: {
+    classId?: number;
+    className?: string;
+    examId?: number;
+    assignmentId?: number;
+    studentId?: string;
+    incidentId?: number;
+    score?: number;
+    maxScore?: number;
+    percentage?: number;
+    classAverage?: number;
+    examTime?: string;
+    examDate?: string;
+    duration?: string;
+    deadline?: string;
+    submissionsStatus?: string;
+    feedback?: string;
+    instructor?: string;
+    originalTime?: string;
+    newTime?: string;
+    type?: string;
+    estimatedTime?: string;
+    resources?: number;
+    severity?: string;
+    maintenanceStart?: string;
+    startsIn?: string;
+  };
 }
 
 // --- Ocean Blue Color Helper Functions (Same as Instructor) ---
@@ -91,7 +122,6 @@ const oceanTextColors = [
 ];
 
 const getOceanColorIndex = (colorClass: string): number => {
-  // Extract the gradient part from the full class
   const gradient = colorClass.replace('bg-gradient-to-r ', '');
   const index = oceanGradients.findIndex(g => g === gradient);
   return index !== -1 ? index : 0;
@@ -125,7 +155,6 @@ const getHoverGradientFromColor = (gradient: string): string => {
   return hoverGradients[index];
 };
 
-// Generate a random class code
 const generateClassCode = (): string => {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const numbers = '0123456789';
@@ -147,83 +176,12 @@ const ClassesStudent = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [completedExams, setCompletedExams] = useState<number[]>([]);
-  const [showNotifications, setShowNotifications] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<string>("all");
+  const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const [showAll, setShowAll] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<number | null>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
-
-  // Load completed exams from localStorage on component mount
-  useEffect(() => {
-    const completed = JSON.parse(localStorage.getItem('completedExams') || '[]');
-    setCompletedExams(completed);
-  }, []);
-
-  // Close notifications when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Prevent default button submits
-  useEffect(() => {
-    const preventButtonSubmit = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const button = target.closest('button');
-      
-      if (button && !button.hasAttribute('type')) {
-        button.setAttribute('type', 'button');
-      }
-    };
-
-    document.addEventListener('click', preventButtonSubmit, true);
-    
-    return () => {
-      document.removeEventListener('click', preventButtonSubmit, true);
-    };
-  }, []);
-
-  // Sample notifications data
-  const notifications: NotificationItem[] = [
-    {
-      id: 1,
-      type: "exam",
-      title: "Upcoming Exam",
-      content: "Midterm Exam in Data Structures - Tomorrow at 10:00 AM",
-      time: "2 hours ago",
-      isRead: false
-    },
-    {
-      id: 2,
-      type: "grade",
-      title: "Grade Posted",
-      content: "Your Quiz 2 grade is now available: 85/100",
-      time: "5 hours ago",
-      isRead: false
-    },
-    {
-      id: 3,
-      type: "system",
-      title: "System Alert",
-      content: "Camera check required before next exam",
-      time: "1 day ago",
-      isRead: true
-    },
-    {
-      id: 4,
-      type: "announcement",
-      title: "Announcement",
-      content: "Office hours moved to Thursday 2 - 4 PM",
-      time: "2 days ago",
-      isRead: true
-    }
-  ];
 
   const [studentClasses, setStudentClasses] = useState<ClassType[]>([
     {
@@ -300,6 +258,430 @@ const ClassesStudent = () => {
     }
   ]);
 
+  const [notifications, setNotifications] = useState<NotificationItem[]>([
+    {
+      id: 1,
+      type: "exam",
+      title: "Upcoming Exam Tomorrow",
+      content: "Data Structures & Algorithms - Midterm Exam tomorrow at 10:00 AM. Duration: 120 minutes.",
+      time: "2 hours ago",
+      isRead: false,
+      priority: "high",
+      metadata: { 
+        classId: 1, 
+        className: "Data Structures & Algorithms", 
+        examId: 101,
+        examTime: "10:00 AM",
+        examDate: "2025-10-15",
+        duration: "120 min"
+      }
+    },
+    {
+      id: 2,
+      type: "grade",
+      title: "New Grade Posted",
+      content: "Your Quiz 2 score: 85/100 (85%). Class average: 78%.",
+      time: "5 hours ago",
+      isRead: false,
+      priority: "medium",
+      metadata: { 
+        classId: 1, 
+        className: "Data Structures & Algorithms", 
+        examId: 102,
+        score: 85,
+        maxScore: 100,
+        percentage: 85,
+        classAverage: 78
+      }
+    },
+    {
+      id: 3,
+      type: "system",
+      title: "Camera Check Required",
+      content: "Please verify your camera and microphone before the next exam. System check takes 2 minutes.",
+      time: "1 day ago",
+      isRead: true,
+      priority: "medium",
+      metadata: { 
+        type: "device_check",
+        estimatedTime: "2 min"
+      }
+    },
+    {
+      id: 4,
+      type: "announcement",
+      title: "Office Hours Changed",
+      content: "Dr. Ahmed Hassan's office hours moved to Thursday 2:00 PM - 4:00 PM this week.",
+      time: "2 days ago",
+      isRead: true,
+      priority: "low",
+      metadata: { 
+        classId: 1, 
+        className: "Data Structures & Algorithms",
+        instructor: "Dr. Ahmed Hassan",
+        originalTime: "Tuesday 2-4 PM",
+        newTime: "Thursday 2-4 PM"
+      }
+    },
+    {
+      id: 5,
+      type: "exam",
+      title: "Quiz 3 Reminder",
+      content: "Database Systems - Quiz 3 closes tomorrow at 11:59 PM. Don't forget to submit!",
+      time: "1 day ago",
+      isRead: false,
+      priority: "high",
+      metadata: { 
+        classId: 2, 
+        className: "Database Systems", 
+        examId: 203,
+        deadline: "11:59 PM",
+        submissionsStatus: "not_submitted"
+      }
+    },
+    {
+      id: 6,
+      type: "grade",
+      title: "Assignment Feedback Available",
+      content: "Your Database Design assignment feedback is now available. Grade: 92/100.",
+      time: "3 days ago",
+      isRead: false,
+      priority: "medium",
+      metadata: { 
+        classId: 2, 
+        className: "Database Systems", 
+        assignmentId: 301,
+        score: 92,
+        maxScore: 100,
+        feedback: "Excellent work on normalization!"
+      }
+    },
+    {
+      id: 7,
+      type: "system",
+      title: "Exam Security Alert",
+      content: "Multiple tab switching detected during Quiz 2. Please ensure you stay in the exam window.",
+      time: "1 week ago",
+      isRead: true,
+      priority: "critical",
+      metadata: { 
+        classId: 1, 
+        className: "Data Structures & Algorithms", 
+        examId: 102,
+        incidentId: 456,
+        severity: "warning"
+      }
+    },
+    {
+      id: 8,
+      type: "announcement",
+      title: "Study Materials Added",
+      content: "New practice problems and solutions added for the upcoming midterm exam.",
+      time: "4 days ago",
+      isRead: false,
+      priority: "medium",
+      metadata: { 
+        classId: 1, 
+        className: "Data Structures & Algorithms", 
+        resources: 5,
+        type: "practice_problems"
+      }
+    }
+  ]);
+
+  // Calculate selectedClass and activeTab BEFORE using them in hooks
+  const selectedClass = classId ? studentClasses.find(cls => cls.id === parseInt(classId)) : null;
+  const activeTab = tab || "overview";
+
+  // Load completed exams from localStorage on component mount
+  useEffect(() => {
+    const completed = JSON.parse(localStorage.getItem('completedExams') || '[]');
+    setCompletedExams(completed);
+  }, []);
+
+  // Prevent default button submits
+  useEffect(() => {
+    const preventButtonSubmit = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const button = target.closest('button');
+      
+      if (button && !button.hasAttribute('type')) {
+        button.setAttribute('type', 'button');
+      }
+    };
+
+    document.addEventListener('click', preventButtonSubmit, true);
+    
+    return () => {
+      document.removeEventListener('click', preventButtonSubmit, true);
+    };
+  }, []);
+
+  // Close notifications when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Simulate real-time notifications
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newNotification = getMockNotification();
+      if (newNotification) {
+        setNotifications(prev => [newNotification, ...prev]);
+        
+        if (Notification.permission === 'granted') {
+          new Notification('New Notification', {
+            body: newNotification.title,
+            icon: '/notification-icon.png',
+            badge: '/notification-badge.png'
+          });
+        }
+        
+        const audio = new Audio('/notification.mp3');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+      }
+    }, 45000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Request notification permission
+  useEffect(() => {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Update URL when class or tab changes
+  useEffect(() => {
+    if (classId && !selectedClass) {
+      navigate("/classes");
+    }
+  }, [classId, selectedClass, navigate]);
+
+  const getMockNotification = (): NotificationItem | null => {
+    const mockNotifications = [
+      {
+        id: Date.now(),
+        type: "exam" as const,
+        title: "Exam Starting Soon",
+        content: "Web Development Quiz starts in 15 minutes. Get ready!",
+        time: "Just now",
+        isRead: false,
+        priority: "high" as const,
+        metadata: { 
+          classId: 3, 
+          className: "Web Development", 
+          examId: 304,
+          startsIn: "15 min"
+        }
+      },
+      {
+        id: Date.now() + 1,
+        type: "grade" as const,
+        title: "Grade Released",
+        content: "Your Operating Systems Quiz 1 grade is now available.",
+        time: "Just now",
+        isRead: false,
+        priority: "medium" as const,
+        metadata: { 
+          classId: 4, 
+          className: "Operating Systems", 
+          examId: 405,
+          score: 88,
+          maxScore: 100
+        }
+      },
+      {
+        id: Date.now() + 2,
+        type: "system" as const,
+        title: "System Maintenance",
+        content: "Scheduled maintenance tonight at 2 AM. Platform may be unavailable for 30 minutes.",
+        time: "Just now",
+        isRead: false,
+        priority: "low" as const,
+        metadata: { 
+          maintenanceStart: "2:00 AM",
+          duration: "30 min"
+        }
+      }
+    ];
+    
+    return Math.random() > 0.8 ? mockNotifications[Math.floor(Math.random() * mockNotifications.length)] as NotificationItem : null;
+  };
+
+  const markAsRead = (notificationId: number) => {
+    setNotifications(prev => 
+      prev.map(notif => 
+        notif.id === notificationId ? { ...notif, isRead: true } : notif
+      )
+    );
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(prev => 
+      prev.map(notif => ({ ...notif, isRead: true }))
+    );
+  };
+
+  const deleteNotification = (notificationId: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+  };
+
+  const clearAllNotifications = () => {
+    if (window.confirm('Clear all notifications?')) {
+      setNotifications([]);
+    }
+  };
+
+  const getFilteredNotifications = () => {
+    let filtered = notifications;
+    
+    if (filterType !== 'all') {
+      if (filterType === 'classes') {
+        filtered = notifications.filter(n => n.metadata?.classId !== undefined);
+      } else {
+        filtered = notifications.filter(n => n.type === filterType);
+      }
+    }
+    
+    return showAll ? filtered : filtered.slice(0, 5);
+  };
+
+  const getUnreadClassesCount = () => {
+    return notifications.filter(n => !n.isRead && n.metadata?.classId !== undefined).length;
+  };
+
+  const getTotalClassesCount = () => {
+    return notifications.filter(n => n.metadata?.classId !== undefined).length;
+  };
+
+  const getPriorityColor = (priority: string = 'medium') => {
+    switch(priority) {
+      case 'critical': return 'bg-red-500';
+      case 'high': return 'bg-orange-500';
+      case 'medium': return 'bg-blue-500';
+      case 'low': return 'bg-gray-500';
+      default: return 'bg-blue-500';
+    }
+  };
+
+  const getPriorityBadge = (priority: string = 'medium') => {
+    switch(priority) {
+      case 'critical': 
+        return <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5">
+          <AlertCircle size={10} />
+          Urgent
+        </span>;
+      case 'high': 
+        return <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded-full">
+          Important
+        </span>;
+      case 'medium': 
+        return <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">
+          Update
+        </span>;
+      case 'low': 
+        return <span className="bg-gray-100 text-gray-700 text-[10px] px-2 py-0.5 rounded-full">
+          Info
+        </span>;
+      default: return null;
+    }
+  };
+
+  const getNotificationIcon = (type: string, priority: string = 'medium') => {
+    const iconClasses = "p-1.5 rounded-lg";
+    switch(type) {
+      case "exam":
+        return <div className={`${iconClasses} bg-blue-100`}><Calendar className="text-blue-600" size={18} /></div>;
+      case "grade":
+        return <div className={`${iconClasses} bg-green-100`}><Award className="text-green-600" size={18} /></div>;
+      case "system":
+        return <div className={`${iconClasses} bg-red-100`}><AlertCircle className="text-red-600" size={18} /></div>;
+      case "announcement":
+        return <div className={`${iconClasses} bg-purple-100`}><Megaphone className="text-purple-600" size={18} /></div>;
+      default:
+        return <div className={`${iconClasses} bg-gray-100`}><Info className="text-gray-600" size={18} /></div>;
+    }
+  };
+
+  const handleNotificationClick = (notification: NotificationItem) => {
+    markAsRead(notification.id);
+    setSelectedNotification(notification.id);
+    setShowNotifications(false);
+    
+    // Safe navigation with null checks
+    if (notification?.metadata?.classId) {
+      // Verify if the class exists
+      const classExists = studentClasses.some(cls => cls.id === notification.metadata?.classId);
+      
+      if (classExists) {
+        // Navigate to appropriate class tab based on notification type
+        switch(notification.type) {
+          case 'exam':
+            navigate(`/classes/${notification.metadata.classId}/exams`);
+            break;
+          case 'grade':
+            navigate(`/classes/${notification.metadata.classId}/grades`);
+            break;
+          case 'system':
+          case 'announcement':
+          default:
+            navigate(`/classes/${notification.metadata.classId}/overview`);
+            break;
+        }
+      } else {
+        // Class doesn't exist - navigate to classes list
+        console.error('Class not found');
+        navigate('/classes');
+      }
+    } else {
+      // Handle notifications without classId
+      switch(notification.type) {
+        case 'system':
+          if (notification.metadata?.type === 'device_check') {
+            navigate('/system-check');
+          } else if (notification.metadata?.incidentId) {
+            navigate(`/exam-security/${notification.metadata.incidentId}`);
+          } else {
+            navigate('/');
+          }
+          break;
+        case 'exam':
+          if (notification.metadata?.examId) {
+            navigate(`/exam/${notification.metadata.examId}`);
+          } else {
+            navigate('/');
+          }
+          break;
+        case 'grade':
+          if (notification.metadata?.examId) {
+            navigate(`/exam-results/${notification.metadata.examId}`);
+          } else {
+            navigate('/');
+          }
+          break;
+        default:
+          navigate('/');
+          break;
+      }
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+
   // Update exams based on completion status
   const exams: Exam[] = [
     { 
@@ -314,16 +696,6 @@ const ClassesStudent = () => {
     { id: 3, name: "Quiz 2", date: "2025-09-28", duration: "30 min", status: "completed", score: 85 },
     { id: 4, name: "Quiz 1", date: "2025-09-15", duration: "30 min", status: "completed", score: 92 },
   ];
-
-  const selectedClass = classId ? studentClasses.find(cls => cls.id === parseInt(classId)) : null;
-  const activeTab = tab || "overview";
-
-  // Update URL when class or tab changes
-  useEffect(() => {
-    if (classId && !selectedClass) {
-      navigate("/classes");
-    }
-  }, [classId, selectedClass, navigate]);
 
   const handleClassClick = (cls: ClassType) => {
     navigate(`/classes/${cls.id}/overview`);
@@ -347,108 +719,9 @@ const ClassesStudent = () => {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  // Get notification icon based on type
-  const getNotificationIcon = (type: string) => {
-    switch(type) {
-      case "exam":
-        return <Calendar className="text-blue-600" size={18} />;
-      case "grade":
-        return <CheckCircle className="text-green-600" size={18} />;
-      case "system":
-        return <AlertCircle className="text-red-600" size={18} />;
-      case "announcement":
-        return <Megaphone className="text-purple-600" size={18} />;
-      default:
-        return <Info className="text-gray-600" size={18} />;
-    }
-  };
-
-  // Notification Dropdown Component
-  const NotificationDropdown = () => {
-    const unreadCount = notifications.filter(n => !n.isRead).length;
-
-    return (
-      <div className="relative" ref={notificationRef}>
-        <button 
-          title="Notifications" 
-          type="button"
-          className="relative p-2 text-gray-600 hover:text-gray-800 transition-colors"
-          onClick={() => setShowNotifications(!showNotifications)}
-        >
-          <Bell size={20} className="sm:w-6 sm:h-6" />
-          {unreadCount > 0 && (
-            <span className="absolute top-0 right-0 bg-red-500 w-2 h-2 rounded-full"></span>
-          )}
-        </button>
-
-        {showNotifications && (
-          <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl z-50 overflow-hidden">
-            <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-4 py-3 flex justify-between items-center">
-              <h3 className="font-semibold">Notifications</h3>
-              <span className="bg-white text-[#1A80F6] text-xs px-2 py-1 rounded-full">
-                {unreadCount} unread
-              </span>
-            </div>
-            
-            <div className="max-h-96 overflow-y-auto">
-              {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`px-4 py-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
-                    !notification.isRead ? 'bg-blue-50' : ''
-                  }`}
-                >
-                  <div className="flex gap-3">
-                    <div className="mt-1">
-                      {getNotificationIcon(notification.type)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-semibold text-gray-800 text-sm">
-                          {notification.title}
-                        </h4>
-                        <button 
-                          title='close' 
-                          type="button"
-                          className="text-gray-400 hover:text-gray-600"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                      <p className="text-gray-600 text-sm mt-1">
-                        {notification.content}
-                      </p>
-                      <p className="text-gray-500 text-xs mt-1">
-                        {notification.time}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="px-4 py-2 bg-gray-50 text-center">
-              <button 
-                type="button"
-                className="text-[#1A80F6] text-sm font-medium hover:text-[#0E6AD0]"
-              >
-                View all notifications
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   // Tab Components
   const OverviewTab = ({ class: cls }: { class: ClassType }) => (
     <div className="space-y-6">
-      {/* Class Code Section - New addition for students */}
       <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)}`}>
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
@@ -484,7 +757,6 @@ const ClassesStudent = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Next Exam Section */}
         <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)} hover:shadow-md transition-shadow`}>
           <div className="flex items-center gap-3 mb-3">
             <div className={`w-10 h-10 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
@@ -509,7 +781,6 @@ const ClassesStudent = () => {
           </button>
         </div>
 
-        {/* Overall Grades Section */}
         <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)} hover:shadow-md transition-shadow`}>
           <div className="flex items-center gap-3 mb-3">
             <div className={`w-10 h-10 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
@@ -735,7 +1006,6 @@ const ClassesStudent = () => {
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {[
             { id: "overview", label: "Overview", icon: BookOpen },
@@ -758,7 +1028,6 @@ const ClassesStudent = () => {
           ))}
         </div>
 
-        {/* Tab Content */}
         {renderTabContent()}
       </div>
     );
@@ -846,16 +1115,439 @@ const ClassesStudent = () => {
     </div>
   );
 
+  // Notification Dropdown Component
+  const NotificationDropdown = () => (
+    <div className="relative" ref={notificationRef}>
+      <button 
+        title="Notifications" 
+        type="button"
+        className="relative p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 group"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowNotifications(!showNotifications);
+        }}
+      >
+        <Bell size={20} className="sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
+        {unreadCount > 0 && (
+          <>
+            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
+            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          </>
+        )}
+      </button>
+
+      <AnimatePresence>
+        {showNotifications && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute right-0 mt-2 w-[32rem] max-w-[90vw] bg-white rounded-xl shadow-2xl z-50 overflow-hidden border border-gray-100"
+          >
+            <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-5 py-4">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Bell size={20} className="animate-[bounce_2s_infinite]" />
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-300 rounded-full"></span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Notifications</h3>
+                    <p className="text-xs text-blue-100 mt-0.5">
+                      {unreadCount} unread · {notifications.length} total
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <button 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        markAllAsRead();
+                      }}
+                      className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                      title="Mark all as read"
+                    >
+                      <Check size={14} />
+                      Mark all read
+                    </button>
+                  )}
+                  <button 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowNotifications(false);
+                    }}
+                    className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+                    title="Close"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-4 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-white/30">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'classes', label: 'Classes', count: getTotalClassesCount(), unread: getUnreadClassesCount() },
+                  { id: 'exam', label: 'Exams' },
+                  { id: 'grade', label: 'Grades' },
+                  { id: 'system', label: 'System' },
+                  { id: 'announcement', label: 'Announcements' }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setFilterType(tab.id);
+                    }}
+                    className={`
+                      px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-all relative
+                      ${filterType === tab.id 
+                        ? 'bg-white text-[#1A80F6] shadow-md' 
+                        : 'bg-white/20 text-white hover:bg-white/30'
+                      }
+                    `}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {tab.id === 'classes' && <School size={12} />}
+                      {tab.label}
+                      {tab.id !== 'all' && (
+                        <span className="px-1.5 py-0.5 bg-white/30 rounded-full text-[10px]">
+                          {tab.id === 'classes' 
+                            ? getTotalClassesCount()
+                            : notifications.filter(n => n.type === tab.id).length}
+                        </span>
+                      )}
+                      {tab.id === 'classes' && getUnreadClassesCount() > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-300 rounded-full"></span>
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {filterType === 'classes' && (
+                <div className="mt-2 text-xs bg-white/20 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                  <School size={12} />
+                  <span>Showing class-related notifications only</span>
+                  <span className="ml-auto font-semibold">{getTotalClassesCount()} total</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="max-h-[32rem] overflow-y-auto divide-y divide-gray-100">
+              {getFilteredNotifications().length > 0 ? (
+                getFilteredNotifications().map((notification, index) => (
+                  <motion.div
+                    key={notification.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`
+                      relative px-5 py-4 hover:bg-gray-50 cursor-pointer transition-all duration-200
+                      ${!notification.isRead ? 'bg-blue-50/50' : ''}
+                      ${selectedNotification === notification.id ? 'bg-blue-100/50' : ''}
+                      ${filterType === 'classes' ? 'border-l-4 border-l-[#1A80F6]' : ''}
+                    `}
+                  >
+                    {notification.priority && ['critical', 'high'].includes(notification.priority) && (
+                      <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 ${getPriorityColor(notification.priority)} rounded-r-full`}></div>
+                    )}
+
+                    <div className="flex gap-4">
+                      <div className="flex-shrink-0">
+                        {filterType === 'classes' ? (
+                          <div className="p-1.5 rounded-lg bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white">
+                            <School size={18} />
+                          </div>
+                        ) : (
+                          getNotificationIcon(notification.type, notification.priority)
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-semibold text-gray-900 text-sm">
+                                {notification.title}
+                              </h4>
+                              {!notification.isRead && (
+                                <span className="bg-[#1A80F6] text-white text-[10px] px-2 py-0.5 rounded-full">
+                                  New
+                                </span>
+                              )}
+                              {getPriorityBadge(notification.priority)}
+                            </div>
+                            
+                            <p className="text-gray-600 text-sm mt-1 line-clamp-2">
+                              {notification.content}
+                            </p>
+                            
+                            {notification.metadata && (
+                              <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
+                                {notification.metadata.className && (
+                                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <School size={12} />
+                                    {notification.metadata.className}
+                                  </span>
+                                )}
+                                
+                                {notification.type === 'exam' && notification.metadata.examTime && (
+                                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <Clock size={12} />
+                                    {notification.metadata.examTime}
+                                  </span>
+                                )}
+                                
+                                {notification.type === 'grade' && notification.metadata.score !== undefined && (
+                                  <>
+                                    <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                      Score: {notification.metadata.score}/{notification.metadata.maxScore}
+                                    </span>
+                                    {notification.metadata.classAverage !== undefined && (
+                                      <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+                                        Class Avg: {notification.metadata.classAverage}%
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                                
+                                {notification.metadata.deadline && (
+                                  <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <AlertCircle size={12} />
+                                    Due {notification.metadata.deadline}
+                                  </span>
+                                )}
+                                
+                                {notification.metadata.submissionsStatus === 'not_submitted' && (
+                                  <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                                    Not Submitted
+                                  </span>
+                                )}
+
+                                {notification.metadata.duration && (
+                                  <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <Clock size={12} />
+                                    {notification.metadata.duration}
+                                  </span>
+                                )}
+
+                                {notification.metadata.startsIn && (
+                                  <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <Sparkles size={12} />
+                                    Starts in {notification.metadata.startsIn}
+                                  </span>
+                                )}
+
+                                {notification.metadata.instructor && (
+                                  <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <Users size={12} />
+                                    {notification.metadata.instructor}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <span className="text-xs text-gray-400 whitespace-nowrap">
+                              {notification.time}
+                            </span>
+                            <button 
+                              title="Delete notification"
+                              type="button"
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              onClick={(e) => deleteNotification(notification.id, e)}
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 mt-2">
+                          {!notification.isRead && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                markAsRead(notification.id);
+                              }}
+                              className="text-xs text-[#1A80F6] hover:text-[#0E6AD0] flex items-center gap-1"
+                            >
+                              <Check size={12} />
+                              Mark as read
+                            </button>
+                          )}
+                          
+                          {notification.type === 'exam' && 
+                           notification.metadata?.examId && 
+                           notification.metadata?.startsIn && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/start-exam/${notification.metadata?.examId}`);
+                              }}
+                              className="text-xs bg-green-100 text-green-700 hover:bg-green-200 px-2 py-1 rounded-lg flex items-center gap-1"
+                            >
+                              <Sparkles size={12} />
+                              Start Exam
+                            </button>
+                          )}
+                          
+                          {notification.type === 'grade' && 
+                           notification.metadata?.examId && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/exam-results/${notification.metadata?.examId}`);
+                              }}
+                              className="text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 px-2 py-1 rounded-lg flex items-center gap-1"
+                            >
+                              <Award size={12} />
+                              View Feedback
+                            </button>
+                          )}
+
+                          {notification.type === 'system' && 
+                           notification.metadata?.type === 'device_check' && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate('/system-check');
+                              }}
+                              className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded-lg flex items-center gap-1"
+                            >
+                              <CheckCircle size={12} />
+                              Check Now
+                            </button>
+                          )}
+
+                          {notification.metadata?.classId && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setShowNotifications(false);
+                                const classExists = studentClasses.some(cls => cls.id === notification.metadata?.classId);
+                                if (classExists) {
+                                  navigate(`/classes/${notification.metadata?.classId}/overview`);
+                                } else {
+                                  navigate('/classes');
+                                }
+                              }}
+                              className="text-xs bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white hover:from-[#0E6AD0] hover:to-[#3A80D2] px-2 py-1 rounded-lg flex items-center gap-1 shadow-sm"
+                            >
+                              <School size={12} />
+                              View Class
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              ) : (
+                <div className="px-5 py-12 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    {filterType === 'classes' ? (
+                      <School size={24} className="text-gray-400" />
+                    ) : (
+                      <Bell size={24} className="text-gray-400" />
+                    )}
+                  </div>
+                  <p className="text-gray-500 font-medium">
+                    {filterType === 'classes' 
+                      ? 'No class notifications' 
+                      : 'No notifications'}
+                  </p>
+                  <p className="text-gray-400 text-sm mt-1">
+                    {filterType === 'classes' 
+                      ? 'Updates about your classes will appear here' 
+                      : filterType !== 'all' 
+                        ? `No ${filterType} notifications found` 
+                        : 'You\'re all caught up!'}
+                  </p>
+                  {filterType !== 'all' && (
+                    <button
+                      onClick={() => setFilterType('all')}
+                      className="mt-4 text-[#1A80F6] text-sm hover:text-[#0E6AD0]"
+                    >
+                      View all notifications
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {notifications.length > 0 && (
+              <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowAll(!showAll);
+                  }}
+                  className="text-[#1A80F6] text-sm font-medium hover:text-[#0E6AD0] transition-colors flex items-center gap-1"
+                  title={showAll ? "Show less" : "View all notifications"}
+                >
+                  {showAll ? 'Show less' : 'View all notifications'}
+                  <ChevronDown size={14} className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {getFilteredNotifications().length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (filterType === 'classes') {
+                        if (window.confirm('Clear all class notifications?')) {
+                          setNotifications(prev => prev.filter(n => n.metadata?.classId === undefined));
+                        }
+                      } else if (filterType !== 'all') {
+                        if (window.confirm(`Clear all ${filterType} notifications?`)) {
+                          setNotifications(prev => prev.filter(n => n.type !== filterType));
+                        }
+                      } else {
+                        clearAllNotifications();
+                      }
+                    }}
+                    className="text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                    title={`Clear ${filterType === 'all' ? 'all' : filterType} notifications`}
+                  >
+                    <Trash2 size={12} />
+                    Clear {filterType === 'all' ? 'all' : filterType}
+                  </button>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
   return (
     <div className="w-full pt-20 min-h-screen bg-gradient-to-br from-[#E3F0FE] to-[#F0F7FF]">
       <div className="min-h-screen p-6">
         <Header fixed={true} showAccount={true} isRegistered={true} />
 
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
           <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6 border border-white/50">
             <div className="flex flex-col gap-4">
-              {/* Top Row */}
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3 sm:gap-4">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] flex items-center justify-center text-white text-xl font-bold shadow-lg">
@@ -873,7 +1565,6 @@ const ClassesStudent = () => {
                 <NotificationDropdown />
               </div>
 
-              {/* Bottom Row - Search Bar */}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -889,10 +1580,32 @@ const ClassesStudent = () => {
             </div>
           </div>
 
-          {/* Main Content */}
           {selectedClass ? <ClassDetails /> : <ClassesList />}
         </div>
       </div>
+
+      <style>{`
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-2px); }
+        }
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .scrollbar-thin::-webkit-scrollbar {
+          height: 2px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: rgba(255,255,255,0.1);
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.3);
+          border-radius: 10px;
+        }
+      `}</style>
     </div>
   );
 };
