@@ -152,10 +152,8 @@ const ExamInterface: React.FC = () => {
     
     setIsRequestingFullScreen(true);
     try {
-      if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen();
-        setFullScreenActive(true);
-      }
+      await document.documentElement.requestFullscreen?.();
+      setFullScreenActive(true);
     } catch (err) {
       console.error('Failed to enter fullscreen mode:', err);
       addViolation(0.5, 'Failed to enter full-screen mode');
@@ -166,10 +164,8 @@ const ExamInterface: React.FC = () => {
 
   const exitFullScreen = async () => {
     try {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen();
-        setFullScreenActive(false);
-      }
+      await document.exitFullscreen?.();
+      setFullScreenActive(false);
     } catch (err) {
       console.error('Failed to exit fullscreen mode:', err);
     }
@@ -412,9 +408,7 @@ const ExamInterface: React.FC = () => {
     setCurrentView('terminated');
     
     // Exit fullscreen on termination
-    if (document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
-    }
+    document.exitFullscreen?.().catch(() => {});
     
     console.log('Exam terminated:', {
       reason,
@@ -513,11 +507,9 @@ const ExamInterface: React.FC = () => {
 
     // Fullscreen check
     setTimeout(() => {
-      if (document.documentElement.requestFullscreen) {
-        setSystemCheckStatus(prev => ({ ...prev, fullscreen: 'success' }));
-      } else {
-        setSystemCheckStatus(prev => ({ ...prev, fullscreen: 'failed' }));
-      }
+      // Check if fullscreen API is available by attempting to access it
+      const supportsFullscreen = 'requestFullscreen' in document.documentElement;
+      setSystemCheckStatus(prev => ({ ...prev, fullscreen: supportsFullscreen ? 'success' : 'failed' }));
     }, 3000);
 
     // Screen sharing check
@@ -560,22 +552,20 @@ const ExamInterface: React.FC = () => {
         }
         break;
       case 'internet':
-        const isOnline = navigator.onLine;
-        setSystemCheckStatus(prev => ({ ...prev, internet: isOnline ? 'success' : 'failed' }));
+        setSystemCheckStatus(prev => ({ ...prev, internet: navigator.onLine ? 'success' : 'failed' }));
         break;
-      case 'browser':
+      case 'browser': {
         const isChrome = /Chrome/.test(navigator.userAgent);
         const isFirefox = /Firefox/.test(navigator.userAgent);
         const isEdge = /Edg/.test(navigator.userAgent);
         setSystemCheckStatus(prev => ({ ...prev, browser: (isChrome || isFirefox || isEdge) ? 'success' : 'failed' }));
         break;
-      case 'fullscreen':
-        if (document.documentElement.requestFullscreen) {
-          setSystemCheckStatus(prev => ({ ...prev, fullscreen: 'success' }));
-        } else {
-          setSystemCheckStatus(prev => ({ ...prev, fullscreen: 'failed' }));
-        }
+      }
+      case 'fullscreen': {
+        const supportsFullscreen = 'requestFullscreen' in document.documentElement;
+        setSystemCheckStatus(prev => ({ ...prev, fullscreen: supportsFullscreen ? 'success' : 'failed' }));
         break;
+      }
       case 'screen':
         try {
           const stream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
