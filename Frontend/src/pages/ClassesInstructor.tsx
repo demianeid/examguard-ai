@@ -33,21 +33,9 @@ import {
   ChevronDown,
   Search
 } from "lucide-react";
+import { classesApi, type ClassType } from "../services/api";
 
 // --- Types ---
-interface ClassType {
-  id: number;
-  name: string;
-  students: number;
-  activeExams: number;
-  pendingReviews: number;
-  avgScore: number;
-  color: string;
-  code: string;
-  subject?: string;
-  description?: string;
-}
-
 interface NotificationItem {
   id: number;
   type: "exam" | "grade" | "system" | "announcement";
@@ -90,6 +78,7 @@ interface EditClassModalProps {
   onSubmit: (data: EditClassData) => void;
   onDelete?: () => void;
   classData: ClassType | null;
+  isLoading?: boolean;
 }
 
 interface EditClassData {
@@ -209,26 +198,9 @@ const getHoverGradientFromColor = (gradient: string): string => {
   return hoverGradients[index];
 };
 
-// Generate a random class code
-const generateClassCode = (): string => {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const numbers = '0123456789';
-  let code = '';
-  
-  for (let i = 0; i < 3; i++) {
-    code += letters.charAt(Math.floor(Math.random() * letters.length));
-  }
-  code += '-';
-  for (let i = 0; i < 4; i++) {
-    code += numbers.charAt(Math.floor(Math.random() * numbers.length));
-  }
-  
-  return code;
-};
-
 // --- Helper Components ---
 
-const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubmit, onDelete, classData }) => {
+const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubmit, onDelete, classData, isLoading = false }) => {
   const [formData, setFormData] = useState<EditClassData>({
     name: "",
     subject: "",
@@ -242,7 +214,7 @@ const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubm
       setFormData({
         name: classData.name,
         subject: classData.subject || "",
-        students: classData.students.toString(),
+        students: classData.students?.toString() || "0",
         description: classData.description || ""
       });
     }
@@ -302,13 +274,14 @@ const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubm
             title="Close modal"
             onClick={onClose}
             className="text-white/80 hover:text-white transition-colors"
+            disabled={isLoading}
           >
             <X size={20} />
           </button>
         </div>
 
         {showDeleteConfirm ? (
-          <div className="p-6">
+          <div key="delete-confirm" className="p-6">
             <div className="flex flex-col items-center text-center">
               <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
                 <Trash2 size={32} className="text-red-600" />
@@ -323,22 +296,24 @@ const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubm
                   onClick={handleDeleteCancel}
                   className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
                   title="Cancel deletion"
+                  disabled={isLoading}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleDeleteConfirm}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-md hover:shadow-lg"
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Confirm delete class"
+                  disabled={isLoading}
                 >
-                  Delete Class
+                  {isLoading ? 'Deleting...' : 'Delete Class'}
                 </button>
               </div>
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <form key="edit-form" onSubmit={handleSubmit} className="p-6 space-y-5">
             <div className="space-y-1">
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                 Class Name *
@@ -350,7 +325,8 @@ const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubm
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent disabled:bg-gray-100"
+                disabled={isLoading}
               />
             </div>
 
@@ -366,7 +342,8 @@ const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubm
                   required
                   value={formData.subject}
                   onChange={handleChange}
-                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent disabled:bg-gray-100"
+                  disabled={isLoading}
                 />
               </div>
 
@@ -382,7 +359,8 @@ const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubm
                   min="1"
                   value={formData.students}
                   onChange={handleChange}
-                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent"
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent disabled:bg-gray-100"
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -397,24 +375,27 @@ const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubm
                 rows={4}
                 value={formData.description}
                 onChange={handleChange}
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent resize-none"
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent resize-none disabled:bg-gray-100"
+                disabled={isLoading}
               />
             </div>
 
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
-                className={`flex-1 ${classData?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-lg ${getHoverGradientFromColor(classData?.color || '')}`}
+                className={`flex-1 ${classData?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-lg ${getHoverGradientFromColor(classData?.color || '')} disabled:opacity-50 disabled:cursor-not-allowed`}
                 title="Save changes to class"
+                disabled={isLoading}
               >
-                Save Changes
+                {isLoading ? 'Saving...' : 'Save Changes'}
               </button>
               
               <button
                 type="button"
                 onClick={handleDeleteClick}
-                className="px-5 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg flex items-center gap-2"
+                className="px-5 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Delete this class"
+                disabled={isLoading}
               >
                 <Trash2 size={18} />
                 <span className="hidden sm:inline">Delete</span>
@@ -654,6 +635,7 @@ const NotificationDropdown = () => {
       <AnimatePresence>
         {showNotifications && (
           <motion.div
+            key="notification-dropdown"
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
@@ -706,9 +688,9 @@ const NotificationDropdown = () => {
 
               {/* Filter tabs */}
               <div className="flex gap-2 mt-4 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-white/30">
-                {['all', 'exam', 'grade', 'system', 'announcement'].map((type) => (
+                {['all', 'exam', 'grade', 'system', 'announcement'].map((type, index) => (
                   <button
-                    key={type}
+                    key={`filter-${type}-${index}`} 
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -738,7 +720,7 @@ const NotificationDropdown = () => {
               {getFilteredNotifications().length > 0 ? (
                 getFilteredNotifications().map((notification, index) => (
                   <motion.div
-                    key={notification.id}
+                    key={`notification-${notification.id}-${index}`} 
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}
@@ -846,7 +828,7 @@ const NotificationDropdown = () => {
                   </motion.div>
                 ))
               ) : (
-                <div className="px-5 py-12 text-center">
+                <div key="no-notifications" className="px-5 py-12 text-center">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Bell size={24} className="text-gray-400" />
                   </div>
@@ -870,7 +852,7 @@ const NotificationDropdown = () => {
 
             {/* Footer */}
             {notifications.length > 0 && (
-              <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              <div key="notification-footer" className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
                 <button 
                   type="button"
                   onClick={(e) => {
@@ -908,6 +890,23 @@ const NotificationDropdown = () => {
   );
 };
 
+// Generate a random class code
+const generateClassCode = (): string => {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const numbers = '0123456789';
+  let code = '';
+  
+  for (let i = 0; i < 3; i++) {
+    code += letters.charAt(Math.floor(Math.random() * letters.length));
+  }
+  code += '-';
+  for (let i = 0; i < 4; i++) {
+    code += numbers.charAt(Math.floor(Math.random() * numbers.length));
+  }
+  
+  return code;
+};
+
 // --- Main Component ---
 
 const ClassesInstructor = () => {
@@ -917,67 +916,60 @@ const ClassesInstructor = () => {
   const [isEditClassModalOpen, setIsEditClassModalOpen] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{show: boolean, classId: number | null, className: string}>({
     show: false,
     classId: null,
     className: ''
   });
   
-  // Load classes from localStorage or use default
-  const [instructorClasses, setInstructorClasses] = useState<ClassType[]>(() => {
-    const savedClasses = localStorage.getItem('instructorClasses');
-    if (savedClasses) {
-      return JSON.parse(savedClasses);
+  // State for classes from API
+  const [instructorClasses, setInstructorClasses] = useState<ClassType[]>([]);
+
+  // Fetch classes from API on component mount
+  useEffect(() => {
+    fetchClasses();
+  }, []);
+
+  const fetchClasses = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const data = await classesApi.getAll();
+      console.log('API Response:', data);
+      
+      const transformedClasses = data.map((cls: any) => ({
+        id: cls.id,
+        name: cls.name,
+        students: Math.floor(Math.random() * 30) + 20,
+        activeExams: Math.floor(Math.random() * 5),
+        pendingReviews: Math.floor(Math.random() * 10),
+        avgScore: Math.floor(Math.random() * 30) + 70,
+        color: oceanGradients[cls.id % oceanGradients.length],
+        code: cls.code || `CLASS-${String(cls.id).padStart(4, '0')}`,
+        subject: cls.subject || "Computer Science",
+        description: cls.description || "No description available"
+      }));
+      
+      console.log('Classes keys:', transformedClasses.map(c => ({ id: c.id, name: c.name })));
+      
+      setInstructorClasses(transformedClasses);
+    } catch (error) {
+      console.error('Error fetching classes:', error);
+      setErrorMessage('Failed to load classes. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-    // Default classes if no saved data
-    return [
-      {
-        id: 1,
-        name: "Software Engineering",
-        students: 38,
-        activeExams: 2,
-        pendingReviews: 8,
-        avgScore: 78,
-        color: oceanGradients[0],
-        code: generateClassCode(),
-        subject: "Computer Science",
-        description: "This course covers software development methodologies, project management, and quality assurance."
-      },
-      {
-        id: 2,
-        name: "Computer Networks",
-        students: 45,
-        activeExams: 4,
-        pendingReviews: 6,
-        avgScore: 82,
-        color: oceanGradients[1],
-        code: generateClassCode(),
-        subject: "Computer Science",
-        description: "Study of network architectures, protocols, and security."
-      },
-      {
-        id: 3,
-        name: "Data Structures & Algorithms",
-        students: 52,
-        activeExams: 1,
-        pendingReviews: 3,
-        avgScore: 75,
-        color: oceanGradients[2],
-        code: generateClassCode(),
-        subject: "Computer Science",
-        description: "This course covers fundamental data structures and algorithms including arrays, linked lists, trees, graphs, sorting, and searching algorithms."
-      }
-    ];
-  });
+  };
 
   // Check for success message from navigation state
   useEffect(() => {
     if (location.state?.message) {
       setSuccessMessage(location.state.message);
-      // Clear the message from location state
       window.history.replaceState({}, document.title);
       
-      // Auto-hide success message after 3 seconds
       const timer = setTimeout(() => {
         setSuccessMessage(null);
       }, 3000);
@@ -986,28 +978,16 @@ const ClassesInstructor = () => {
     }
   }, [location.state]);
 
-  // Save classes to localStorage whenever they change
+  // Auto-hide error message after 5 seconds
   useEffect(() => {
-    localStorage.setItem('instructorClasses', JSON.stringify(instructorClasses));
-  }, [instructorClasses]);
-  
-  // Prevent default button submits
-  useEffect(() => {
-    const preventButtonSubmit = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const button = target.closest('button');
+    if (errorMessage) {
+      const timer = setTimeout(() => {
+        setErrorMessage(null);
+      }, 5000);
       
-      if (button && !button.hasAttribute('type')) {
-        button.setAttribute('type', 'button');
-      }
-    };
-
-    document.addEventListener('click', preventButtonSubmit, true);
-    
-    return () => {
-      document.removeEventListener('click', preventButtonSubmit, true);
-    };
-  }, []);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
 
   // Sample exams data
   const exams: Exam[] = [
@@ -1029,10 +1009,10 @@ const ClassesInstructor = () => {
   const activeTab = tab || "overview";
 
   useEffect(() => {
-    if (classId && !selectedClass) {
+    if (classId && !selectedClass && !isLoading) {
       navigate("/classes-instructor");
     }
-  }, [classId, selectedClass, navigate]);
+  }, [classId, selectedClass, navigate, isLoading]);
 
   const handleClassClick = (cls: ClassType) => {
     navigate(`/classes-instructor/${cls.id}/overview`);
@@ -1054,25 +1034,53 @@ const ClassesInstructor = () => {
     setIsEditClassModalOpen(true);
   };
 
-  const handleEditClassSubmit = (data: EditClassData) => {
-    if (selectedClass) {
-      const updatedClasses = instructorClasses.map(cls => 
-        cls.id === selectedClass.id 
-          ? { 
-              ...cls, 
-              name: data.name,
-              subject: data.subject,
-              students: parseInt(data.students),
-              description: data.description
-            }
-          : cls
-      );
+const handleEditClassSubmit = async (data: EditClassData) => {
+  if (selectedClass) {
+    setIsSubmitting(true);
+    try {
+      // 1. تحديث الكلاس في الـ API
+      await classesApi.update(selectedClass.id, {
+        name: data.name,
+        subject: data.subject,
+        students: parseInt(data.students),
+        description: data.description
+      });
       
-      setInstructorClasses(updatedClasses);
+
+      const updatedClasses = await classesApi.getAll();
+      console.log('Updated API Response:', updatedClasses);
+      
+
+      const transformedClasses = updatedClasses.map((cls: any) => ({
+        id: cls.id,
+        name: cls.name,
+        students: Math.floor(Math.random() * 30) + 20,
+        activeExams: Math.floor(Math.random() * 5),
+        pendingReviews: Math.floor(Math.random() * 10),
+        avgScore: Math.floor(Math.random() * 30) + 70,
+        color: oceanGradients[cls.id % oceanGradients.length],
+        code: cls.code || `CLASS-${String(cls.id).padStart(4, '0')}`,
+        subject: cls.subject || data.subject,
+        description: cls.description || data.description
+      }));
+      
+      console.log('Transformed classes after update:', transformedClasses);
+      
+
+      setInstructorClasses(transformedClasses);
+      
+    
       setIsEditClassModalOpen(false);
       setSuccessMessage('Class updated successfully!');
+      
+    } catch (error) {
+      console.error('Error updating class:', error);
+      setErrorMessage('Failed to update class. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+  }
+};
 
   const handleDeleteClass = (classId: number, className: string) => {
     setDeleteConfirmation({
@@ -1082,18 +1090,26 @@ const ClassesInstructor = () => {
     });
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deleteConfirmation.classId) {
-      // If we're currently viewing the class that's being deleted, navigate back to the list
-      if (selectedClass && selectedClass.id === deleteConfirmation.classId) {
-        navigate("/classes-instructor");
+      setIsSubmitting(true);
+      try {
+        await classesApi.delete(deleteConfirmation.classId);
+        
+        if (selectedClass && selectedClass.id === deleteConfirmation.classId) {
+          navigate("/classes-instructor");
+        }
+        
+        setInstructorClasses(prev => prev.filter(cls => cls.id !== deleteConfirmation.classId));
+        setSuccessMessage(`Class "${deleteConfirmation.className}" deleted successfully!`);
+      } catch (error) {
+        console.error('Error deleting class:', error);
+        setErrorMessage('Failed to delete class. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+        setDeleteConfirmation({ show: false, classId: null, className: '' });
       }
-      
-      const updatedClasses = instructorClasses.filter(cls => cls.id !== deleteConfirmation.classId);
-      setInstructorClasses(updatedClasses);
-      setSuccessMessage(`Class "${deleteConfirmation.className}" deleted successfully!`);
     }
-    setDeleteConfirmation({ show: false, classId: null, className: '' });
   };
 
   const handleDeleteCancel = () => {
@@ -1137,28 +1153,6 @@ const ClassesInstructor = () => {
   // Tab Components
   const OverviewTab = ({ cls }: { cls: ClassType }) => (
     <div className="space-y-6">
-      {/* Success Message */}
-      {successMessage && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center justify-between"
-        >
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} className="text-green-600" />
-            <span className="font-medium">{successMessage}</span>
-          </div>
-          <button 
-            title="Dismiss message" 
-            onClick={() => setSuccessMessage(null)} 
-            className="text-green-600 hover:text-green-800"
-          >
-            <X size={16} />
-          </button>
-        </motion.div>
-      )}
-
       {/* Class Code Section */}
       <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)}`}>
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -1292,8 +1286,8 @@ const ClassesInstructor = () => {
 
   const StudentsTab = ({ students }: { students: Student[] }) => (
     <div className="space-y-4">
-      {students.map((student) => (
-        <div key={student.id} className="bg-white border p-4 rounded-lg shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+      {students.map((student, index) => (
+        <div key={`student-${student.id}-${index}`} className="bg-white border p-4 rounded-lg shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
           <div className="flex items-center gap-4">
             <div className={`w-12 h-12 rounded-full ${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} flex items-center justify-center text-white font-bold shadow-md`}>
               S{student.id}
@@ -1340,9 +1334,8 @@ const ClassesInstructor = () => {
           <span className="font-medium">Create New Exam</span>
         </button>
       </div>
-
-      {exams.map((exam) => (
-        <div key={exam.id} className="bg-white border p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+      {exams.map((exam, index) => (
+        <div key={`exam-${exam.id}-${index}`} className="bg-white border p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
           <div className="flex justify-between items-center">
             <div>
               <h4 className="font-semibold text-gray-800 text-lg">{exam.name}</h4>
@@ -1407,7 +1400,7 @@ const ClassesInstructor = () => {
 
   const ProctoringTab = () => (
     <div className="space-y-4">
-      <div className="bg-gradient-to-br from-red-50 to-orange-50 p-5 rounded-xl border border-red-200">
+      <div key="proctoring-flagged" className="bg-gradient-to-br from-red-50 to-orange-50 p-5 rounded-xl border border-red-200">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
             <AlertCircle className="text-red-600" size={24} />
@@ -1433,7 +1426,7 @@ const ClassesInstructor = () => {
         </div>
       </div>
 
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-xl border border-green-200">
+      <div key="proctoring-live" className="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-xl border border-green-200">
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
             <Eye className="text-green-600" size={24} />
@@ -1457,7 +1450,7 @@ const ClassesInstructor = () => {
 
   const AnalyticsTab = () => (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border border-blue-200 hover:shadow-lg transition-shadow">
+      <div key="analytics-avg-score" className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border border-blue-200 hover:shadow-lg transition-shadow">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
             <TrendingUp className="text-[#1A80F6]" size={24} />
@@ -1468,7 +1461,7 @@ const ClassesInstructor = () => {
         <p className="text-sm text-gray-500 mt-2">↑ 5% from last exam</p>
       </div>
 
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200 hover:shadow-lg transition-shadow">
+      <div key="analytics-pass-rate" className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200 hover:shadow-lg transition-shadow">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
             <CheckCircle className="text-green-600" size={24} />
@@ -1479,7 +1472,7 @@ const ClassesInstructor = () => {
         <p className="text-sm text-gray-500 mt-2">35 out of 38 students</p>
       </div>
 
-      <div className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-xl border border-red-200 hover:shadow-lg transition-shadow">
+      <div key="analytics-cheating-reports" className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-xl border border-red-200 hover:shadow-lg transition-shadow">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
             <AlertCircle className="text-red-600" size={24} />
@@ -1497,17 +1490,17 @@ const ClassesInstructor = () => {
 
     switch (activeTab) {
       case "overview":
-        return <OverviewTab cls={selectedClass} />;
+        return <OverviewTab key={`overview-${selectedClass.id}`} cls={selectedClass} />;
       case "students":
-        return <StudentsTab students={students} />;
+        return <StudentsTab key={`students-${selectedClass.id}`} students={students} />;
       case "exams":
-        return <ExamsTab exams={exams} />;
+        return <ExamsTab key={`exams-${selectedClass.id}`} exams={exams} />;
       case "proctoring":
-        return <ProctoringTab />;
+        return <ProctoringTab key={`proctoring-${selectedClass.id}`} />;
       case "analytics":
-        return <AnalyticsTab />;
+        return <AnalyticsTab key={`analytics-${selectedClass.id}`} />;
       default:
-        return <OverviewTab cls={selectedClass} />;
+        return <OverviewTab key={`overview-${selectedClass.id}`} cls={selectedClass} />;
     }
   };
 
@@ -1515,7 +1508,7 @@ const ClassesInstructor = () => {
     if (!selectedClass) return null;
 
     return (
-      <div className="bg-white rounded-xl shadow-lg p-6">
+      <div key={`class-details-${selectedClass.id}`} className="bg-white rounded-xl shadow-lg p-6">
         <div className="flex justify-between items-start mb-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">{selectedClass.name}</h2>
@@ -1581,121 +1574,165 @@ const ClassesInstructor = () => {
     );
   };
 
-  const ClassesList = () => (
-    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {instructorClasses.map((cls) => (
-        <motion.div
-          key={cls.id}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden transform hover:scale-[1.02]"
-        >
-          <div className={`h-2 ${cls.color}`}></div>
+  const ClassesList = () => {
+    if (isLoading) {
+      return (
+        <div key="loading-state" className="flex flex-col items-center justify-center py-12">
+          <div className="w-16 h-16 border-4 border-[#1A80F6] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-600">Loading classes...</p>
+        </div>
+      );
+    }
 
-          <div className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">{cls.name}</h3>
-                <div className="flex items-center gap-2 text-gray-600 text-sm bg-gray-50 px-3 py-1.5 rounded-lg">
-                  <School size={14} />
-                  <span className="font-mono font-medium">{cls.code}</span>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleCopyCode(cls.code);
-                    }}
-                    className="text-gray-500 hover:text-gray-700 ml-1"
-                    title={copiedCode === cls.code ? "Copied!" : "Copy class code"}
-                  >
-                    {copiedCode === cls.code ? (
-                      <Check size={14} className="text-green-600" />
-                    ) : (
-                      <Copy size={14} />
-                    )}
-                  </button>
+    if (errorMessage) {
+      return (
+        <div key="error-state" className="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
+          <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-gray-800 mb-2">Failed to Load Classes</h3>
+          <p className="text-gray-600 mb-4">{errorMessage}</p>
+          <button
+            onClick={fetchClasses}
+            className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-6 py-3 rounded-lg hover:from-[#0E6AD0] hover:to-[#3A80D2] transition-all duration-200"
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    if (instructorClasses.length === 0) {
+      return (
+        <div key="empty-state" className="bg-white rounded-xl shadow-lg p-12 text-center">
+          <School size={64} className="text-gray-300 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-gray-800 mb-2">No Classes Yet</h3>
+          <p className="text-gray-600 mb-6">Get started by creating your first class</p>
+          <button
+            onClick={handleCreateClassClick}
+            className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-6 py-3 rounded-lg hover:from-[#0E6AD0] hover:to-[#3A80D2] transition-all duration-200 flex items-center gap-2 mx-auto"
+          >
+            <Plus size={20} />
+            Create Your First Class
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div key="classes-list" className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {instructorClasses.map((cls) => (
+          <motion.div
+            key={`class-${cls.id}-${cls.code}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden transform hover:scale-[1.02]"
+          >
+            <div className={`h-2 ${cls.color}`}></div>
+
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">{cls.name}</h3>
+                  <div className="flex items-center gap-2 text-gray-600 text-sm bg-gray-50 px-3 py-1.5 rounded-lg">
+                    <School size={14} />
+                    <span className="font-mono font-medium">{cls.code}</span>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleCopyCode(cls.code);
+                      }}
+                      className="text-gray-500 hover:text-gray-700 ml-1"
+                      title={copiedCode === cls.code ? "Copied!" : "Copy class code"}
+                    >
+                      {copiedCode === cls.code ? (
+                        <Check size={14} className="text-green-600" />
+                      ) : (
+                        <Copy size={14} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDeleteClass(cls.id, cls.name);
+                  }}
+                  className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                  title={`Delete ${cls.name}`}
+                  aria-label={`Delete class ${cls.name}`}
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-2 text-gray-600">
+                    <Users size={16} /> Students
+                  </span>
+                  <span className="font-semibold text-gray-900">{cls.students}</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-2 text-gray-600">
+                    <FileText size={16} /> Active Exams
+                  </span>
+                  <span className="font-semibold text-green-600">{cls.activeExams}</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-2 text-gray-600">
+                    <AlertCircle size={16} /> Pending Reviews
+                  </span>
+                  <span className="font-semibold text-red-600">{cls.pendingReviews}</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-2 text-gray-600">
+                    <BarChart3 size={16} /> Avg Score
+                  </span>
+                  <span className={`font-semibold ${getTextColorFromGradient(cls.color)}`}>{cls.avgScore}%</span>
                 </div>
               </div>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleDeleteClass(cls.id, cls.name);
-                }}
-                className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                title={`Delete ${cls.name}`}
-                aria-label={`Delete class ${cls.name}`}
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
 
-            <div className="space-y-3 mb-4">
-              <div className="flex justify-between items-center">
-                <span className="flex items-center gap-2 text-gray-600">
-                  <Users size={16} /> Students
-                </span>
-                <span className="font-semibold text-gray-900">{cls.students}</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="flex items-center gap-2 text-gray-600">
-                  <FileText size={16} /> Active Exams
-                </span>
-                <span className="font-semibold text-green-600">{cls.activeExams}</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="flex items-center gap-2 text-gray-600">
-                  <AlertCircle size={16} /> Pending Reviews
-                </span>
-                <span className="font-semibold text-red-600">{cls.pendingReviews}</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="flex items-center gap-2 text-gray-600">
-                  <BarChart3 size={16} /> Avg Score
-                </span>
-                <span className={`font-semibold ${getTextColorFromGradient(cls.color)}`}>{cls.avgScore}%</span>
+              <div className="flex gap-2 mt-4">
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleClassClick(cls);
+                  }}
+                  className={`flex-1 py-2.5 rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg text-white ${getGradientFromColor(cls.color)}`}
+                  title={`Manage ${cls.name}`}
+                >
+                  Manage Class
+                </button>
+                <button 
+                  type="button"
+                  onClick={(e) => handleCreateExam(e, cls.id)}
+                  className={`${cls.color} text-white px-4 py-2.5 rounded-lg font-semibold ${getHoverGradientFromColor(cls.color)} transition-all duration-200 flex items-center justify-center shadow-md hover:shadow-lg`}
+                  title={`Create exam for ${cls.name}`}
+                >
+                  <Plus size={18} />
+                  <span className="ml-1 hidden sm:inline">Exam</span>
+                </button>
               </div>
             </div>
-
-            <div className="flex gap-2 mt-4">
-              <button 
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleClassClick(cls);
-                }}
-                className={`flex-1 py-2.5 rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg text-white ${getGradientFromColor(cls.color)}`}
-                title={`Manage ${cls.name}`}
-              >
-                Manage Class
-              </button>
-              <button 
-                type="button"
-                onClick={(e) => handleCreateExam(e, cls.id)}
-                className={`${cls.color} text-white px-4 py-2.5 rounded-lg font-semibold ${getHoverGradientFromColor(cls.color)} transition-all duration-200 flex items-center justify-center shadow-md hover:shadow-lg`}
-                title={`Create exam for ${cls.name}`}
-              >
-                <Plus size={18} />
-                <span className="ml-1 hidden sm:inline">Exam</span>
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      ))}
-    </div>
-  );
+          </motion.div>
+        ))}
+      </div>
+    );
+  };
 
   // Delete Confirmation Modal
   const DeleteConfirmationModal = () => {
     if (!deleteConfirmation.show) return null;
 
     return (
-      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div key="delete-confirmation-modal" className="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1737,16 +1774,18 @@ const ClassesInstructor = () => {
                   onClick={handleDeleteCancel}
                   className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
                   title="Cancel deletion"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleConfirmDelete}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-md hover:shadow-lg"
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Confirm delete class"
+                  disabled={isSubmitting}
                 >
-                  Yes, Delete Class
+                  {isSubmitting ? 'Deleting...' : 'Yes, Delete Class'}
                 </button>
               </div>
             </div>
@@ -1763,7 +1802,7 @@ const ClassesInstructor = () => {
 
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6 border border-white/50">
+          <div key="page-header" className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6 border border-white/50">
             <div className="flex flex-col gap-4">
               {/* Top Row */}
               <div className="flex justify-between items-center">
@@ -1799,9 +1838,10 @@ const ClassesInstructor = () => {
           </div>
 
           {/* Success Message */}
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             {successMessage && (
               <motion.div
+                key="success-message"
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -1822,24 +1862,51 @@ const ClassesInstructor = () => {
             )}
           </AnimatePresence>
 
+          {/* Error Message */}
+          <AnimatePresence mode="wait">
+            {errorMessage && (
+              <motion.div
+                key="error-message"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="mb-6 bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-lg flex items-center justify-between shadow-md"
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle size={20} className="text-red-600" />
+                  <span className="font-medium">{errorMessage}</span>
+                </div>
+                <button 
+                  onClick={() => setErrorMessage(null)} 
+                  className="text-red-600 hover:text-red-800"
+                  title="Dismiss message"
+                >
+                  <X size={18} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Main Content */}
           {selectedClass ? <ClassDetails /> : <ClassesList />}
         </div>
       </div>
 
       {/* Modals */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {isEditClassModalOpen && selectedClass && (
           <EditClassModal 
+            key={`edit-modal-${selectedClass.id}`}
             isOpen={isEditClassModalOpen} 
             onClose={() => setIsEditClassModalOpen(false)} 
             onSubmit={handleEditClassSubmit} 
             onDelete={() => handleDeleteClass(selectedClass.id, selectedClass.name)}
             classData={selectedClass}
+            isLoading={isSubmitting}
           />
         )}
         
-        <DeleteConfirmationModal />
+        <DeleteConfirmationModal key="delete-modal" />
       </AnimatePresence>
     </div>
   );

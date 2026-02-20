@@ -3,7 +3,6 @@ import { ArrowLeft, Upload } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
 
 export default function StudentSignup() {
   const [formData, setFormData] = useState({

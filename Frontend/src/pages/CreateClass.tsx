@@ -3,16 +3,31 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import Header from '../components/Header';
 import {
-  GraduationCap,
-  X,
-  ArrowLeft,
-  Sparkles,
-  BookOpen,
-  Users,
-  FileText
+  GraduationCap, X, ArrowLeft, Sparkles, BookOpen, Users, FileText
 } from "lucide-react";
+import { classesApi } from "../services/api"; // ← Import من ملف الـ API
 
-// --- Types ---
+// --- Ocean Blue Color Helper ---
+const oceanGradients = [
+  'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]',
+  'bg-gradient-to-r from-[#0E6AD0] to-[#3A80D2]',
+  'bg-gradient-to-r from-[#2C8F8F] to-[#4CAF92]',
+  'bg-gradient-to-r from-[#00A8B5] to-[#00C2C7]',
+  'bg-gradient-to-r from-[#1A5F8F] to-[#2E7DA2]',
+  'bg-gradient-to-r from-[#006994] to-[#2196F3]'
+];
+
+// Generate a random class code
+const generateClassCode = (): string => {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const numbers = '0123456789';
+  let code = '';
+  for (let i = 0; i < 3; i++) code += letters.charAt(Math.floor(Math.random() * letters.length));
+  code += '-';
+  for (let i = 0; i < 4; i++) code += numbers.charAt(Math.floor(Math.random() * numbers.length));
+  return code;
+};
+
 interface NewClassData {
   name: string;
   subject: string;
@@ -20,142 +35,58 @@ interface NewClassData {
   description: string;
 }
 
-interface ClassType {
-  id: number;
-  name: string;
-  students: number;
-  activeExams: number;
-  pendingReviews: number;
-  avgScore: number;
-  color: string;
-  code: string;
-  subject?: string;
-  description?: string;
-}
-
-// --- Ocean Blue Color Helper Functions (reused from original) ---
-const oceanGradients = [
-  'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]', // Bright Blue
-  'bg-gradient-to-r from-[#0E6AD0] to-[#3A80D2]', // Deep Blue
-  'bg-gradient-to-r from-[#2C8F8F] to-[#4CAF92]', // Teal
-  'bg-gradient-to-r from-[#00A8B5] to-[#00C2C7]', // Cyan
-  'bg-gradient-to-r from-[#1A5F8F] to-[#2E7DA2]', // Navy Blue
-  'bg-gradient-to-r from-[#006994] to-[#2196F3]'   // Ocean Blue
-];
-
-const getHoverGradientFromColor = (gradient: string): string => {
-  const index = oceanGradients.findIndex(g => g === gradient);
-  const hoverGradients = [
-    'hover:from-[#0E6AD0] hover:to-[#3A80D2]',
-    'hover:from-[#0A5AB0] hover:to-[#2A70C2]',
-    'hover:from-[#1C7F7F] hover:to-[#3C9F82]',
-    'hover:from-[#0098A5] hover:to-[#00B2B7]',
-    'hover:from-[#0A4F7F] hover:to-[#1E6D92]',
-    'hover:from-[#005984] hover:to-[#1186E3]'
-  ];
-  return hoverGradients[index !== -1 ? index : 0];
-};
-
-// Generate a random class code
-const generateClassCode = (): string => {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const numbers = '0123456789';
-  let code = '';
-  
-  for (let i = 0; i < 3; i++) {
-    code += letters.charAt(Math.floor(Math.random() * letters.length));
-  }
-  code += '-';
-  for (let i = 0; i < 4; i++) {
-    code += numbers.charAt(Math.floor(Math.random() * numbers.length));
-  }
-  
-  return code;
-};
-
 const CreateClass = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState<NewClassData>({
-    name: "",
-    subject: "",
-    students: "",
-    description: ""
+    name: "", subject: "", students: "", description: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error when user starts typing
     if (error) setError(null);
   };
 
+  // ✅ بدل localStorage — بيبعت POST request للـ Backend
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validation
-    if (!formData.name.trim()) {
-      setError("Class name is required");
-      return;
-    }
-    if (!formData.subject.trim()) {
-      setError("Subject is required");
-      return;
-    }
-    if (!formData.students || parseInt(formData.students) < 1) {
-      setError("Please enter a valid number of students");
-      return;
-    }
+
+    // Client-side validation
+    if (!formData.name.trim()) return setError("Class name is required");
+    if (!formData.subject.trim()) return setError("Subject is required");
+    if (!formData.students || parseInt(formData.students) < 1) return setError("Please enter a valid number of students");
 
     setIsSubmitting(true);
     setError(null);
 
     try {
-      // Create new class object
-      const newClass: ClassType = {
-        id: Date.now(), // Use timestamp as temporary ID
-        name: formData.name,
-        students: parseInt(formData.students) || 0,
-        activeExams: 0,
-        pendingReviews: 0,
-        avgScore: 0,
+      const newClass = await classesApi.create({
+        name: formData.name.trim(),
+        subject: formData.subject.trim(),
+        students: parseInt(formData.students),
+        description: formData.description.trim(),
         color: oceanGradients[Math.floor(Math.random() * oceanGradients.length)],
         code: generateClassCode(),
-        subject: formData.subject,
-        description: formData.description
-      };
+      });
 
-      // Get existing classes from localStorage
-      const existingClasses = JSON.parse(localStorage.getItem('instructorClasses') || '[]');
-      
-      // Add new class
-      const updatedClasses = [...existingClasses, newClass];
-      
-      // Save to localStorage
-      localStorage.setItem('instructorClasses', JSON.stringify(updatedClasses));
-
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Navigate back to classes page
-      navigate('/classes-instructor', { 
-        state: { 
+      // Navigate back with success message
+      navigate('/classes-instructor', {
+        state: {
           message: 'Class created successfully!',
-          newClassId: newClass.id 
+          newClassId: newClass.id
         }
       });
-    } catch (err) {
-      setError('Failed to create class. Please try again.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create class. Please try again.');
       console.error('Error creating class:', err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleCancel = () => {
-    navigate('/classes-instructor');
-  };
+  const handleCancel = () => navigate('/classes-instructor');
 
   return (
     <div className="w-full pt-20 min-h-screen bg-gradient-to-br from-[#E3F0FE] to-[#F0F7FF]">
@@ -166,10 +97,8 @@ const CreateClass = () => {
           {/* Header with Back Button */}
           <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6 border border-white/50">
             <div className="flex items-center gap-4">
-              <button
-                onClick={handleCancel}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-              >
+              <button onClick={handleCancel}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors">
                 <ArrowLeft size={20} />
                 <span className="hidden sm:inline">Back to Classes</span>
               </button>
@@ -186,28 +115,21 @@ const CreateClass = () => {
           </div>
 
           {/* Main Form Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white rounded-xl shadow-2xl overflow-hidden"
-          >
-            {/* Header Gradient */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
+            className="bg-white rounded-xl shadow-2xl overflow-hidden">
             <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] px-6 py-5">
               <div className="flex items-center gap-3 text-white">
                 <Sparkles size={24} />
                 <h2 className="text-xl font-bold">Class Information</h2>
               </div>
-              <p className="text-white/80 text-sm mt-1 ml-9">
-                Fill in the details below to create your new class
-              </p>
+              <p className="text-white/80 text-sm mt-1 ml-9">Fill in the details below to create your new class</p>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6">
+              {/* Error Message */}
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
-                  <X size={18} className="text-red-500" />
+                  <X size={18} className="text-red-500 flex-shrink-0" />
                   <span className="text-sm font-medium">{error}</span>
                 </div>
               )}
@@ -221,21 +143,12 @@ const CreateClass = () => {
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <BookOpen size={18} className="text-gray-400" />
                   </div>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    required
-                    value={formData.name}
-                    onChange={handleChange}
+                  <input type="text" id="name" name="name" required value={formData.name} onChange={handleChange}
                     placeholder="e.g., Data Structures & Algorithms"
                     className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent transition-shadow"
-                    disabled={isSubmitting}
-                  />
+                    disabled={isSubmitting} />
                 </div>
-                <p className="text-xs text-gray-500">
-                  Choose a descriptive name that clearly identifies your class
-                </p>
+                <p className="text-xs text-gray-500">Choose a descriptive name that clearly identifies your class</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -248,17 +161,10 @@ const CreateClass = () => {
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <FileText size={18} className="text-gray-400" />
                     </div>
-                    <input
-                      type="text"
-                      id="subject"
-                      name="subject"
-                      required
-                      value={formData.subject}
-                      onChange={handleChange}
+                    <input type="text" id="subject" name="subject" required value={formData.subject} onChange={handleChange}
                       placeholder="e.g., Computer Science"
                       className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent transition-shadow"
-                      disabled={isSubmitting}
-                    />
+                      disabled={isSubmitting} />
                   </div>
                 </div>
 
@@ -271,62 +177,38 @@ const CreateClass = () => {
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <Users size={18} className="text-gray-400" />
                     </div>
-                    <input
-                      type="number"
-                      id="students"
-                      name="students"
-                      required
-                      min="1"
-                      value={formData.students}
-                      onChange={handleChange}
+                    <input type="number" id="students" name="students" required min="1" value={formData.students} onChange={handleChange}
                       placeholder="0"
                       className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent transition-shadow appearance-none"
-                      disabled={isSubmitting}
-                    />
+                      disabled={isSubmitting} />
                   </div>
                 </div>
               </div>
 
-              {/* Class Description */}
+              {/* Description */}
               <div className="space-y-2">
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
-                  Class Description
-                </label>
-                <div className="relative">
-                  <textarea
-                    id="description"
-                    name="description"
-                    rows={5}
-                    value={formData.description}
-                    onChange={handleChange}
-                    placeholder="Brief description of the class, course objectives, prerequisites, etc..."
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent transition-shadow resize-none"
-                    disabled={isSubmitting}
-                  />
-                </div>
-                <p className="text-xs text-gray-500">
-                  Provide a detailed description to help students understand what they'll learn
-                </p>
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700">Class Description</label>
+                <textarea id="description" name="description" rows={5} value={formData.description} onChange={handleChange}
+                  placeholder="Brief description of the class, course objectives, prerequisites, etc..."
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent transition-shadow resize-none"
+                  disabled={isSubmitting} />
+                <p className="text-xs text-gray-500">Provide a detailed description to help students understand what they'll learn</p>
               </div>
 
-              {/* Preview Section */}
+              {/* Live Preview */}
               {formData.name && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="bg-gradient-to-br from-blue-50 to-cyan-50 p-4 rounded-lg border border-blue-200"
-                >
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                  className="bg-gradient-to-br from-blue-50 to-cyan-50 p-4 rounded-lg border border-blue-200">
                   <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <Sparkles size={16} className="text-[#1A80F6]" />
-                    Class Preview
+                    <Sparkles size={16} className="text-[#1A80F6]" /> Class Preview
                   </h3>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] flex items-center justify-center text-white font-bold text-lg">
                       {formData.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-800">{formData.name || "Class Name"}</p>
-                      <p className="text-xs text-gray-600">{formData.subject || "Subject"} • {formData.students || "0"} students</p>
+                      <p className="font-semibold text-gray-800">{formData.name}</p>
+                      <p className="text-xs text-gray-600">{formData.subject || "Subject"} · {formData.students || "0"} students</p>
                     </div>
                   </div>
                 </motion.div>
@@ -334,65 +216,33 @@ const CreateClass = () => {
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] hover:from-[#0E6AD0] hover:to-[#3A80D2] text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                <button type="submit" disabled={isSubmitting}
+                  className="flex-1 bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] hover:from-[#0E6AD0] hover:to-[#3A80D2] text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                   {isSubmitting ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Creating Class...
-                    </>
+                    <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Creating Class...</>
                   ) : (
-                    <>
-                      <Sparkles size={20} />
-                      Create Class
-                    </>
+                    <><Sparkles size={20} /> Create Class</>
                   )}
                 </button>
-                
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  disabled={isSubmitting}
-                  className="flex-1 bg-white border-2 border-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <X size={20} />
-                  Cancel
+                <button type="button" onClick={handleCancel} disabled={isSubmitting}
+                  className="flex-1 bg-white border-2 border-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-lg hover:bg-gray-50 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <X size={20} /> Cancel
                 </button>
               </div>
             </form>
           </motion.div>
 
           {/* Tips Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-            className="mt-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}
+            className="mt-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
             <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
-              <Sparkles size={16} className="text-[#1A80F6]" />
-              Tips for creating a great class
+              <Sparkles size={16} className="text-[#1A80F6]" /> Tips for creating a great class
             </h3>
             <ul className="space-y-2 text-sm text-gray-600">
-              <li className="flex items-start gap-2">
-                <span className="text-[#1A80F6] font-bold">•</span>
-                Use a clear, descriptive class name that reflects the course content
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#1A80F6] font-bold">•</span>
-                Specify the subject to help organize your classes by department
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#1A80F6] font-bold">•</span>
-                Add a comprehensive description including prerequisites and learning objectives
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-[#1A80F6] font-bold">•</span>
-                You can always edit these details later from the class management page
-              </li>
+              <li className="flex items-start gap-2"><span className="text-[#1A80F6] font-bold">•</span> Use a clear, descriptive class name that reflects the course content</li>
+              <li className="flex items-start gap-2"><span className="text-[#1A80F6] font-bold">•</span> Specify the subject to help organize your classes by department</li>
+              <li className="flex items-start gap-2"><span className="text-[#1A80F6] font-bold">•</span> Add a comprehensive description including prerequisites and learning objectives</li>
+              <li className="flex items-start gap-2"><span className="text-[#1A80F6] font-bold">•</span> You can always edit these details later from the class management page</li>
             </ul>
           </motion.div>
         </div>
