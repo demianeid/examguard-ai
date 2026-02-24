@@ -1,57 +1,61 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CheckCircle } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-
+import { motion, AnimatePresence } from "framer-motion";
+import axios from "axios";
 
 export default function ForgetPassword() {
-  const [phoneNumber, setPhoneNumber] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
   const [error, setError] = useState<string>("");
-  const [step, setStep] = useState<"phone" | "otp" | "newPassword">("phone");
+  const [step, setStep] = useState<"email" | "otp" | "newPassword">("email");
   const [newPassword, setNewPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const [passwordError, setPasswordError] = useState<string>("");
-  const [code, setCode] = useState<string[]>(['', '', '', '']);
-  const [timer, setTimer] = useState<number>(29);
+  const [loading, setLoading] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  const [code, setCode] = useState<string[]>(['', '', '', '', '', '']);
+  const [timer, setTimer] = useState<number>(60);
+
   const inputRefs = [
-    useRef<HTMLInputElement>(null), 
-    useRef<HTMLInputElement>(null), 
-    useRef<HTMLInputElement>(null), 
-    useRef<HTMLInputElement>(null)
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
   ];
 
   const navigate = useNavigate();
 
   useEffect(() => {
     if (step === "otp") {
+      setTimer(60);
       const interval = setInterval(() => {
         setTimer((prev) => (prev > 0 ? prev - 1 : 0));
       }, 1000);
-
       return () => clearInterval(interval);
     }
   }, [step]);
 
-  const validatePhone = (): string => {
-    const cleaned = phoneNumber.replace(/\D/g, "");
-    const egyptRegex = /^(010|011|012|015)\d{8}$/;
+  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-    if (!cleaned) return "Phone number is required.";
-    if (!egyptRegex.test(cleaned)) return "Invalid Egyptian phone number.";
-
-    return "";
-  };
-
-  const handleSendCode = (): void => {
-    const validationError = validatePhone();
-
-    if (validationError) {
-      setError(validationError);
+  const handleSendCode = async (): Promise<void> => {
+    if (!validateEmail(email)) {
+      setError("Please enter a valid email address.");
       return;
     }
-
+    setLoading(true);
     setError("");
-    setStep("otp");
+    try {
+      await axios.post("http://127.0.0.1:8000/api/auth/forget-password/", { email });
+      setStep("otp");
+      setCode(['', '', '', '', '', '']);
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Email not registered in our system.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBack = (): void => {
@@ -61,9 +65,9 @@ export default function ForgetPassword() {
       setConfirmPassword("");
       setPasswordError("");
     } else if (step === "otp") {
-      setStep("phone");
-      setCode(['', '', '', '']);
-      setTimer(29);
+      setStep("email");
+      setCode(['', '', '', '', '', '']);
+      setError("");
     } else {
       navigate(-1);
     }
@@ -71,12 +75,10 @@ export default function ForgetPassword() {
 
   const handleChange = (index: number, value: string): void => {
     if (value.length > 1) return;
-    
     const newCode = [...code];
     newCode[index] = value;
     setCode(newCode);
-
-    if (value && index < 3) {
+    if (value && index < 5) {
       inputRefs[index + 1].current?.focus();
     }
   };
@@ -87,144 +89,147 @@ export default function ForgetPassword() {
     }
   };
 
-  const handleConfirm = (): void => {
-    const fullCode = code.join('');
-    console.log('Verification code:', fullCode);
-    // Handle verification logic here
-    // If verification successful, move to new password step
-    setStep("newPassword");
-  };
-
-  const handleResend = (): void => {
-    if (timer === 0) {
-      setTimer(29);
-      setCode(['', '', '', '']);
-      console.log('Resending code...');
-      // Handle resend logic here
+  const handleConfirmOtp = async (): Promise<void> => {
+    if (code.join('').length < 6) {
+      setError("Please enter the full 6-digit code.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await axios.post("http://127.0.0.1:8000/api/auth/verify-otp/", {
+        email,
+        otp: code.join('')
+      });
+      setStep("newPassword");
+    } catch (err: any) {
+      setError(err.response?.data?.error || "Invalid or expired code.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleChangePassword = (): void => {
+  const handleChangePassword = async (): Promise<void> => {
     setPasswordError("");
-
-    if (!newPassword) {
-      setPasswordError("Password is required.");
+    if (newPassword.length < 8) {
+      setPasswordError("Password must be at least 8 characters.");
       return;
     }
-
-    if (newPassword.length < 6) {
-      setPasswordError("Password must be at least 6 characters.");
-      return;
-    }
-
     if (newPassword !== confirmPassword) {
       setPasswordError("Passwords do not match.");
       return;
     }
+    setLoading(true);
+    try {
+      await axios.post("http://127.0.0.1:8000/api/auth/reset-password/", {
+        email,
+        otp: code.join(''),
+        new_password: newPassword
+      });
 
-    console.log('Password changed successfully');
-    // Handle password change logic here
-    // Navigate to success page or login
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        navigate("/Login");
+      }, 2500);
+    } catch (err: any) {
+      setPasswordError(err.response?.data?.error || "Failed to reset password.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const maskPhoneNumber = (phone: string): string => {
-    const cleaned = phone.replace(/\D/g, "");
-    if (cleaned.length >= 3) {
-      return '********' + cleaned.slice(-3);
-    }
-    return phone;
+  const maskEmail = (email: string): string => {
+    const [user, domain] = email.split('@');
+    return user.slice(0, 3) + '****@' + domain;
   };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <motion.div
-  initial={{ opacity: 0, y: 30 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.6, ease: "easeOut" }}
-  className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-8"
->
 
-        {/* ---------- Back Header ---------- */}
-        <div className="flex items-center mb-6">
-          <button
-            onClick={handleBack}
-            className="flex items-center text-gray-700 hover:text-gray-900"
+      {/* ✅ Custom Success Alert */}
+      <AnimatePresence>
+        {showSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -60 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -60 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-2xl px-8 py-5 flex items-center gap-4 border border-green-100"
           >
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle className="text-green-500 w-7 h-7" />
+            </div>
+            <div>
+              <p className="font-bold text-gray-800 text-lg">Password Updated!</p>
+              <p className="text-gray-500 text-sm">Redirecting you to login...</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-8"
+      >
+
+        {/* Back Header */}
+        <div className="flex items-center mb-6">
+          <button onClick={handleBack} className="flex items-center text-gray-700 hover:text-gray-900">
             <ArrowLeft className="w-5 h-5 mr-2" />
             <span className="font-semibold">
-              {step === "phone" ? "Forget Password" : step === "otp" ? "Verification Code" : "New Password"}
+              {step === "email" ? "Forget Password" : step === "otp" ? "Verification Code" : "New Password"}
             </span>
           </button>
         </div>
 
-        {/* ---------- Top Image (Design) ---------- */}
+        {/* Top Image */}
         <div className="w-full flex justify-center mb-8">
-          <img
-            src="images/forget.png"
-            alt="Forgot Password"
-            className="w-40 h-40 object-contain"
-          />
+          <img src="images/forget.png" alt="Forgot Password" className="w-40 h-40 object-contain" />
         </div>
 
-        {/* ==================== PHONE STEP ==================== */}
-        {step === "phone" && (
+        {/* ==================== EMAIL STEP ==================== */}
+        {step === "email" && (
           <div className="flex flex-col items-center justify-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Forgot Password?
-            </h2>
-
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Forgot Password?</h2>
             <p className="text-gray-600 text-center mb-8 max-w-md">
-              Please Write Your Email To Receive A Confirmation Code To Set New Password.
+              Please write your personal email to receive a confirmation code to set a new password.
             </p>
-
             <div className="w-full max-w-md">
               <div className="mb-4">
-                <label className="block text-gray-600 text-sm mb-2">
-                  Phone Number
-                </label>
-
+                <label className="block text-gray-600 text-sm mb-2">Email Address</label>
                 <input
-                  type="text"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${
-                    error
-                      ? "border-red-500 focus:ring-red-400"
-                      : "border-gray-300 focus:ring-blue-500"
+                    error ? "border-red-500 focus:ring-red-400" : "border-gray-300 focus:ring-blue-500"
                   }`}
-                  placeholder="e.g. 01012345678"
+                  placeholder="name@gmail.com"
                 />
-
-                {error && (
-                  <p className="text-red-500 text-sm mt-1">{error}</p>
-                )}
+                {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
               </div>
-
               <button
                 onClick={handleSendCode}
-                className="w-full bg-secondary hover:bg-primary text-white font-semibold py-3 rounded-lg transition shadow-md hover:shadow-lg"
+                disabled={loading}
+                className="w-full bg-secondary hover:bg-primary text-white font-semibold py-3 rounded-lg transition shadow-md hover:shadow-lg disabled:bg-gray-400"
               >
-                Send Code
+                {loading ? "Sending..." : "Send Code"}
               </button>
             </div>
           </div>
         )}
 
-        {/* ==================== OTP/VERIFICATION CODE STEP ==================== */}
+        {/* ==================== OTP STEP ==================== */}
         {step === "otp" && (
           <div className="flex flex-col items-center justify-center py-8">
-            {/* Title */}
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Verify Phone Number
-            </h2>
-
-            {/* Description */}
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Verify Email</h2>
             <p className="text-gray-500 text-center mb-8">
-              Verification Code Sent To {maskPhoneNumber(phoneNumber)}
+              Verification Code Sent To <span className="text-blue-600 font-medium">{maskEmail(email)}</span>
             </p>
 
-            {/* Verification Code Inputs */}
-            <div className="flex gap-4 mb-6">
+            <div className="flex gap-3 mb-6">
               {code.map((digit, index) => (
                 <input
                   key={index}
@@ -234,34 +239,30 @@ export default function ForgetPassword() {
                   value={digit}
                   onChange={(e) => handleChange(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
-                  className="w-16 h-16 text-center text-2xl font-semibold border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  aria-label={`Verification code digit ${index + 1}`}
+                  className="w-12 h-14 text-center text-xl font-semibold border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="-"
                 />
               ))}
             </div>
 
-            {/* Confirm Button */}
+            {error && <p className="text-red-500 text-sm mb-4 font-medium">{error}</p>}
+
             <button
-              onClick={handleConfirm}
-              className="w-full max-w-md bg-secondary hover:bg-primary text-white font-semibold py-3 rounded-lg transition duration-200 shadow-md hover:shadow-lg mb-4"
+              onClick={handleConfirmOtp}
+              disabled={loading}
+              className="w-full max-w-md bg-secondary hover:bg-primary text-white font-semibold py-3 rounded-lg transition duration-200 shadow-md hover:shadow-lg mb-4 disabled:bg-gray-400"
             >
-              Confirm Code
+              {loading ? "Verifying..." : "Confirm Code"}
             </button>
 
-            {/* Timer and Resend */}
             <div className="text-center">
-              <span className="text-gray-900 font-semibold">
+              <span className={`font-mono font-semibold ${timer < 10 ? 'text-red-500' : 'text-gray-900'}`}>
                 00:{timer.toString().padStart(2, '0')}
               </span>
               <button
-                onClick={handleResend}
-                disabled={timer > 0}
-                className={`ml-2 ${
-                  timer > 0
-                    ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-blue-600 hover:text-blue-700 cursor-pointer'
-                }`}
+                onClick={handleSendCode}
+                disabled={timer > 0 || loading}
+                className={`ml-2 ${timer > 0 ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-700 cursor-pointer'}`}
               >
                 Resend Confirmation Code
               </button>
@@ -272,17 +273,9 @@ export default function ForgetPassword() {
         {/* ==================== NEW PASSWORD STEP ==================== */}
         {step === "newPassword" && (
           <div className="flex flex-col items-center justify-center py-8">
-            {/* Title */}
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              New Password
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">New Password</h2>
+            <p className="text-gray-600 text-center mb-8">Please write your new password.</p>
 
-            {/* Description */}
-            <p className="text-gray-600 text-center mb-8">
-              Please Write Your New Password
-            </p>
-
-            {/* Password Inputs */}
             <div className="w-full max-w-md space-y-4">
               <div>
                 <input
@@ -290,36 +283,31 @@ export default function ForgetPassword() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter Your password"
+                  placeholder="Enter your new password"
                 />
               </div>
-
               <div>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Confirm Your password"
+                  placeholder="Confirm your new password"
                 />
               </div>
-
-              {passwordError && (
-                <p className="text-red-500 text-sm">{passwordError}</p>
-              )}
-
+              {passwordError && <p className="text-red-500 text-sm">{passwordError}</p>}
               <button
                 onClick={handleChangePassword}
-                className="w-full bg-secondary hover:bg-primary text-white font-semibold py-3 rounded-lg transition duration-200 shadow-md hover:shadow-lg"
+                disabled={loading}
+                className="w-full bg-secondary hover:bg-primary text-white font-semibold py-3 rounded-lg transition duration-200 shadow-md hover:shadow-lg disabled:bg-gray-400"
               >
-                Change Your Password
+                {loading ? "Updating..." : "Change Your Password"}
               </button>
             </div>
           </div>
         )}
 
       </motion.div>
-
     </div>
   );
 }

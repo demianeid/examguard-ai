@@ -1,10 +1,9 @@
 // ============================================================
 // api.ts — Centralized API Service
-// ضع هذا الملف في: src/services/api.ts
+// src/services/api.ts
 // ============================================================
 
-// غيّر الـ URL ده لو البيك-إند بيشتغل على بورت تاني
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_BASE = "http://127.0.0.1:8000/api"; // ✅ Django URL
 
 // --- Types ---
 export interface ClassType {
@@ -41,11 +40,13 @@ const request = async <T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> => {
+  const token = localStorage.getItem("token");
+
   const res = await fetch(`${API_BASE}${endpoint}`, {
     headers: {
       "Content-Type": "application/json",
-      // لو بتستخدم JWT Authentication حط التوكن هنا:
-      // Authorization: `Bearer ${localStorage.getItem("token")}`,
+      // نرسل التوكن فقط إذا كان موجوداً (عشان الـ Login والـ Register مش محتاجين توكن)
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
     ...options,
@@ -53,10 +54,10 @@ const request = async <T>(
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
+    // بنرمي الـ object كامل عشان تقدر تمسك الـ error message في الـ catch
+    throw errorData; 
   }
 
-  // لو الـ response فاضي (مثل DELETE 204)
   if (res.status === 204) return undefined as T;
 
   return res.json();
@@ -66,24 +67,51 @@ const request = async <T>(
 // Classes API
 // ============================================================
 export const classesApi = {
-  /** GET /api/classes — جيب كل الكلاسات */
-  getAll: (): Promise<ClassType[]> => request<ClassType[]>("/classes"),
+  /** جيب كل الكلاسات */
+  getAll: (): Promise<ClassType[]> => request<ClassType[]>("/classes/"),
 
-  /** POST /api/classes — أنشئ كلاس جديد */
+  /** أنشئ كلاس جديد */
   create: (payload: CreateClassPayload): Promise<ClassType> =>
-    request<ClassType>("/classes", {
+    request<ClassType>("/classes/", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  /** PUT /api/classes/:id — عدّل كلاس */
+  /** عدّل كلاس */
   update: (id: number, payload: UpdateClassPayload): Promise<ClassType> =>
-    request<ClassType>(`/classes/${id}`, {
+    request<ClassType>(`/classes/${id}/`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
 
-  /** DELETE /api/classes/:id — احذف كلاس */
+  /** احذف كلاس */
   delete: (id: number): Promise<void> =>
-    request<void>(`/classes/${id}`, { method: "DELETE" }),
+    request<void>(`/classes/${id}/`, { method: "DELETE" }),
+};
+
+// ============================================================
+// Auth API (Password Reset & OTP)
+// مطابقة تماماً للـ Views اللي أنت بعتها في الـ Django
+// ============================================================
+export const authApi = {
+  /** 1. ارسال طلب OTP (ForgetPasswordView) */
+  forgotPassword: (email: string): Promise<{ message: string }> =>
+    request<{ message: string }>("/auth/forget-password/", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  /** 2. التحقق من الكود (VerifyOtpView) */
+  verifyOtp: (email: string, otp: string): Promise<{ message: string }> =>
+    request<{ message: string }>("/auth/verify-otp/", {
+      method: "POST",
+      body: JSON.stringify({ email, otp }),
+    }),
+
+  /** 3. تغيير الباسورد (ResetPasswordView) */
+  resetPassword: (payload: { email: string; otp: string; new_password: string }): Promise<{ message: string }> =>
+    request<{ message: string }>("/auth/reset-password/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
