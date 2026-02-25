@@ -133,6 +133,7 @@ class Professor(models.Model):
     otp_code = models.CharField(max_length=6, blank=True, null=True)
     otp_expiry = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    last_login = models.DateTimeField(null=True, blank=True)
 
     @property
     def is_authenticated(self):

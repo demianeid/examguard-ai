@@ -68,7 +68,7 @@ class LoginView(APIView):
         if not email or not password:
             return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ------- Student بـ platform email -------
+        # ------- Student -->> platform email -------
         student = None
         try:
             student = Student.objects.get(email=email)
@@ -89,7 +89,7 @@ class LoginView(APIView):
                 "student_id": student.student_custom_id,
             }, status=status.HTTP_200_OK)
 
-        # ------- Professor بـ real_email -------
+        # ------- Professor -->> real_email -------
         professor = None
         try:
             professor = Professor.objects.get(real_email=email)
