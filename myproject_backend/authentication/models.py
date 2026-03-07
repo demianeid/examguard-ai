@@ -6,6 +6,7 @@ from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.hashers import make_password, check_password as django_check_password
 from django.core.mail import EmailMultiAlternatives
 
+
 def professor_upload_path(instance, filename):
     folder_name = f"{instance.first_name}_{instance.last_name}".replace(" ", "_")
     return os.path.join('professors', folder_name, filename)
@@ -46,10 +47,8 @@ class Student(AbstractUser):
                 counter += 1
             self.username = username
 
-        if not self.email:
-            random_num = random.randint(10, 99)
-            self.email = f"{self.username}2026_{random_num}@examguard.ed"
-
+        # ✅ الـ email بيبقى نفس الـ real_email
+        self.email = self.real_email
         if is_new and self.password:
             if not self.password.startswith(('pbkdf2_', 'bcrypt', 'argon2')):
                 if not raw_password:
@@ -67,35 +66,22 @@ class Student(AbstractUser):
 
         html_content = f"""
         <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: auto;">
-
             <p>Dear <strong>{self.first_name} {self.last_name}</strong>,</p>
-
-            <p>We are delighted to welcome you to <strong>ExamGuard</strong> — your trusted academic examination and proctoring platform.</p>
-
-            <p>Your student account has been successfully created and is now fully active. Please find your login credentials below.</p>
-
+            <p>Welcome to <strong>ExamGuard</strong>!</p>
             <p>
-                📧 <strong>Platform Email:</strong> {self.email}<br>
-                🔑 <strong>Password:</strong> {password_display}<br>
-                🆔 <strong>Student ID:</strong> {self.student_custom_id}
+                🆔 <strong>Student ID:</strong> {self.student_custom_id}<br>
+                🔑 <strong>Password:</strong> {password_display}
             </p>
-
-            <p><strong>⚠️ Important Security Notice</strong><br>
-            Please change your password after your first login. Never share your credentials with anyone. ExamGuard staff will never ask for your password.</p>
-
+            <p><strong>⚠️ Important:</strong> Please change your password after your first login.</p>
             <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">
-
             <p style="color: #555; font-size: 13px;">
-                🌐 Platform: https://examguard.ed &nbsp;|&nbsp; 📩 Support: support@examguard.ed<br><br>
                 Best regards,<br>
-                <strong>The ExamGuard Team</strong><br>
-                Academic Technology & Assessment Division<br><br>
-                © 2026 ExamGuard. All rights reserved.<br>
+                <strong>The ExamGuard Team</strong>
             </p>
         </div>
         """
 
-        text_content = f"Dear {self.first_name} {self.last_name},\n\nWelcome to ExamGuard!\n\nEmail: {self.email}\nPassword: {password_display}\nStudent ID: {self.student_custom_id}\n\nBest regards,\nThe ExamGuard Team"
+        text_content = f"Dear {self.first_name} {self.last_name},\n\nStudent ID: {self.student_custom_id}\nPassword: {password_display}"
 
         try:
             msg = EmailMultiAlternatives(subject, text_content, None, [self.real_email])
@@ -113,8 +99,6 @@ class Student(AbstractUser):
 
     def __str__(self):
         return f"{self.student_custom_id} - {self.first_name} {self.last_name}"
-
-
 # =================================================== PROFESSOR ===================================================
 class Professor(models.Model):
     professor_custom_id = models.CharField(
@@ -170,40 +154,14 @@ class Professor(models.Model):
 
         html_content = f"""
         <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: auto;">
-
             <p>Dear <strong>Dr. {self.first_name} {self.last_name}</strong>,</p>
-
-            <p>Thank you for submitting your registration to join <strong>ExamGuard</strong> as a member of our academic staff.</p>
-
-            <p>We have successfully received your application along with your submitted documents. Our administration team will carefully review your credentials and identity verification.</p>
-
-            <p>
-                👤 <strong>Full Name:</strong> Dr. {self.first_name} {self.last_name}<br>
-                🆔 <strong>Tracking ID:</strong> {self.professor_custom_id}<br>
-                ⚖️ <strong>Status:</strong> PENDING VERIFICATION
-            </p>
-
-            <p><strong>📌 What Happens Next?</strong><br>
-            1. Our team will review your submitted documents.<br>
-            2. Identity verification will be completed within <strong>24–48 hours</strong>.<br>
-            3. You will receive a confirmation email once approved.<br>
-            4. Upon approval, your login credentials will be provided.</p>
-
-            <p>Please do not attempt to register again. If you have any questions, contact our support team directly.</p>
-
-            <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">
-
-            <p style="color: #555; font-size: 13px;">
-                🌐 Platform: https://examguard.ed &nbsp;|&nbsp; 📩 Support: support@examguard.ed<br><br>
-                Best regards,<br>
-                <strong>The ExamGuard Administration Team</strong><br>
-                Academic Technology & Assessment Division<br><br>
-                © 2026 ExamGuard. All rights reserved.<br>
-            </p>
+            <p>Your application has been received. Status: <strong>PENDING VERIFICATION</strong></p>
+            <p>🆔 <strong>Tracking ID:</strong> {self.professor_custom_id}</p>
+            <p>Best regards,<br><strong>The ExamGuard Team</strong></p>
         </div>
         """
 
-        text_content = f"Dear Dr. {self.first_name} {self.last_name},\n\nYour application has been received.\nTracking ID: {self.professor_custom_id}\nStatus: PENDING VERIFICATION\n\nBest regards,\nThe ExamGuard Team"
+        text_content = f"Dear Dr. {self.first_name} {self.last_name},\n\nTracking ID: {self.professor_custom_id}\nStatus: PENDING VERIFICATION"
 
         try:
             msg = EmailMultiAlternatives(subject, text_content, None, [self.real_email])

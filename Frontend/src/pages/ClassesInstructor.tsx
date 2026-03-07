@@ -33,7 +33,22 @@ import {
   ChevronDown,
   Search
 } from "lucide-react";
-import { classesApi, type ClassType } from "../services/api";
+const BASE_URL = 'http://127.0.0.1:8000/api/instructors';
+
+const getToken = () => localStorage.getItem('access_token');
+
+const apiRequest = async (url: string, options: RequestInit = {}) => {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${getToken()}`,
+      ...options.headers,
+    },
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+};
 
 // --- Types ---
 interface NotificationItem {
@@ -71,7 +86,18 @@ interface Student {
   studentId: string;
   avgScore: number;
 }
-
+interface ClassType {
+  id: number;
+  name: string;
+  students: number;
+  activeExams: number;
+  pendingReviews: number;
+  avgScore: number;
+  color: string;
+  code: string;
+  subject: string;
+  description: string;
+}
 interface EditClassModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -932,37 +958,30 @@ const ClassesInstructor = () => {
   useEffect(() => {
     fetchClasses();
   }, []);
-
-  const fetchClasses = async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const data = await classesApi.getAll();
-      console.log('API Response:', data);
-      
-      const transformedClasses = data.map((cls: any) => ({
-        id: cls.id,
-        name: cls.name,
-        students: Math.floor(Math.random() * 30) + 20,
-        activeExams: Math.floor(Math.random() * 5),
-        pendingReviews: Math.floor(Math.random() * 10),
-        avgScore: Math.floor(Math.random() * 30) + 70,
-        color: oceanGradients[cls.id % oceanGradients.length],
-        code: cls.code || `CLASS-${String(cls.id).padStart(4, '0')}`,
-        subject: cls.subject || "Computer Science",
-        description: cls.description || "No description available"
-      }));
-      
-      console.log('Classes keys:', transformedClasses.map(c => ({ id: c.id, name: c.name })));
-      
-      setInstructorClasses(transformedClasses);
-    } catch (error) {
-      console.error('Error fetching classes:', error);
-      setErrorMessage('Failed to load classes. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+const fetchClasses = async () => {
+  setIsLoading(true);
+  setErrorMessage(null);
+  try {
+    const data = await apiRequest(`${BASE_URL}/classes/`);
+    const transformedClasses = data.map((cls: any) => ({
+      id: cls.id,
+      name: cls.name,
+      students: cls.number_of_students,
+      activeExams: 0,
+      pendingReviews: 0,
+      avgScore: 0,
+      color: oceanGradients[cls.id % oceanGradients.length],
+      code: cls.code,
+      subject: cls.subject,
+      description: cls.description || ''
+    }));
+    setInstructorClasses(transformedClasses);
+  } catch (error) {
+    setErrorMessage('Failed to load classes. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Check for success message from navigation state
   useEffect(() => {
@@ -1033,48 +1052,23 @@ const ClassesInstructor = () => {
     e.stopPropagation();
     setIsEditClassModalOpen(true);
   };
-
 const handleEditClassSubmit = async (data: EditClassData) => {
   if (selectedClass) {
     setIsSubmitting(true);
     try {
-      // 1. تحديث الكلاس في الـ API
-      await classesApi.update(selectedClass.id, {
-        name: data.name,
-        subject: data.subject,
-        students: parseInt(data.students),
-        description: data.description
+      await apiRequest(`${BASE_URL}/classes/${selectedClass.id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: data.name,
+          subject: data.subject,
+          number_of_students: parseInt(data.students),
+          description: data.description,
+        }),
       });
-      
-
-      const updatedClasses = await classesApi.getAll();
-      console.log('Updated API Response:', updatedClasses);
-      
-
-      const transformedClasses = updatedClasses.map((cls: any) => ({
-        id: cls.id,
-        name: cls.name,
-        students: Math.floor(Math.random() * 30) + 20,
-        activeExams: Math.floor(Math.random() * 5),
-        pendingReviews: Math.floor(Math.random() * 10),
-        avgScore: Math.floor(Math.random() * 30) + 70,
-        color: oceanGradients[cls.id % oceanGradients.length],
-        code: cls.code || `CLASS-${String(cls.id).padStart(4, '0')}`,
-        subject: cls.subject || data.subject,
-        description: cls.description || data.description
-      }));
-      
-      console.log('Transformed classes after update:', transformedClasses);
-      
-
-      setInstructorClasses(transformedClasses);
-      
-    
+      await fetchClasses();
       setIsEditClassModalOpen(false);
       setSuccessMessage('Class updated successfully!');
-      
     } catch (error) {
-      console.error('Error updating class:', error);
       setErrorMessage('Failed to update class. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -1089,28 +1083,25 @@ const handleEditClassSubmit = async (data: EditClassData) => {
       className
     });
   };
-
-  const handleConfirmDelete = async () => {
-    if (deleteConfirmation.classId) {
-      setIsSubmitting(true);
-      try {
-        await classesApi.delete(deleteConfirmation.classId);
-        
-        if (selectedClass && selectedClass.id === deleteConfirmation.classId) {
-          navigate("/classes-instructor");
-        }
-        
-        setInstructorClasses(prev => prev.filter(cls => cls.id !== deleteConfirmation.classId));
-        setSuccessMessage(`Class "${deleteConfirmation.className}" deleted successfully!`);
-      } catch (error) {
-        console.error('Error deleting class:', error);
-        setErrorMessage('Failed to delete class. Please try again.');
-      } finally {
-        setIsSubmitting(false);
-        setDeleteConfirmation({ show: false, classId: null, className: '' });
-      }
+const handleConfirmDelete = async () => {
+  if (deleteConfirmation.classId) {
+    setIsSubmitting(true);
+    try {
+      await fetch(`${BASE_URL}/classes/${deleteConfirmation.classId}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${getToken()}` },
+      });
+      if (selectedClass?.id === deleteConfirmation.classId) navigate("/classes-instructor");
+      setInstructorClasses(prev => prev.filter(cls => cls.id !== deleteConfirmation.classId));
+      setSuccessMessage(`Class "${deleteConfirmation.className}" deleted successfully!`);
+    } catch (error) {
+      setErrorMessage('Failed to delete class. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+      setDeleteConfirmation({ show: false, classId: null, className: '' });
     }
-  };
+  }
+};
 
   const handleDeleteCancel = () => {
     setDeleteConfirmation({ show: false, classId: null, className: '' });

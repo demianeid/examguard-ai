@@ -1,5 +1,5 @@
 // pages/AccountInstructor.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from '../components/Header';
 import { motion } from "framer-motion";
@@ -8,7 +8,6 @@ import {
   Phone, 
   Edit, 
   Users, 
-  FileText, 
   TrendingUp, 
   Video, 
   AlertCircle, 
@@ -18,17 +17,31 @@ import {
   Calendar, 
   Clock, 
   ChevronDown, 
-  ChevronUp
+  ChevronUp,
+  User
 } from "lucide-react";
+
+// ============================================
+// TYPES
+// ============================================
+interface ProfileData {
+  user_role: string;
+  professor_id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  real_email: string;
+  phone: string;
+  profile_image: string | null;
+  is_active: boolean;
+}
 
 // Animation variants
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
+    transition: { staggerChildren: 0.1 }
   }
 };
 
@@ -37,45 +50,21 @@ const itemVariants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: {
-      duration: 0.6,
-      ease: "easeOut" as const
-    }
+    transition: { duration: 0.6, ease: "easeOut" as const }
   }
 };
 
 const pulseVariants = {
-  pulse: {
-    scale: [1, 1.05, 1],
-    opacity: [1, 0.8, 1]
-  }
+  pulse: { scale: [1, 1.05, 1], opacity: [1, 0.8, 1] }
 };
 
 const liveIndicatorVariants = {
-  animate: {
-    scale: [1, 1.2, 1],
-    opacity: [1, 0.7, 1]
-  }
+  animate: { scale: [1, 1.2, 1], opacity: [1, 0.7, 1] }
 };
 
-// Transition objects with proper TypeScript types
-const hoverTransition = {
-  duration: 0.3,
-  ease: "easeOut" as const
-};
-
-const pulseTransition = {
-  duration: 2,
-  repeat: Infinity,
-  ease: "easeInOut" as const
-};
-
-const liveIndicatorTransition = {
-  duration: 1.5,
-  repeat: Infinity,
-  ease: "easeInOut" as const
-};
-
+const hoverTransition = { duration: 0.3, ease: "easeOut" as const };
+const pulseTransition = { duration: 2, repeat: Infinity, ease: "easeInOut" as const };
+const liveIndicatorTransition = { duration: 1.5, repeat: Infinity, ease: "easeInOut" as const };
 const backgroundTransition = {
   duration: 10,
   repeat: Infinity,
@@ -86,130 +75,96 @@ const backgroundTransition = {
 const AccountInstructor: React.FC = () => {
   const [showAllMonitoring, setShowAllMonitoring] = useState(false);
   const navigate = useNavigate();
-  
+
+  // ============================================
+  // Profile State
+  // ============================================
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/auth/profile/', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.status === 401) {
+        navigate('/login');
+        return;
+      }
+
+      const data = await response.json();
+      if (response.ok) {
+        setProfile(data);
+      }
+    } catch (err) {
+      console.error('Profile fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEditProfile = () => {
     navigate("/settings");
   };
 
+  // Static data (will be replaced with API later)
   const upcomingExams = [
-    {
-      exam: "Software Engineering",
-      subject: "Midterm",
-      dateTime: "June 15, 10:00 AM",
-      enrolled: 25
-    },
-    {
-      exam: "Computer Network",
-      subject: "Quiz1",
-      dateTime: "July 02, 08:00 AM",
-      enrolled: 28
-    }
+    { exam: "Software Engineering", subject: "Midterm", dateTime: "June 15, 10:00 AM", enrolled: 25 },
+    { exam: "Computer Network", subject: "Quiz1", dateTime: "July 02, 08:00 AM", enrolled: 28 }
   ];
 
   const allLiveMonitoring = [
-    {
-      name: "Sarah Johnson",
-      status: "Active",
-      isLive: true,
-      progress: 75,
-      exam: "Software Engineering",
-      timeRemaining: "45 min"
-    },
-    {
-      name: "Mark Wilson",
-      status: "Active", 
-      isLive: false,
-      progress: 45,
-      exam: "Database Systems",
-      timeRemaining: "30 min"
-    },
-    {
-      name: "Ahmed Saeed",
-      status: "Warning",
-      isLive: true,
-      progress: 60,
-      exam: "Computer Network",
-      timeRemaining: "60 min"
-    },
-    {
-      name: "Lina Mohamed",
-      status: "Active",
-      isLive: true,
-      progress: 85,
-      exam: "Software Engineering",
-      timeRemaining: "15 min"
-    },
-    {
-      name: "Omar Hassan",
-      status: "Active",
-      isLive: false,
-      progress: 35,
-      exam: "Database Systems",
-      timeRemaining: "50 min"
-    },
-    {
-      name: "Nour Ali",
-      status: "Warning",
-      isLive: true,
-      progress: 70,
-      exam: "Computer Network",
-      timeRemaining: "25 min"
-    }
+    { name: "Sarah Johnson", status: "Active", isLive: true, progress: 75, exam: "Software Engineering", timeRemaining: "45 min" },
+    { name: "Mark Wilson", status: "Active", isLive: false, progress: 45, exam: "Database Systems", timeRemaining: "30 min" },
+    { name: "Ahmed Saeed", status: "Warning", isLive: true, progress: 60, exam: "Computer Network", timeRemaining: "60 min" },
+    { name: "Lina Mohamed", status: "Active", isLive: true, progress: 85, exam: "Software Engineering", timeRemaining: "15 min" },
+    { name: "Omar Hassan", status: "Active", isLive: false, progress: 35, exam: "Database Systems", timeRemaining: "50 min" },
+    { name: "Nour Ali", status: "Warning", isLive: true, progress: 70, exam: "Computer Network", timeRemaining: "25 min" }
   ];
 
   const liveMonitoring = showAllMonitoring ? allLiveMonitoring : allLiveMonitoring.slice(0, 3);
 
   const alerts = [
-    {
-      type: "warning",
-      message: "Suspicious movement detected",
-      details: "Ahmed Saeed | Database Systems Exam",
-      time: "2 min ago"
-    },
-    {
-      type: "warning", 
-      message: "Background voice detected",
-      details: "Sarah Mohamed | Software Exam",
-      time: "5 min ago"
-    },
-    {
-      type: "info",
-      message: "Connection lost",
-      details: "Sara Wilson | Network Exam", 
-      time: "10 min ago"
-    }
+    { type: "warning", message: "Suspicious movement detected", details: "Ahmed Saeed | Database Systems Exam", time: "2 min ago" },
+    { type: "warning", message: "Background voice detected", details: "Sarah Mohamed | Software Exam", time: "5 min ago" },
+    { type: "info", message: "Connection lost", details: "Sara Wilson | Network Exam", time: "10 min ago" }
   ];
 
   const stats = [
-    {
-      value: "3",
-      label: "Live Exams",
-      icon: Eye,
-      color: "bg-[#3DA5FA]",
-      delay: 0.1
-    },
-    {
-      value: "124", 
-      label: "Students Testing",
-      icon: Users,
-      color: "bg-[#3F72B7]",
-      delay: 0.2
-    },
-    {
-      value: "86%",
-      label: "Completion Rate",
-      icon: BarChart3,
-      color: "bg-[#3DA5FA]",
-      delay: 0.3
-    },
-    {
-      value: "12%",
-      label: "Avg Suspicion",
-      icon: AlertCircle,
-      color: "bg-[#3F72B7]",
-      delay: 0.4
-    }
+    { value: "3", label: "Live Exams", icon: Eye, color: "bg-[#3DA5FA]", delay: 0.1 },
+    { value: "124", label: "Students Testing", icon: Users, color: "bg-[#3F72B7]", delay: 0.2 },
+    { value: "86%", label: "Completion Rate", icon: BarChart3, color: "bg-[#3DA5FA]", delay: 0.3 },
+    { value: "12%", label: "Avg Suspicion", icon: AlertCircle, color: "bg-[#3F72B7]", delay: 0.4 }
   ];
+
+  // ============================================
+  // Loading State
+  // ============================================
+  if (loading) {
+    return (
+      <div className="w-full min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-h-screen bg-background">
@@ -222,7 +177,9 @@ const AccountInstructor: React.FC = () => {
           animate="visible"
           className="max-w-[1100px] mx-auto space-y-6"
         >
-          {/* Profile Card */}
+          {/* ============================================ */}
+          {/* Profile Card - متربط بالـ API               */}
+          {/* ============================================ */}
           <motion.div
             variants={itemVariants}
             className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200"
@@ -230,9 +187,7 @@ const AccountInstructor: React.FC = () => {
             {/* Header */}
             <div className="h-24 bg-gradient-to-r from-[#3F72B7] to-[#3DA5FA] relative overflow-hidden">
               <motion.div
-                animate={{
-                  backgroundPosition: ["0% 0%", "100% 100%"],
-                }}
+                animate={{ backgroundPosition: ["0% 0%", "100% 100%"] }}
                 transition={backgroundTransition}
                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent bg-[length:200%_200%]"
               />
@@ -245,11 +200,17 @@ const AccountInstructor: React.FC = () => {
                 <motion.div
                   whileHover={{ scale: 1.05 }}
                   transition={hoverTransition}
-                  className="w-32 h-32 bg-gradient-to-br from-[#3F72B7] to-[#3DA5FA] rounded-full flex items-center justify-center shadow-2xl border-4 border-white relative"
+                  className="w-32 h-32 bg-gradient-to-br from-[#3F72B7] to-[#3DA5FA] rounded-full flex items-center justify-center shadow-2xl border-4 border-white relative overflow-hidden"
                 >
-                  <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                  </svg>
+                  {profile?.profile_image ? (
+                    <img
+                      src={`http://127.0.0.1:8000${profile.profile_image}`}
+                      alt={profile.full_name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-16 h-16 text-white" />
+                  )}
                   <motion.div
                     variants={pulseVariants}
                     animate="pulse"
@@ -272,7 +233,7 @@ const AccountInstructor: React.FC = () => {
                 <span className="text-sm">Edit Profile</span>
               </motion.button>
 
-              {/* Name & ID */}
+              {/* Name & ID - من الـ API */}
               <div className="text-center mb-6">
                 <motion.h1
                   initial={{ opacity: 0, y: 10 }}
@@ -280,7 +241,7 @@ const AccountInstructor: React.FC = () => {
                   transition={{ delay: 0.3 }}
                   className="text-3xl font-bold text-gray-900 mb-2"
                 >
-                  Dr. Sara Mohamed Ali
+                  {profile?.full_name || "Loading..."}
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0, y: 10 }}
@@ -288,11 +249,11 @@ const AccountInstructor: React.FC = () => {
                   transition={{ delay: 0.4 }}
                   className="text-gray-500 text-lg bg-slate-100 inline-block px-4 py-1 rounded-full"
                 >
-                  INST20219001
+                  {profile?.professor_id || "—"}
                 </motion.p>
               </div>
 
-              {/* Contact Info */}
+              {/* Contact Info - من الـ API */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -301,22 +262,21 @@ const AccountInstructor: React.FC = () => {
               >
                 <div className="flex items-center gap-3 text-gray-600 bg-slate-100 px-4 py-2 rounded-lg">
                   <Mail className="w-5 h-5 text-[#3F72B7]" />
-                  <span>sara.mohamed@example.com</span>
+                  <span>{profile?.real_email || "—"}</span>
                 </div>
                 <div className="flex items-center gap-3 text-gray-600 bg-slate-100 px-4 py-2 rounded-lg">
                   <Phone className="w-5 h-5 text-[#3F72B7]" />
-                  <span>+20 123 456 7890</span>
+                  <span>{profile?.phone || "—"}</span>
                 </div>
               </motion.div>
             </div>
           </motion.div>
 
-          {/* Performance Dashboard */}
+          {/* Performance Dashboard - static data */}
           <motion.div
             variants={itemVariants}
             className="bg-white rounded-2xl shadow-lg p-6 border border-slate-200"
           >
-            {/* Dashboard Header */}
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
                 <motion.div
@@ -341,57 +301,34 @@ const AccountInstructor: React.FC = () => {
             </div>
 
             {/* Stats Grid */}
-            <motion.div
-              variants={containerVariants}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
-            >
+            <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {stats.map((stat, idx) => (
                 <motion.div
                   key={idx}
                   variants={itemVariants}
                   custom={stat.delay}
-                  whileHover={{
-                    scale: 1.02,
-                    y: -4,
-                    boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
-                  }}
+                  whileHover={{ scale: 1.02, y: -4, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)" }}
                   transition={hoverTransition}
                   className={`${stat.color} rounded-2xl p-6 text-white shadow-lg relative overflow-hidden`}
                 >
-                  {/* Animated background */}
                   <motion.div
-                    animate={{
-                      x: ["0%", "100%"],
-                    }}
-                    transition={{
-                      duration: 3,
-                      repeat: Infinity,
-                      ease: "linear",
-                    }}
+                    animate={{ x: ["0%", "100%"] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                     className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
                   />
-                  
                   <div className="relative z-10 flex items-center justify-between">
                     <div>
                       <motion.h3
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
-                        transition={{ 
-                          type: "spring",
-                          stiffness: 200,
-                          delay: 0.5 + (idx * 0.1)
-                        }}
+                        transition={{ type: "spring", stiffness: 200, delay: 0.5 + (idx * 0.1) }}
                         className="text-3xl font-bold mb-2"
                       >
                         {stat.value}
                       </motion.h3>
                       <p className="text-sm font-semibold opacity-90">{stat.label}</p>
                     </div>
-                    <motion.div
-                      whileHover={{ scale: 1.1, rotate: 5 }}
-                      transition={hoverTransition}
-                      className="p-3 bg-white/20 rounded-xl"
-                    >
+                    <motion.div whileHover={{ scale: 1.1, rotate: 5 }} transition={hoverTransition} className="p-3 bg-white/20 rounded-xl">
                       <stat.icon className="w-6 h-6" />
                     </motion.div>
                   </div>
@@ -403,34 +340,18 @@ const AccountInstructor: React.FC = () => {
             <div className="grid lg:grid-cols-3 gap-6">
               {/* Upcoming Exams */}
               <motion.div
-                whileHover={{
-                  scale: 1.02,
-                  y: -4,
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
-                }}
+                whileHover={{ scale: 1.02, y: -4 }}
                 transition={hoverTransition}
                 className="lg:col-span-2 bg-gradient-to-br from-[#3F72B7] to-[#2E5A9B] rounded-2xl p-6 text-white shadow-lg relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16"></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
-                
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-xl font-bold flex items-center gap-2">
-                      <motion.div
-                        animate={{ rotate: [0, 10, 0] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                      >
-                        <Calendar className="w-5 h-5" />
-                      </motion.div>
+                      <Calendar className="w-5 h-5" />
                       Upcoming Exams
                     </h3>
-                    <motion.span
-                      whileHover={{ scale: 1.05 }}
-                      className="text-sm bg-white/20 px-3 py-1 rounded-full"
-                    >
-                      {upcomingExams.length} scheduled
-                    </motion.span>
+                    <span className="text-sm bg-white/20 px-3 py-1 rounded-full">{upcomingExams.length} scheduled</span>
                   </div>
                   <div className="space-y-4">
                     {upcomingExams.map((exam, idx) => (
@@ -463,48 +384,22 @@ const AccountInstructor: React.FC = () => {
 
               {/* Exam Progress */}
               <motion.div
-                whileHover={{
-                  scale: 1.02,
-                  y: -4,
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
-                }}
+                whileHover={{ scale: 1.02, y: -4 }}
                 transition={hoverTransition}
                 className="bg-gradient-to-br from-[#3DA5FA] to-[#2B8CDB] rounded-2xl p-6 text-white shadow-lg relative overflow-hidden"
               >
-                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent"></div>
                 <div className="relative z-10">
                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <motion.div
-                      animate={{ rotate: [0, -5, 0] }}
-                      transition={{ duration: 3, repeat: Infinity }}
-                    >
-                      <BarChart3 className="w-5 h-5" />
-                    </motion.div>
+                    <BarChart3 className="w-5 h-5" />
                     Exam Progress
                   </h3>
-                  
-                  {/* Enhanced Donut Chart */}
                   <div className="flex flex-col items-center mb-6">
                     <div className="relative w-40 h-40 mb-4">
                       <svg className="w-full h-full transform -rotate-90">
-                        <circle
-                          cx="80"
-                          cy="80"
-                          r="70"
-                          stroke="rgba(255,255,255,0.3)"
-                          strokeWidth="12"
-                          fill="none"
-                        />
+                        <circle cx="80" cy="80" r="70" stroke="rgba(255,255,255,0.3)" strokeWidth="12" fill="none" />
                         <motion.circle
-                          cx="80"
-                          cy="80"
-                          r="70"
-                          stroke="white"
-                          strokeWidth="12"
-                          fill="none"
-                          strokeDasharray="440"
-                          strokeDashoffset="176"
-                          strokeLinecap="round"
+                          cx="80" cy="80" r="70" stroke="white" strokeWidth="12" fill="none"
+                          strokeDasharray="440" strokeDashoffset="176" strokeLinecap="round"
                           initial={{ strokeDashoffset: 440 }}
                           animate={{ strokeDashoffset: 176 }}
                           transition={{ duration: 2, delay: 0.5 }}
@@ -512,20 +407,11 @@ const AccountInstructor: React.FC = () => {
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="text-center">
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 200, delay: 1 }}
-                            className="text-3xl font-bold"
-                          >
-                            60%
-                          </motion.div>
+                          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200, delay: 1 }} className="text-3xl font-bold">60%</motion.div>
                           <div className="text-sm opacity-80">Completed</div>
                         </div>
                       </div>
                     </div>
-                    
-                    {/* Progress Bars */}
                     <div className="w-full space-y-3">
                       {[
                         { label: "Completed", value: 60, color: "bg-white" },
@@ -538,12 +424,7 @@ const AccountInstructor: React.FC = () => {
                             <span className="text-sm font-semibold">{item.value}%</span>
                           </div>
                           <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
-                            <motion.div
-                              className={`h-2 rounded-full ${item.color}`}
-                              initial={{ width: 0 }}
-                              animate={{ width: `${item.value}%` }}
-                              transition={{ duration: 1.5, delay: 0.8 + (idx * 0.2) }}
-                            />
+                            <motion.div className={`h-2 rounded-full ${item.color}`} initial={{ width: 0 }} animate={{ width: `${item.value}%` }} transition={{ duration: 1.5, delay: 0.8 + (idx * 0.2) }} />
                           </div>
                         </div>
                       ))}
@@ -557,94 +438,41 @@ const AccountInstructor: React.FC = () => {
             <div className="grid lg:grid-cols-2 gap-6 mt-6">
               {/* Live Monitoring */}
               <motion.div
-                whileHover={{
-                  scale: 1.02,
-                  y: -4,
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
-                }}
+                whileHover={{ scale: 1.02, y: -4 }}
                 transition={hoverTransition}
                 className="bg-gradient-to-br from-[#3DA5FA] to-[#2B8CDB] rounded-2xl p-6 text-white shadow-lg relative overflow-hidden"
               >
                 <div className="absolute top-4 right-4">
-                  <motion.div
-                    variants={liveIndicatorVariants}
-                    animate="animate"
-                    transition={liveIndicatorTransition}
-                    className="flex items-center gap-2 bg-red-500/20 px-2 py-1 rounded-full"
-                  >
+                  <motion.div variants={liveIndicatorVariants} animate="animate" transition={liveIndicatorTransition} className="flex items-center gap-2 bg-red-500/20 px-2 py-1 rounded-full">
                     <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                     <span className="text-xs font-semibold">LIVE</span>
                   </motion.div>
                 </div>
-                
                 <div className="relative z-10">
-                  {/* العنوان وعدد الطلاب */}
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-bold flex items-center gap-2">
-                      <motion.div
-                        animate={{ scale: [1, 1.2, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                      >
-                        <Eye className="w-5 h-5" />
-                      </motion.div>
+                      <Eye className="w-5 h-5" />
                       Live Monitoring
                     </h3>
-                    <motion.span
-                      whileHover={{ scale: 1.05 }}
-                      className="text-sm bg-white/20 px-3 py-1 rounded-full"
-                    >
-                      {allLiveMonitoring.length} students
-                    </motion.span>
+                    <span className="text-sm bg-white/20 px-3 py-1 rounded-full">{allLiveMonitoring.length} students</span>
                   </div>
-                  
                   <div className="space-y-4">
                     {liveMonitoring.map((student, idx) => (
-                      <motion.div
-                        key={idx}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.1 }}
-                        whileHover={{ scale: 1.02 }}
-                        className="bg-white/10 rounded-xl p-4 backdrop-blur-sm hover:bg-white/15 transition-all duration-200 border border-white/10"
-                      >
+                      <motion.div key={idx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.1 }} whileHover={{ scale: 1.02 }} className="bg-white/10 rounded-xl p-4 backdrop-blur-sm hover:bg-white/15 transition-all duration-200 border border-white/10">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
-                            <motion.div
-                              animate={
-                                student.status === 'Active' 
-                                  ? { scale: [1, 1.2, 1] } 
-                                  : {}
-                              }
-                              transition={{ duration: 2, repeat: Infinity }}
-                              className={`w-3 h-3 rounded-full ${
-                                student.status === 'Active' ? 'bg-green-400' : 'bg-yellow-400'
-                              }`}
-                            ></motion.div>
+                            <div className={`w-3 h-3 rounded-full ${student.status === 'Active' ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
                             <div>
                               <span className="font-semibold block">{student.name}</span>
                               <span className="text-xs opacity-80">{student.exam}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {student.isLive ? (
-                              <motion.div
-                                animate={{ scale: [1, 1.1, 1] }}
-                                transition={{ duration: 1.5, repeat: Infinity }}
-                              >
-                                <Video className="w-5 h-5 text-green-400" />
-                              </motion.div>
-                            ) : (
-                              <div className="w-5 h-5 border-2 border-white/50 rounded"></div>
-                            )}
+                            {student.isLive ? <Video className="w-5 h-5 text-green-400" /> : <div className="w-5 h-5 border-2 border-white/50 rounded"></div>}
                           </div>
                         </div>
                         <div className="w-full bg-white/20 rounded-full h-2 mb-2 overflow-hidden">
-                          <motion.div 
-                            className="bg-green-400 h-2 rounded-full"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${student.progress}%` }}
-                            transition={{ duration: 1, delay: 0.5 + (idx * 0.1) }}
-                          ></motion.div>
+                          <motion.div className="bg-green-400 h-2 rounded-full" initial={{ width: 0 }} animate={{ width: `${student.progress}%` }} transition={{ duration: 1, delay: 0.5 + (idx * 0.1) }} />
                         </div>
                         <div className="flex justify-between text-xs text-blue-100">
                           <span>Progress: {student.progress}%</span>
@@ -653,37 +481,13 @@ const AccountInstructor: React.FC = () => {
                       </motion.div>
                     ))}
                   </div>
-
-                  {/* Buttons Container - Fixed Layout */}
                   <div className="mt-6 flex flex-col gap-3">
-                    {/* End All Exams Button */}
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-                    >
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
                       <AlertCircle className="w-4 h-4" />
                       End All Exams
                     </motion.button>
-                    
-                    {/* See More/Less Button */}
-                    <motion.button 
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setShowAllMonitoring(!showAllMonitoring)}
-                      className="bg-white/20 hover:bg-white/30 text-white py-2 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2"
-                    >
-                      {showAllMonitoring ? (
-                        <>
-                          <ChevronUp className="w-4 h-4" />
-                          Show Less
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="w-4 h-4" />
-                          See More ({allLiveMonitoring.length - 3} more)
-                        </>
-                      )}
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setShowAllMonitoring(!showAllMonitoring)} className="bg-white/20 hover:bg-white/30 text-white py-2 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2">
+                      {showAllMonitoring ? (<><ChevronUp className="w-4 h-4" />Show Less</>) : (<><ChevronDown className="w-4 h-4" />See More ({allLiveMonitoring.length - 3} more)</>)}
                     </motion.button>
                   </div>
                 </div>
@@ -691,63 +495,25 @@ const AccountInstructor: React.FC = () => {
 
               {/* Alert Feed */}
               <motion.div
-                whileHover={{
-                  scale: 1.02,
-                  y: -4,
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
-                }}
+                whileHover={{ scale: 1.02, y: -4 }}
                 transition={hoverTransition}
                 className="bg-gradient-to-br from-[#3F72B7] to-[#2E5A9B] rounded-2xl p-6 text-white shadow-lg relative overflow-hidden"
               >
-                <div className="absolute top-0 right-0 w-20 h-20 bg-white/5 rounded-full -translate-y-8 translate-x-8"></div>
-                
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-xl font-bold flex items-center gap-2">
-                      <motion.div
-                        animate={{ rotate: [0, 10, -10, 0] }}
-                        transition={{ duration: 3, repeat: Infinity }}
-                      >
-                        <AlertCircle className="w-5 h-5" />
-                      </motion.div>
+                      <AlertCircle className="w-5 h-5" />
                       Alert Feed
                     </h3>
-                    <motion.span
-                      whileHover={{ scale: 1.05 }}
-                      className="text-sm bg-white/20 px-3 py-1 rounded-full"
-                    >
-                      Last 24h
-                    </motion.span>
+                    <span className="text-sm bg-white/20 px-3 py-1 rounded-full">Last 24h</span>
                   </div>
-                  
                   <div className="space-y-4">
                     {alerts.map((alert, idx) => (
-                      <motion.div 
-                        key={idx}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.1 }}
-                        whileHover={{ x: 5 }}
-                        className={`bg-white/10 rounded-xl p-4 backdrop-blur-sm border-l-4 ${
-                          alert.type === 'warning' ? 'border-yellow-400' : 'border-blue-300'
-                        } hover:bg-white/15 transition-all duration-200 border border-white/10`}
-                      >
+                      <motion.div key={idx} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.1 }} whileHover={{ x: 5 }} className={`bg-white/10 rounded-xl p-4 backdrop-blur-sm border-l-4 ${alert.type === 'warning' ? 'border-yellow-400' : 'border-blue-300'} hover:bg-white/15 transition-all duration-200 border border-white/10`}>
                         <div className="flex items-start gap-3">
-                          <motion.div
-                            animate={
-                              alert.type === 'warning' 
-                                ? { scale: [1, 1.1, 1] } 
-                                : {}
-                            }
-                            transition={{ duration: 2, repeat: Infinity }}
-                            className={`p-2 rounded-lg ${
-                              alert.type === 'warning' ? 'bg-yellow-400/20' : 'bg-blue-300/20'
-                            }`}
-                          >
-                            <AlertCircle className={`w-4 h-4 ${
-                              alert.type === 'warning' ? 'text-yellow-400' : 'text-blue-300'
-                            }`} />
-                          </motion.div>
+                          <div className={`p-2 rounded-lg ${alert.type === 'warning' ? 'bg-yellow-400/20' : 'bg-blue-300/20'}`}>
+                            <AlertCircle className={`w-4 h-4 ${alert.type === 'warning' ? 'text-yellow-400' : 'text-blue-300'}`} />
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start mb-1">
                               <p className="font-semibold text-sm">{alert.message}</p>
@@ -768,18 +534,10 @@ const AccountInstructor: React.FC = () => {
 
       {/* Footer */}
       <div className="border-t border-[#1d1d1d]/20 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-[#E3F0FE] px-6 pb-4">
-        <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">
-          © 2024 ExamGuard. All rights reserved.
-        </p>
+        <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">© 2024 ExamGuard. All rights reserved.</p>
         <div className="flex flex-wrap gap-3 justify-center md:justify-end">
           {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item, idx) => (
-            <a
-              key={idx}
-              href="#"
-              className="text-[#1d1d1d]/70 text-sm hover:underline"
-            >
-              {item}
-            </a>
+            <a key={idx} href="#" className="text-[#1d1d1d]/70 text-sm hover:underline">{item}</a>
           ))}
         </div>
       </div>

@@ -13,7 +13,7 @@ class StudentAdmin(admin.ModelAdmin):
         'phone_number',
         'profile_image',
         'username',
-        'email',  # Platform email (@examguard.ed)
+        # 'email',  # Platform email (@examguard.ed)
         'password',
         'is_active',
     )

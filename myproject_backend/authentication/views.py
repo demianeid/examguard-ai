@@ -28,7 +28,6 @@ class StudentRegisterView(APIView):
                 "message": "Student registered successfully!",
                 "data": {
                     "student_id": student.student_custom_id,
-                    "platform_email": student.email,
                     "username": student.username,
                     "profile_image": student.profile_image.url if student.profile_image else None
                 }
@@ -71,7 +70,7 @@ class LoginView(APIView):
         # ------- Student -->> platform email -------
         student = None
         try:
-            student = Student.objects.get(email=email)
+           student = Student.objects.get(real_email=email)
         except Student.DoesNotExist:
             pass
 

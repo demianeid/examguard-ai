@@ -1,8 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   User, 
-  Mail, 
-  Phone, 
   Lock, 
   Shield, 
   Moon, 
@@ -27,13 +25,76 @@ const SettingsPage: React.FC = () => {
   const [language, setLanguage] = useState("English");
 
   // Form states
-  const [fullName, setFullName] = useState("Sarah Mohamed Ali");
-  const [email, setEmail] = useState("sarah.edu@gmail.com");
-  const [phone, setPhone] = useState("+201234567890");
-  const [studentId] = useState("INST20219001");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [userId, setUserId] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const handleSaveProfile = () => {
-    alert("Profile updated successfully!");
+  // ============================================
+  // Fetch Profile من الـ API
+  // ============================================
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/auth/profile/', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setFullName(`${data.first_name} ${data.last_name}`);
+        setPhone(data.phone || "");
+        setUserId(data.student_id || data.professor_id || "");
+      }
+    } catch (err) {
+      console.error('Settings fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // Save Profile للـ API
+  // ============================================
+  const handleSaveProfile = async () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    const nameParts = fullName.trim().split(" ");
+    const first_name = nameParts[0] || "";
+    const last_name = nameParts.slice(1).join(" ") || "";
+
+    try {
+      const formData = new FormData();
+      formData.append('first_name', first_name);
+      formData.append('last_name', last_name);
+      formData.append('phone_number', phone);
+
+      const response = await fetch('http://127.0.0.1:8000/api/auth/profile/update/', {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      if (response.ok) {
+        alert("Profile updated successfully!");
+      } else {
+        const data = await response.json();
+        alert(data.error || "Failed to update profile.");
+      }
+    } catch (err) {
+      alert("Network error. Please try again.");
+    }
   };
 
   const handleBack = () => {
@@ -42,18 +103,14 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background pt-20 overflow-hidden">
-         <Header  showAccount={true} isRegistered={true} />
+      <Header showAccount={true} isRegistered={true} />
 
       <div className="max-w-3xl mx-auto px-6 py-16">
         {/* Header with Back Button */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button
-                onClick={handleBack}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                title="Back"
-              >
+              <button onClick={handleBack} className="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Back">
                 <ArrowLeft className="w-5 h-5 text-slate-600" />
               </button>
               <div className="flex items-center gap-3">
@@ -75,71 +132,54 @@ const SettingsPage: React.FC = () => {
             <h2 className="text-xl font-bold text-slate-900">Profile Information</h2>
           </div>
 
-          <div className="space-y-4">
-            {/* Full Name */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Full Name
-              </label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
-                placeholder="Sarah Mohamed Ali"
-              />
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Full Name */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Full Name</label>
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
+                />
+              </div>
 
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
-                placeholder="sarah.edu@gmail.com"
-              />
+              {/* Phone Number */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Phone Number</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
+                />
+              </div>
+
+              {/* ID - readonly */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">ID</label>
+                <input
+                  type="text"
+                  value={userId}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500"
+                  disabled
+                />
+              </div>
+
+              {/* Save Button */}
+              <button
+                onClick={handleSaveProfile}
+                className="w-full bg-[#3F72B7] hover:bg-[#3565A3] text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
+              >
+                Save Profile
+              </button>
             </div>
-
-            {/* Phone Number */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
-                placeholder="+201234567890"
-              />
-            </div>
-
-            {/* Student ID */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                 ID
-              </label>
-              <input
-                type="text"
-                value={studentId}
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500"
-                placeholder="INST20219001"
-                disabled
-              />
-            </div>
-
-            {/* Save Button */}
-            <button
-              onClick={handleSaveProfile}
-              className="w-full bg-[#3F72B7] hover:bg-[#3565A3] text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
-            >
-              Save Profile
-            </button>
-          </div>
+          )}
         </div>
 
         {/* Security Section */}
@@ -150,9 +190,7 @@ const SettingsPage: React.FC = () => {
             </div>
             <h2 className="text-xl font-bold text-slate-900">Security</h2>
           </div>
-
           <div className="space-y-4">
-            {/* Change Password */}
             <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
               <div className="flex items-center gap-3">
                 <Lock className="w-5 h-5 text-slate-600" />
@@ -163,8 +201,6 @@ const SettingsPage: React.FC = () => {
               </div>
               <ChevronRight className="w-5 h-5 text-slate-400" />
             </button>
-
-            {/* Two-Factor Authentication */}
             <div className="w-full flex items-center justify-between p-4 rounded-lg border border-slate-200">
               <div className="flex items-center gap-3">
                 <Shield className="w-5 h-5 text-slate-600" />
@@ -173,9 +209,7 @@ const SettingsPage: React.FC = () => {
                   <p className="text-sm text-slate-500">Add an extra layer of security</p>
                 </div>
               </div>
-              <button className="bg-[#3F72B7] hover:bg-[#3565A3] text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition-all">
-                Enable
-              </button>
+              <button className="bg-[#3F72B7] hover:bg-[#3565A3] text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition-all">Enable</button>
             </div>
           </div>
         </div>
@@ -188,9 +222,7 @@ const SettingsPage: React.FC = () => {
             </div>
             <h2 className="text-xl font-bold text-slate-900">Preferences</h2>
           </div>
-
           <div className="space-y-4">
-            {/* Dark Mode Toggle */}
             <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200">
               <div className="flex items-center gap-3">
                 <Moon className="w-5 h-5 text-slate-600" />
@@ -200,17 +232,10 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={darkMode}
-                  onChange={() => setDarkMode(!darkMode)}
-                  className="sr-only peer"
-                />
+                <input type="checkbox" checked={darkMode} onChange={() => setDarkMode(!darkMode)} className="sr-only peer" />
                 <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F72B7]"></div>
               </label>
             </div>
-
-            {/* Language */}
             <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
               <div className="flex items-center gap-3">
                 <Globe className="w-5 h-5 text-slate-600" />
@@ -224,8 +249,6 @@ const SettingsPage: React.FC = () => {
                 <ChevronRight className="w-5 h-5 text-slate-400" />
               </div>
             </button>
-
-            {/* Email Notifications */}
             <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200">
               <div className="flex items-center gap-3">
                 <Bell className="w-5 h-5 text-slate-600" />
@@ -235,12 +258,7 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={emailNotifications}
-                  onChange={() => setEmailNotifications(!emailNotifications)}
-                  className="sr-only peer"
-                />
+                <input type="checkbox" checked={emailNotifications} onChange={() => setEmailNotifications(!emailNotifications)} className="sr-only peer" />
                 <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F72B7]"></div>
               </label>
             </div>
@@ -255,9 +273,7 @@ const SettingsPage: React.FC = () => {
             </div>
             <h2 className="text-xl font-bold text-slate-900">Data & Privacy</h2>
           </div>
-
           <div className="space-y-4">
-            {/* Download My Data */}
             <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
               <div className="flex items-center gap-3">
                 <Database className="w-5 h-5 text-slate-600" />
@@ -268,8 +284,6 @@ const SettingsPage: React.FC = () => {
               </div>
               <ChevronRight className="w-5 h-5 text-slate-400" />
             </button>
-
-            {/* Delete Account */}
             <button className="w-full flex items-center justify-between p-4 hover:bg-red-50 rounded-lg transition-all border border-red-200">
               <div className="flex items-center gap-3">
                 <Trash2 className="w-5 h-5 text-red-600" />
@@ -291,9 +305,7 @@ const SettingsPage: React.FC = () => {
             </div>
             <h2 className="text-xl font-bold text-slate-900">Help & Support</h2>
           </div>
-
           <div className="space-y-4">
-            {/* Help Center */}
             <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
               <div className="flex items-center gap-3">
                 <HelpCircle className="w-5 h-5 text-slate-600" />
@@ -304,8 +316,6 @@ const SettingsPage: React.FC = () => {
               </div>
               <ChevronRight className="w-5 h-5 text-slate-400" />
             </button>
-
-            {/* Contact Support */}
             <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
               <div className="flex items-center gap-3">
                 <MessageCircle className="w-5 h-5 text-slate-600" />
@@ -316,8 +326,6 @@ const SettingsPage: React.FC = () => {
               </div>
               <ChevronRight className="w-5 h-5 text-slate-400" />
             </button>
-
-            {/* Terms & Conditions */}
             <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
               <div className="flex items-center gap-3">
                 <FileText className="w-5 h-5 text-slate-600" />
@@ -328,8 +336,6 @@ const SettingsPage: React.FC = () => {
               </div>
               <ChevronRight className="w-5 h-5 text-slate-400" />
             </button>
-
-            {/* Privacy Policy */}
             <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
               <div className="flex items-center gap-3">
                 <Eye className="w-5 h-5 text-slate-600" />

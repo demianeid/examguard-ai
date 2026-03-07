@@ -3,34 +3,11 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import Header from '../components/Header';
 import {
-  GraduationCap, X, ArrowLeft, Sparkles, BookOpen, Users, FileText
+  GraduationCap, X, ArrowLeft, Sparkles, BookOpen, Users
 } from "lucide-react";
-import { classesApi } from "../services/api"; // ← Import من ملف الـ API
-
-// --- Ocean Blue Color Helper ---
-const oceanGradients = [
-  'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]',
-  'bg-gradient-to-r from-[#0E6AD0] to-[#3A80D2]',
-  'bg-gradient-to-r from-[#2C8F8F] to-[#4CAF92]',
-  'bg-gradient-to-r from-[#00A8B5] to-[#00C2C7]',
-  'bg-gradient-to-r from-[#1A5F8F] to-[#2E7DA2]',
-  'bg-gradient-to-r from-[#006994] to-[#2196F3]'
-];
-
-// Generate a random class code
-const generateClassCode = (): string => {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const numbers = '0123456789';
-  let code = '';
-  for (let i = 0; i < 3; i++) code += letters.charAt(Math.floor(Math.random() * letters.length));
-  code += '-';
-  for (let i = 0; i < 4; i++) code += numbers.charAt(Math.floor(Math.random() * numbers.length));
-  return code;
-};
 
 interface NewClassData {
   name: string;
-  subject: string;
   students: string;
   description: string;
 }
@@ -38,7 +15,7 @@ interface NewClassData {
 const CreateClass = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState<NewClassData>({
-    name: "", subject: "", students: "", description: ""
+    name: "", students: "", description: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,29 +26,38 @@ const CreateClass = () => {
     if (error) setError(null);
   };
 
-  // ✅ بدل localStorage — بيبعت POST request للـ Backend
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Client-side validation
     if (!formData.name.trim()) return setError("Class name is required");
-    if (!formData.subject.trim()) return setError("Subject is required");
     if (!formData.students || parseInt(formData.students) < 1) return setError("Please enter a valid number of students");
 
     setIsSubmitting(true);
     setError(null);
 
     try {
-      const newClass = await classesApi.create({
-        name: formData.name.trim(),
-        subject: formData.subject.trim(),
-        students: parseInt(formData.students),
-        description: formData.description.trim(),
-        color: oceanGradients[Math.floor(Math.random() * oceanGradients.length)],
-        code: generateClassCode(),
+      const token = localStorage.getItem('access_token');
+
+      const response = await fetch('http://127.0.0.1:8000/api/instructors/classes/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          number_of_students: parseInt(formData.students),
+          description: formData.description.trim(),
+        }),
       });
 
-      // Navigate back with success message
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create class');
+      }
+
+      const newClass = await response.json();
+
       navigate('/classes-instructor', {
         state: {
           message: 'Class created successfully!',
@@ -80,7 +66,6 @@ const CreateClass = () => {
       });
     } catch (err: any) {
       setError(err.message || 'Failed to create class. Please try again.');
-      console.error('Error creating class:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -94,7 +79,6 @@ const CreateClass = () => {
         <Header fixed={true} showAccount={true} isRegistered={true} userType="instructor" />
 
         <div className="max-w-4xl mx-auto">
-          {/* Header with Back Button */}
           <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6 border border-white/50">
             <div className="flex items-center gap-4">
               <button onClick={handleCancel}
@@ -114,7 +98,6 @@ const CreateClass = () => {
             </div>
           </div>
 
-          {/* Main Form Card */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
             className="bg-white rounded-xl shadow-2xl overflow-hidden">
             <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] px-6 py-5">
@@ -126,7 +109,6 @@ const CreateClass = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6">
-              {/* Error Message */}
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
                   <X size={18} className="text-red-500 flex-shrink-0" />
@@ -151,37 +133,19 @@ const CreateClass = () => {
                 <p className="text-xs text-gray-500">Choose a descriptive name that clearly identifies your class</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {/* Subject */}
-                <div className="space-y-2">
-                  <label htmlFor="subject" className="block text-sm font-medium text-gray-700">
-                    Subject <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FileText size={18} className="text-gray-400" />
-                    </div>
-                    <input type="text" id="subject" name="subject" required value={formData.subject} onChange={handleChange}
-                      placeholder="e.g., Computer Science"
-                      className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent transition-shadow"
-                      disabled={isSubmitting} />
+              {/* Number of Students */}
+              <div className="space-y-2">
+                <label htmlFor="students" className="block text-sm font-medium text-gray-700">
+                  Number of Students <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Users size={18} className="text-gray-400" />
                   </div>
-                </div>
-
-                {/* Number of Students */}
-                <div className="space-y-2">
-                  <label htmlFor="students" className="block text-sm font-medium text-gray-700">
-                    Number of Students <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Users size={18} className="text-gray-400" />
-                    </div>
-                    <input type="number" id="students" name="students" required min="1" value={formData.students} onChange={handleChange}
-                      placeholder="0"
-                      className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent transition-shadow appearance-none"
-                      disabled={isSubmitting} />
-                  </div>
+                  <input type="number" id="students" name="students" required min="1" value={formData.students} onChange={handleChange}
+                    placeholder="0"
+                    className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent transition-shadow appearance-none"
+                    disabled={isSubmitting} />
                 </div>
               </div>
 
@@ -208,7 +172,7 @@ const CreateClass = () => {
                     </div>
                     <div>
                       <p className="font-semibold text-gray-800">{formData.name}</p>
-                      <p className="text-xs text-gray-600">{formData.subject || "Subject"} · {formData.students || "0"} students</p>
+                      <p className="text-xs text-gray-600">{formData.students || "0"} students</p>
                     </div>
                   </div>
                 </motion.div>
@@ -232,7 +196,6 @@ const CreateClass = () => {
             </form>
           </motion.div>
 
-          {/* Tips Card */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}
             className="mt-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
             <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
@@ -240,7 +203,6 @@ const CreateClass = () => {
             </h3>
             <ul className="space-y-2 text-sm text-gray-600">
               <li className="flex items-start gap-2"><span className="text-[#1A80F6] font-bold">•</span> Use a clear, descriptive class name that reflects the course content</li>
-              <li className="flex items-start gap-2"><span className="text-[#1A80F6] font-bold">•</span> Specify the subject to help organize your classes by department</li>
               <li className="flex items-start gap-2"><span className="text-[#1A80F6] font-bold">•</span> Add a comprehensive description including prerequisites and learning objectives</li>
               <li className="flex items-start gap-2"><span className="text-[#1A80F6] font-bold">•</span> You can always edit these details later from the class management page</li>
             </ul>

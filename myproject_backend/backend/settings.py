@@ -204,6 +204,7 @@ INSTALLED_APPS = [
     
     # My Apps
     'authentication',
+    'instructors',
 ]
 
 MIDDLEWARE = [
@@ -293,4 +294,18 @@ CORS_ALLOW_ALL_ORIGINS = True
 AUTHENTICATION_BACKENDS = [
     'authentication.backends.MultiUserBackend',
     'django.contrib.auth.backends.ModelBackend',
+]
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'authentication.professor_auth.ProfessorJWTAuthentication',
+    ),
+}
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'origin',
+    'x-csrftoken',
+    'x-requested-with',
 ]
