@@ -51,10 +51,16 @@ const CreateClass = () => {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to create class');
-      }
+     if (!response.ok) {
+  let errorMessage = 'Failed to create class';
+  try {
+    const errorData = await response.json();
+    errorMessage = errorData.detail || errorMessage;
+  } catch {
+    errorMessage = `Server error: ${response.status}`;
+  }
+  throw new Error(errorMessage);
+}
 
       const newClass = await response.json();
 
