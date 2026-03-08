@@ -197,7 +197,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
     'rest_framework_simplejwt',
     'rest_framework',
     'corsheaders',
@@ -309,3 +308,11 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),   # يفضل شغال 24 ساعة
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),    # refresh يفضل 30 يوم
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+}
