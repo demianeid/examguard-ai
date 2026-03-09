@@ -13,6 +13,9 @@ import {
   AlertCircle,
   Wifi,
   CheckCircle,
+  UserPlus,
+  UserMinus,
+  Search,
 } from "lucide-react";
 
 interface ExamFormData {
@@ -25,6 +28,8 @@ interface ExamFormData {
   endDate: string;
   endTime: string;
   instructions: string;
+  studentSelectionType: "all" | "specific" | "class";
+  selectedClass?: string;
 }
 
 interface Question {
@@ -63,6 +68,26 @@ interface QuestionErrors {
   };
 }
 
+interface Student {
+  id: string;
+  name: string;
+  email: string;
+  class?: string;
+  rollNumber?: string;
+}
+
+// Mock students data - In real app, this would come from an API
+const MOCK_STUDENTS: Student[] = [
+  { id: "STU001", name: "John Doe", email: "john@example.com", class: "CS101", rollNumber: "2024001" },
+  { id: "STU002", name: "Jane Smith", email: "jane@example.com", class: "CS101", rollNumber: "2024002" },
+  { id: "STU003", name: "Bob Johnson", email: "bob@example.com", class: "CS102", rollNumber: "2024003" },
+  { id: "STU004", name: "Alice Brown", email: "alice@example.com", class: "CS102", rollNumber: "2024004" },
+  { id: "STU005", name: "Charlie Wilson", email: "charlie@example.com", class: "CS103", rollNumber: "2024005" },
+  { id: "STU006", name: "Diana Miller", email: "diana@example.com", class: "CS103", rollNumber: "2024006" },
+  { id: "STU007", name: "Ethan Davis", email: "ethan@example.com", class: "CS101", rollNumber: "2024007" },
+  { id: "STU008", name: "Fiona Garcia", email: "fiona@example.com", class: "CS102", rollNumber: "2024008" },
+];
+
 export default function CreateExam() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<ExamFormData>({
@@ -75,6 +100,7 @@ export default function CreateExam() {
     endDate: "",
     endTime: "",
     instructions: "",
+    studentSelectionType: "all",
   });
   const [questions, setQuestions] = useState<Question[]>([
     {
@@ -87,9 +113,15 @@ export default function CreateExam() {
     },
   ]);
   const [errors, setErrors] = useState<
-    Partial<Record<keyof ExamFormData, string>>
+  Partial<Record<keyof ExamFormData | "students", string>>
   >({});
   const [questionErrors, setQuestionErrors] = useState<QuestionErrors>({});
+
+  // Student selection state
+  const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
+  const [availableStudents, setAvailableStudents] = useState<Student[]>(MOCK_STUDENTS);
+  const [studentSearchTerm, setStudentSearchTerm] = useState<string>("");
+  const [classFilter, setClassFilter] = useState<string>("all");
 
   const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>([
     {
@@ -177,8 +209,9 @@ export default function CreateExam() {
   const steps: Step[] = [
     { number: 1, label: "Basic Info" },
     { number: 2, label: "Questions" },
-    { number: 3, label: "Security Settings" },
-    { number: 4, label: "Review" },
+    { number: 3, label: "Students" },
+    { number: 4, label: "Security Settings" },
+    { number: 5, label: "Review" },
   ];
 
   const questionTypes: QuestionOption[] = [
@@ -186,6 +219,21 @@ export default function CreateExam() {
     { value: "true-false", label: "True/False" },
     { value: "essay", label: "Essay" },
   ];
+
+  // Get unique classes from students
+const uniqueClasses = Array.from(
+  new Set(MOCK_STUDENTS.map(s => s.class))
+).filter((c): c is string => c !== undefined);
+  // Filter available students based on search and class
+  const getFilteredAvailableStudents = () => {
+    return availableStudents.filter(student => {
+      const matchesSearch = student.name.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+                           student.id.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+                           student.email.toLowerCase().includes(studentSearchTerm.toLowerCase());
+      const matchesClass = classFilter === "all" || student.class === classFilter;
+      return matchesSearch && matchesClass && !selectedStudents.some(s => s.id === student.id);
+    });
+  };
 
   const handleInputChange = (field: keyof ExamFormData, value: string) => {
     setFormData((prev) => ({
@@ -207,13 +255,11 @@ export default function CreateExam() {
       correctAnswer: undefined,
     };
     setQuestions([...questions, newQuestion]);
-    // Clear errors for the new question
     setQuestionErrors((prev) => ({ ...prev, [newQuestion.id]: {} }));
   };
 
   const handleDeleteQuestion = (id: string) => {
     setQuestions(questions.filter((q) => q.id !== id));
-    // Remove errors for deleted question
     setQuestionErrors((prev) => {
       const newErrors = { ...prev };
       delete newErrors[id];
@@ -221,22 +267,22 @@ export default function CreateExam() {
     });
   };
 
- const handleQuestionChange = (
-  id: string,
-  field: "type" | "text" | "marks",
-  value: string
-) => {
-  setQuestions(
-    questions.map((q) => (q.id === id ? { ...q, [field]: value } : q))
-  );
-  // Only "text" has a corresponding error field
-  if (field === "text" && questionErrors[id]?.text) {
-    setQuestionErrors((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], text: undefined },
-    }));
-  }
-};
+  const handleQuestionChange = (
+    id: string,
+    field: "type" | "text" | "marks",
+    value: string
+  ) => {
+    setQuestions(
+      questions.map((q) => (q.id === id ? { ...q, [field]: value } : q))
+    );
+    if (field === "text" && questionErrors[id]?.text) {
+      setQuestionErrors((prev) => ({
+        ...prev,
+        [id]: { ...prev[id], text: undefined },
+      }));
+    }
+  };
+
   const handleOptionChange = (
     questionId: string,
     optionIndex: number,
@@ -254,7 +300,6 @@ export default function CreateExam() {
           : q
       )
     );
-    // Clear options error when user starts typing
     if (questionErrors[questionId]?.options) {
       setQuestionErrors((prev) => ({
         ...prev,
@@ -269,7 +314,6 @@ export default function CreateExam() {
         q.id === questionId ? { ...q, correctAnswer: optionIndex } : q
       )
     );
-    // Clear correct answer error when user selects an answer
     if (questionErrors[questionId]?.correctAnswer) {
       setQuestionErrors((prev) => ({
         ...prev,
@@ -284,6 +328,33 @@ export default function CreateExam() {
         feature.id === id ? { ...feature, enabled: !feature.enabled } : feature
       )
     );
+  };
+
+  // Student selection handlers
+  const handleAddStudent = (student: Student) => {
+    setSelectedStudents([...selectedStudents, student]);
+    setAvailableStudents(availableStudents.filter(s => s.id !== student.id));
+  };
+
+  const handleRemoveStudent = (student: Student) => {
+    setSelectedStudents(selectedStudents.filter(s => s.id !== student.id));
+    setAvailableStudents([...availableStudents, student].sort((a, b) => a.name.localeCompare(b.name)));
+  };
+
+  const handleAddAllStudents = () => {
+    setSelectedStudents([...selectedStudents, ...availableStudents]);
+    setAvailableStudents([]);
+  };
+
+  const handleRemoveAllStudents = () => {
+    setAvailableStudents([...availableStudents, ...selectedStudents].sort((a, b) => a.name.localeCompare(b.name)));
+    setSelectedStudents([]);
+  };
+
+  const handleAddByClass = (className: string) => {
+    const studentsInClass = availableStudents.filter(s => s.class === className);
+    setSelectedStudents([...selectedStudents, ...studentsInClass]);
+    setAvailableStudents(availableStudents.filter(s => s.class !== className));
   };
 
   const getActiveFeatures = () => {
@@ -330,7 +401,6 @@ export default function CreateExam() {
     let isValid = true;
 
     if (questions.length === 0) {
-      // Show a general error when no questions are added
       setQuestionErrors({ general: { text: "Please add at least one question" } });
       return false;
     }
@@ -372,6 +442,14 @@ export default function CreateExam() {
     return isValid;
   };
 
+const validateStep3 = (): boolean => {
+  if (formData.studentSelectionType === "specific" && selectedStudents.length === 0) {
+    setErrors(prev => ({ ...prev, students: "Please select at least one student" }));
+    return false;
+  }
+  return true;
+};
+
   const handlePrevious = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
@@ -387,7 +465,6 @@ export default function CreateExam() {
 
     if (currentStep === 2) {
       if (!validateStep2()) {
-        // Scroll to the first error
         setTimeout(() => {
           const firstError = document.querySelector('[data-error="true"]');
           if (firstError) {
@@ -398,7 +475,13 @@ export default function CreateExam() {
       }
     }
 
-    if (currentStep === 4) {
+    if (currentStep === 3) {
+      if (!validateStep3()) {
+        return;
+      }
+    }
+
+    if (currentStep === 5) {
       handlePublish();
     } else {
       setCurrentStep(currentStep + 1);
@@ -415,10 +498,22 @@ export default function CreateExam() {
         (sum, q) => sum + parseInt(q.marks || "0"),
         0
       ),
+      students: formData.studentSelectionType === "all" 
+        ? "All students" 
+        : selectedStudents.map(s => ({
+            id: s.id,
+            name: s.name,
+            email: s.email,
+            class: s.class,
+            rollNumber: s.rollNumber
+          })),
+      studentCount: formData.studentSelectionType === "all" 
+        ? MOCK_STUDENTS.length 
+        : selectedStudents.length,
     };
 
     console.log("Publishing exam:", examData);
-    alert("Exam published successfully!");
+    alert(`Exam published successfully!\nAssigned to: ${formData.studentSelectionType === "all" ? "All students" : selectedStudents.length + " specific students"}`);
   };
 
   const handleClose = () => {
@@ -437,7 +532,7 @@ export default function CreateExam() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-3xl w-full p-8">
+      <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full p-8">
         <div className="flex justify-between items-start mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
@@ -456,10 +551,10 @@ export default function CreateExam() {
           </button>
         </div>
 
-        <div className="flex items-center justify-center mb-8 gap-2">
+        <div className="flex items-center justify-center mb-8 gap-2 overflow-x-auto pb-2">
           {steps.map((step, index) => (
-            <div key={step.number} className="flex items-center gap-2">
-              <div className="flex  flex-col items-center">
+            <div key={step.number} className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex flex-col items-center">
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors ${
                     step.number === currentStep
@@ -478,7 +573,7 @@ export default function CreateExam() {
               </div>
               {index < steps.length - 1 && (
                 <div
-                  className={`w-8 sm:w-20 h-1 transition-colors ${
+                  className={`w-8 sm:w-16 h-1 transition-colors ${
                     step.number < currentStep ? "bg-blue-500" : "bg-gray-200"
                   }`}
                   aria-hidden="true"
@@ -490,6 +585,7 @@ export default function CreateExam() {
 
         {currentStep === 1 && (
           <div className="space-y-5">
+            {/* Step 1 content - same as before */}
             <div>
               <label
                 htmlFor="examTitle"
@@ -758,6 +854,7 @@ export default function CreateExam() {
 
         {currentStep === 2 && (
           <div className="space-y-4">
+            {/* Step 2 content - same as before */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-semibold text-gray-900">
                 Exam Questions
@@ -805,7 +902,7 @@ export default function CreateExam() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-4 ">
+              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                 {questions.map((question, index) => (
                   <div
                     key={question.id}
@@ -1029,6 +1126,197 @@ export default function CreateExam() {
         )}
 
         {currentStep === 3 && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-primary to-Tertiary text-white rounded-lg p-6">
+              <h2 className="text-xl font-bold mb-2">Select Students</h2>
+              <p className="text-sm text-purple-100">
+                Choose who can take this exam
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="studentSelection"
+                    checked={formData.studentSelectionType === "all"}
+                    onChange={() => {
+                      setFormData({ ...formData, studentSelectionType: "all" });
+                      setErrors(prev => ({ ...prev, students: undefined }));
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-700">All Students ({MOCK_STUDENTS.length})</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="studentSelection"
+                    checked={formData.studentSelectionType === "specific"}
+                    onChange={() => {
+                      setFormData({ ...formData, studentSelectionType: "specific" });
+                      setErrors(prev => ({ ...prev, students: undefined }));
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-700">Specific Students</span>
+                </label>
+              </div>
+
+              {formData.studentSelectionType === "specific" && (
+                <div className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-gray-900">
+                      Selected Students: {selectedStudents.length}
+                    </h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAddAllStudents}
+                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                        disabled={availableStudents.length === 0}
+                      >
+                        Add All
+                      </button>
+                      <button
+                        onClick={handleRemoveAllStudents}
+                        className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+                        disabled={selectedStudents.length === 0}
+                      >
+                        Remove All
+                      </button>
+                    </div>
+                  </div>
+
+                  {errors.students && (
+                    <p className="text-sm text-red-600 mb-4">{errors.students}</p>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Available Students */}
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-medium text-gray-700 mb-3">Available Students</h4>
+                      
+                      {/* Search and filter */}
+                      <div className="space-y-2 mb-3">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-2 w-4 h-4 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Search by name, ID, or email..."
+                            value={studentSearchTerm}
+                            onChange={(e) => setStudentSearchTerm(e.target.value)}
+                            className="w-full pl-8 pr-4 py-2 border rounded-md text-sm"
+                          />
+                        </div>
+                        <select
+                        title="Filter by class"
+                          value={classFilter}
+                          onChange={(e) => setClassFilter(e.target.value)}
+                          className="w-full px-3 py-2 border rounded-md text-sm"
+                        >
+                          <option value="all">All Classes</option>
+                          {uniqueClasses.map(cls => (
+                            <option key={cls} value={cls}>{cls}</option>
+                          ))}
+                        </select>
+                        
+                        {/* Class quick add buttons */}
+                        <div className="flex flex-wrap gap-2">
+                          {uniqueClasses.map(cls => {
+                            const countInClass = availableStudents.filter(s => s.class === cls).length;
+                            return countInClass > 0 && (
+                              <button
+                                key={cls}
+                                onClick={() => handleAddByClass(cls)}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                              >
+                                Add {cls} ({countInClass})
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Students list */}
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {getFilteredAvailableStudents().length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-4">
+                            No students available
+                          </p>
+                        ) : (
+                          getFilteredAvailableStudents().map(student => (
+                            <div
+                              key={student.id}
+                              className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100"
+                            >
+                              <div>
+                                <p className="text-sm font-medium">{student.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {student.id} • {student.class} • {student.rollNumber}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleAddStudent(student)}
+                                className="text-blue-600 hover:text-blue-800"
+                                title="Add student"
+                              >
+                                <UserPlus size={18} />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Selected Students */}
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-medium text-gray-700 mb-3">Selected Students</h4>
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {selectedStudents.length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-4">
+                            No students selected
+                          </p>
+                        ) : (
+                          selectedStudents.map(student => (
+                            <div
+                              key={student.id}
+                              className="flex items-center justify-between p-2 bg-blue-50 rounded hover:bg-blue-100"
+                            >
+                              <div>
+                                <p className="text-sm font-medium">{student.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {student.id} • {student.class} • {student.rollNumber}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => handleRemoveStudent(student)}
+                                className="text-red-600 hover:text-red-800"
+                                title="Remove student"
+                              >
+                                <UserMinus size={18} />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {formData.studentSelectionType === "all" && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-700">
+                    This exam will be available to all {MOCK_STUDENTS.length} students.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {currentStep === 4 && (
           <div className="space-y-4">
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg p-6 flex items-start gap-4">
               <Shield
@@ -1134,7 +1422,7 @@ export default function CreateExam() {
           </div>
         )}
 
-        {currentStep === 4 && (
+        {currentStep === 5 && (
           <div className="space-y-4">
             <div className="bg-green-600 text-white rounded-lg p-6 flex items-start gap-4">
               <div>
@@ -1203,6 +1491,28 @@ export default function CreateExam() {
               <p className="text-sm text-gray-600 mt-1">
                 Total Marks: {getTotalMarks()}
               </p>
+            </div>
+
+            <div
+              className="border border-gray-300 rounded-lg p-6"
+              role="region"
+              aria-label="Student assignment"
+            >
+              <h3 className="font-bold text-gray-900 mb-4">Assigned To</h3>
+              <p className="text-sm text-gray-600">
+                {formData.studentSelectionType === "all" 
+                  ? `All Students (${MOCK_STUDENTS.length} students)` 
+                  : `${selectedStudents.length} Specific Student${selectedStudents.length !== 1 ? 's' : ''}`}
+              </p>
+              {formData.studentSelectionType === "specific" && selectedStudents.length > 0 && (
+                <div className="mt-3 max-h-32 overflow-y-auto">
+                  {selectedStudents.map(student => (
+                    <div key={student.id} className="text-sm text-gray-600 py-1 border-b last:border-0">
+                      {student.name} ({student.id}) - {student.class}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div
@@ -1278,13 +1588,13 @@ export default function CreateExam() {
           <button
             onClick={handleNextStep}
             className={`px-6 py-2 rounded-md font-medium text-white transition-colors ${
-              currentStep === 4
+              currentStep === 5
                 ? "bg-green-600 hover:bg-green-700"
                 : "bg-blue-600 hover:bg-blue-700"
             }`}
-            aria-label={currentStep === 4 ? "Publish exam" : "Go to next step"}
+            aria-label={currentStep === 5 ? "Publish exam" : "Go to next step"}
           >
-            {currentStep === 4 ? "Publish Exam" : "Next Step"}
+            {currentStep === 5 ? "Publish Exam" : "Next Step"}
           </button>
         </div>
       </div>
