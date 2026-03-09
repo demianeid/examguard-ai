@@ -12,6 +12,7 @@ import Features from "./pages/Features";
 import HowItWorks from "./pages/HowItWorks";
 import Contact from "./pages/Contact";
 import AccountStudent from "./pages/AccountStudent";
+
 import ClassesStudent from "./pages/ClassesStudent";
 import ClassesInstructor from "./pages/ClassesInstructor";
 import AccountInstructor from "./pages/AccountInstructor";
@@ -27,6 +28,9 @@ import OfflineMode from "./pages/OfflineMode";
 import Roi from "./pages/Roi";
 import MonitoringOffline from "./pages/MonitoringOffline";
 import CreateClass from "./pages/CreateClass";
+import FaceRecognition from './pages/FaceRecognition';
+
+
 
 function App() {
   const location = useLocation();
@@ -79,6 +83,8 @@ function App() {
       <Route path="/OfflineMode" element={<OfflineMode />} />
       <Route path="/Roi" element={<Roi />} />
       <Route path="/MonitoringOffline" element={<MonitoringOffline />} />
+      <Route path="/FaceRecognition" element={<FaceRecognition />} />
+
     </Routes>
   );
 }

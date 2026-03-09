@@ -232,7 +232,7 @@ const NotificationDropdown = () => {
                 <div className="flex items-center gap-3"><Bell size={20} /><div><h3 className="font-semibold text-lg">Notifications</h3><p className="text-xs text-blue-100 mt-0.5">{unreadCount} unread · {notifications.length} total</p></div></div>
                 <div className="flex items-center gap-2">
                   {unreadCount > 0 && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); markAllAsRead(); }} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"><Check size={14} />Mark all read</button>}
-                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNotifications(false); }} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"><X size={16} /></button>
+                  <button title='Close' onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNotifications(false); }} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"><X size={16} /></button>
                 </div>
               </div>
               <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
@@ -654,7 +654,7 @@ const ClassesInstructor = () => {
                   <h3 className="text-xl font-bold text-gray-800 mb-2">{cls.name}</h3>
                   <div className="flex items-center gap-2 text-gray-600 text-sm bg-gray-50 px-3 py-1.5 rounded-lg"><School size={14} /><span className="font-mono font-medium">{cls.code}</span><button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopyCode(cls.code); }} className="text-gray-500 hover:text-gray-700 ml-1">{copiedCode === cls.code ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}</button></div>
                 </div>
-                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteClass(cls.id, cls.name); }} className="text-gray-400 hover:text-red-600 transition-colors p-1"><Trash2 size={18} /></button>
+                <button title='Delete Class' onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteClass(cls.id, cls.name); }} className="text-gray-400 hover:text-red-600 transition-colors p-1"><Trash2 size={18} /></button>
               </div>
               <div className="space-y-3 mb-4">
                 <div className="flex justify-between items-center"><span className="flex items-center gap-2 text-gray-600"><Users size={16} />Students</span><span className="font-semibold text-gray-900">{cls.students}</span></div>
@@ -730,11 +730,11 @@ const ClassesInstructor = () => {
           </div>
 
           <AnimatePresence mode="wait">
-            {successMessage && (<motion.div key="success-message" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="mb-6 bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-lg flex items-center justify-between shadow-md"><div className="flex items-center gap-3"><CheckCircle size={20} className="text-green-600" /><span className="font-medium">{successMessage}</span></div><button onClick={() => setSuccessMessage(null)} className="text-green-600 hover:text-green-800"><X size={18} /></button></motion.div>)}
+            {successMessage && (<motion.div key="success-message" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="mb-6 bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-lg flex items-center justify-between shadow-md"><div className="flex items-center gap-3"><CheckCircle size={20} className="text-green-600" /><span className="font-medium">{successMessage}</span></div><button title='Close' onClick={() => setSuccessMessage(null)} className="text-green-600 hover:text-green-800"><X size={18} /></button></motion.div>)}
           </AnimatePresence>
 
           <AnimatePresence mode="wait">
-            {errorMessage && (<motion.div key="error-message" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="mb-6 bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-lg flex items-center justify-between shadow-md"><div className="flex items-center gap-3"><AlertCircle size={20} className="text-red-600" /><span className="font-medium">{errorMessage}</span></div><button onClick={() => setErrorMessage(null)} className="text-red-600 hover:text-red-800"><X size={18} /></button></motion.div>)}
+            {errorMessage && (<motion.div key="error-message" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="mb-6 bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-lg flex items-center justify-between shadow-md"><div className="flex items-center gap-3"><AlertCircle size={20} className="text-red-600" /><span className="font-medium">{errorMessage}</span></div><button title='alert' onClick={() => setErrorMessage(null)} className="text-red-600 hover:text-red-800"><X size={18} /></button></motion.div>)}
           </AnimatePresence>
 
           {selectedClass ? <ClassDetails /> : <ClassesList />}

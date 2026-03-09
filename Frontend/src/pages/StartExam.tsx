@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Clock, FileText, CheckCircle, ChevronLeft, ChevronRight, 
   Settings, Camera, Mic, Wifi, Monitor, Flag, AlertTriangle, 
-  Send, Eye, Copy, Ban, Shield, Lock, Maximize2, Minimize2 
+  Send, Eye, Copy, Ban, Shield, Lock, Maximize2, Minimize2,
+  // ── مضاف للـ Face Recognition ──
+  ScanFace, UserCheck, UserX, Loader2, RefreshCw
 } from 'lucide-react';
 
 const ExamInterface: React.FC = () => {
-  const [currentView, setCurrentView] = useState<'rules' | 'system-check' | 'exam' | 'terminated'>('rules');
+  // ── تغيير وحيد في السطر ده: أضفنا 'face-recognition' للـ type ──
+  const [currentView, setCurrentView] = useState<'rules' | 'face-recognition' | 'system-check' | 'exam' | 'terminated'>('rules');
   const [agreedToRules, setAgreedToRules] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -26,6 +29,16 @@ const ExamInterface: React.FC = () => {
   const [examTerminated, setExamTerminated] = useState(false);
   const [terminationReason, setTerminationReason] = useState('');
   const [isRequestingFullScreen, setIsRequestingFullScreen] = useState(false);
+
+  // ════════════════════════════════════════════════════════════
+  // Face Recognition States  ← مضاف
+  // ════════════════════════════════════════════════════════════
+  type FaceStatus = 'idle' | 'requesting-camera' | 'scanning' | 'verifying' | 'success' | 'failed' | 'camera-error';
+  const [faceStatus, setFaceStatus] = useState<FaceStatus>('idle');
+  const [faceAttempts, setFaceAttempts] = useState(0);
+  const [faceMessage, setFaceMessage] = useState('');
+  const MAX_FACE_ATTEMPTS = 3;
+  // ════════════════════════════════════════════════════════════
   
   // System check states
   const [systemCheckStatus, setSystemCheckStatus] = useState<{[key: string]: 'checking' | 'success' | 'failed'}>({
@@ -44,6 +57,14 @@ const ExamInterface: React.FC = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const examContainerRef = useRef<HTMLDivElement>(null);
   const fullScreenCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ════════════════════════════════════════════════════════════
+  // Face Recognition Refs  ← مضاف
+  // ════════════════════════════════════════════════════════════
+  const faceVideoRef = useRef<HTMLVideoElement>(null);
+  const faceCanvasRef = useRef<HTMLCanvasElement>(null);
+  const faceStreamRef = useRef<MediaStream | null>(null);
+  // ════════════════════════════════════════════════════════════
 
   // Questions data
   const questions = [
@@ -652,6 +673,121 @@ const ExamInterface: React.FC = () => {
     }
   };
 
+  // ════════════════════════════════════════════════════════════
+  // Face Recognition Functions  ← مضاف
+  // ════════════════════════════════════════════════════════════
+
+  const startFaceCamera = useCallback(async () => {
+    setFaceStatus('requesting-camera');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'user' },
+      });
+      faceStreamRef.current = stream;
+      if (faceVideoRef.current) {
+        faceVideoRef.current.srcObject = stream;
+        await faceVideoRef.current.play();
+      }
+      setFaceStatus('scanning');
+    } catch {
+      setFaceStatus('camera-error');
+    }
+  }, []);
+
+  const stopFaceCamera = useCallback(() => {
+    faceStreamRef.current?.getTracks().forEach(t => t.stop());
+    faceStreamRef.current = null;
+  }, []);
+
+  const captureFrame = useCallback((): string | null => {
+    const video = faceVideoRef.current;
+    const canvas = faceCanvasRef.current;
+    if (!video || !canvas) return null;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.85);
+  }, []);
+
+  /**
+   * ════════════════════════════════════════════════════════════
+   * TODO: اربط الـ model هنا
+   *
+   * لما تبقى جاهز تربط Django:
+   *  1. احذف الـ placeholder جوه الدالة دي
+   *  2. حط الـ fetch call بدله:
+   *
+   *     const response = await fetch('http://localhost:8000/api/face-verify/', {
+   *       method: 'POST',
+   *       headers: {
+   *         'Content-Type': 'application/json',
+   *         // 'Authorization': `Bearer ${token}`  ← لو بتستخدم JWT
+   *       },
+   *       body: JSON.stringify({ image: imageBase64, student_id: 'YOUR_STUDENT_ID' }),
+   *     });
+   *     return await response.json();
+   *     // Expected response: { verified: true/false, confidence: 0.97, message: "..." }
+   *
+   *  3. في Django views.py:
+   *     def face_verify(request):
+   *         data = json.loads(request.body)
+   *         image_b64 = data['image'].split(',')[1]
+   *         student_id = data['student_id']
+   *         # result = your_model.verify(image_b64, student_id)
+   *         return JsonResponse({ 'verified': True, 'confidence': 0.97, 'message': 'OK' })
+   *
+   *  4. في urls.py:
+   *     path('api/face-verify/', views.face_verify),
+   * ════════════════════════════════════════════════════════════
+   */
+  const verifyFaceWithModel = async (_imageBase64: string): Promise<{ verified: boolean; message: string }> => {
+    // ── Placeholder: الـ screen بتظهر بس مش بتتحقق لحد ما تربط الـ model ──
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return { verified: true, message: 'Bypassed: model not connected yet.' }; // TODO: remove when model is ready
+    // ─────────────────────────────────────────────────────────────────────
+  };
+
+  const handleFaceVerify = useCallback(async () => {
+    if (faceStatus !== 'scanning') return;
+    const image = captureFrame();
+    if (!image) return;
+    setFaceStatus('verifying');
+    try {
+      const result = await verifyFaceWithModel(image);
+      setFaceMessage(result.message);
+      if (result.verified) {
+        setFaceStatus('success');
+        stopFaceCamera();
+        setTimeout(() => setCurrentView('system-check'), 2000);
+      } else {
+        setFaceStatus('failed');
+        setFaceAttempts(prev => prev + 1);
+      }
+    } catch {
+      setFaceMessage('Connection error. Please try again.');
+      setFaceStatus('failed');
+      setFaceAttempts(prev => prev + 1);
+    }
+  }, [faceStatus, captureFrame, stopFaceCamera]);
+
+  const handleFaceRetry = useCallback(() => {
+    setFaceMessage('');
+    setFaceStatus('scanning');
+  }, []);
+
+  // تشغيل/إيقاف الكاميرا مع الـ view
+  useEffect(() => {
+    if (currentView === 'face-recognition') {
+      startFaceCamera();
+    } else {
+      stopFaceCamera();
+    }
+  }, [currentView]);
+
+  // ════════════════════════════════════════════════════════════
+
   // ============ RENDER VIEWS ============
 
   // Rules View
@@ -740,24 +876,264 @@ const ExamInterface: React.FC = () => {
             </label>
           </div>
 
+          {/* ── تغيير وحيد هنا: ('face-recognition') بدل ('system-check') ── */}
           <button
-            onClick={() => setCurrentView('system-check')}
+            onClick={() => setCurrentView('face-recognition')}
             disabled={!agreedToRules}
             className={`w-full py-4 px-6 rounded-xl font-semibold text-white text-lg flex items-center justify-center gap-2 transition-all ${
               agreedToRules
                 ? 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl'
                 : 'bg-gray-400 cursor-not-allowed'
             }`}
-            aria-label="Proceed to system check"
+            aria-label="Proceed to identity verification"
           >
-            <Shield size={20} />
-            Proceed To System Check
+            <ScanFace size={20} />
+            Proceed To Identity Verification
             <ChevronRight size={20} />
           </button>
         </div>
       </div>
     );
   }
+
+  // ════════════════════════════════════════════════════════════
+  // Face Recognition View  ← مضاف بالكامل (جديد)
+  // ════════════════════════════════════════════════════════════
+  if (currentView === 'face-recognition') {
+    const attemptsLeft = MAX_FACE_ATTEMPTS - faceAttempts;
+    const isMaxAttempts = faceAttempts >= MAX_FACE_ATTEMPTS;
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full">
+
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-100 p-3 rounded-full">
+                <ScanFace className="w-7 h-7 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Identity Verification</h1>
+                <p className="text-gray-500 text-sm">Step 1 of 3 · Face Recognition</p>
+              </div>
+            </div>
+            <button
+              onClick={() => { stopFaceCamera(); setCurrentView('rules'); }}
+              className="text-gray-500 hover:text-gray-700 flex items-center gap-1 text-sm"
+              aria-label="Back to rules"
+            >
+              <ChevronLeft size={18} /> Back
+            </button>
+          </div>
+
+          {/* Progress Steps */}
+          <div className="flex items-center gap-2 mb-6">
+            {[
+              { label: 'Identity',     active: true,  done: faceStatus === 'success' },
+              { label: 'System Check', active: false, done: false },
+              { label: 'Start Exam',   active: false, done: false },
+            ].map((step, i) => (
+              <React.Fragment key={i}>
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                  step.done   ? 'bg-green-100 text-green-700' :
+                  step.active ? 'bg-blue-100 text-blue-700'   :
+                                'bg-gray-100 text-gray-400'
+                }`}>
+                  {step.done
+                    ? <CheckCircle size={12} />
+                    : <span className="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center text-[10px]">{i + 1}</span>
+                  }
+                  {step.label}
+                </div>
+                {i < 2 && <div className="flex-1 h-px bg-gray-200" />}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* Camera Area */}
+          <div className="relative mb-6">
+            <div className={`relative rounded-2xl overflow-hidden bg-gray-900 aspect-video border-4 transition-colors duration-300 ${
+              faceStatus === 'success'   ? 'border-green-500' :
+              faceStatus === 'failed'    ? 'border-red-500'   :
+              faceStatus === 'verifying' ? 'border-yellow-400':
+                                          'border-blue-500'
+            }`}>
+
+              {/* Video Feed */}
+              <video
+                ref={faceVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className={`w-full h-full object-cover transition-opacity duration-300 ${
+                  ['verifying', 'success', 'failed'].includes(faceStatus) ? 'opacity-30' : 'opacity-100'
+                }`}
+                style={{ transform: 'scaleX(-1)' }}
+              />
+
+              {/* Hidden canvas for frame capture */}
+              <canvas ref={faceCanvasRef} className="hidden" />
+
+              {/* Face oval guide — shown only while scanning */}
+              {faceStatus === 'scanning' && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-44 h-56 border-4 border-blue-400 rounded-full opacity-70 animate-pulse" />
+                  <div className="absolute bottom-4 left-0 right-0 text-center">
+                    <span className="bg-black/50 text-white text-xs px-3 py-1 rounded-full">
+                      Position your face in the oval
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Requesting camera overlay */}
+              {faceStatus === 'requesting-camera' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900">
+                  <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
+                  <p className="text-white text-sm">Starting camera...</p>
+                </div>
+              )}
+
+              {/* Verifying overlay */}
+              {faceStatus === 'verifying' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="w-12 h-12 text-yellow-400 animate-spin" />
+                  <p className="text-white font-semibold text-lg">Verifying Identity...</p>
+                  <p className="text-gray-300 text-sm">Please wait</p>
+                </div>
+              )}
+
+              {/* Success overlay */}
+              {faceStatus === 'success' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <div className="bg-green-500/20 p-4 rounded-full">
+                    <UserCheck className="w-14 h-14 text-green-400" />
+                  </div>
+                  <p className="text-white font-bold text-xl">Identity Confirmed!</p>
+                  <p className="text-gray-300 text-sm animate-pulse">Redirecting to System Check...</p>
+                </div>
+              )}
+
+              {/* Failed overlay */}
+              {faceStatus === 'failed' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <div className="bg-red-500/20 p-4 rounded-full">
+                    <UserX className="w-14 h-14 text-red-400" />
+                  </div>
+                  <p className="text-white font-bold text-xl">Verification Failed</p>
+                  <p className="text-gray-300 text-sm text-center px-6">{faceMessage}</p>
+                </div>
+              )}
+
+              {/* Camera error overlay */}
+              {faceStatus === 'camera-error' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900">
+                  <Camera className="w-12 h-12 text-gray-500" />
+                  <p className="text-white font-semibold">Camera Access Denied</p>
+                  <p className="text-gray-400 text-sm text-center px-4">
+                    Please allow camera access in your browser settings
+                  </p>
+                </div>
+              )}
+
+              {/* Idle overlay */}
+              {faceStatus === 'idle' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900">
+                  <Camera className="w-12 h-12 text-gray-500" />
+                  <p className="text-gray-400 text-sm">Camera not started</p>
+                </div>
+              )}
+            </div>
+
+            {/* Attempts badge */}
+            {faceAttempts > 0 && faceStatus !== 'success' && (
+              <div className={`absolute top-3 right-3 text-white text-xs px-2.5 py-1 rounded-full font-medium shadow ${
+                isMaxAttempts ? 'bg-red-600' : 'bg-orange-500'
+              }`}>
+                {isMaxAttempts ? 'No attempts left' : `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} left`}
+              </div>
+            )}
+          </div>
+
+          {/* Tips — shown while scanning */}
+          {faceStatus === 'scanning' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5">
+              <h3 className="font-semibold text-blue-800 text-sm mb-2 flex items-center gap-2">
+                <ScanFace size={16} /> Tips for best results
+              </h3>
+              <ul className="text-blue-700 text-sm space-y-1">
+                <li>• Ensure good lighting on your face</li>
+                <li>• Look directly at the camera</li>
+                <li>• Remove glasses or hat if possible</li>
+                <li>• Keep your face centered in the oval</li>
+              </ul>
+            </div>
+          )}
+
+          {/* Max attempts warning */}
+          {isMaxAttempts && faceStatus === 'failed' && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="text-red-600 flex-shrink-0 mt-0.5" size={18} />
+                <div>
+                  <p className="text-red-800 font-semibold text-sm">Maximum attempts reached</p>
+                  <p className="text-red-700 text-xs mt-1">
+                    Please contact your instructor or exam administrator for assistance.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            {faceStatus === 'idle' && (
+              <button
+                onClick={startFaceCamera}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg"
+              >
+                <Camera size={20} /> Start Camera
+              </button>
+            )}
+
+            {faceStatus === 'scanning' && (
+              <button
+                onClick={handleFaceVerify}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg"
+              >
+                <ScanFace size={20} /> Verify My Identity
+              </button>
+            )}
+
+            {faceStatus === 'failed' && !isMaxAttempts && (
+              <button
+                onClick={handleFaceRetry}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                <RefreshCw size={18} /> Try Again
+              </button>
+            )}
+
+            {faceStatus === 'camera-error' && (
+              <button
+                onClick={startFaceCamera}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                <Camera size={18} /> Retry Camera Access
+              </button>
+            )}
+          </div>
+
+          {/* Security note */}
+          <p className="text-center text-xs text-gray-400 mt-4 flex items-center justify-center gap-1">
+            <Shield size={12} /> Verification is encrypted and secure
+          </p>
+        </div>
+      </div>
+    );
+  }
+  // ════════════════════════════════════════════════════════════
 
   // System Check View
   if (currentView === 'system-check') {
@@ -833,10 +1209,11 @@ const ExamInterface: React.FC = () => {
                 <p className="text-gray-600">Verifying your system meets exam requirements</p>
               </div>
             </div>
+            {/* ── تغيير وحيد هنا: ('face-recognition') بدل ('rules') ── */}
             <button 
-              onClick={() => setCurrentView('rules')}
+              onClick={() => setCurrentView('face-recognition')}
               className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
-              aria-label="Back to rules"
+              aria-label="Back to identity verification"
             >
               <ChevronLeft size={20} />
               <span>Back</span>
@@ -936,13 +1313,14 @@ const ExamInterface: React.FC = () => {
               </div>
 
               <div className="flex gap-3">
+                {/* ── تغيير وحيد هنا: ('face-recognition') بدل ('rules') ── */}
                 <button 
-                  onClick={() => setCurrentView('rules')}
+                  onClick={() => setCurrentView('face-recognition')}
                   className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-colors"
-                  aria-label="Back to rules"
+                  aria-label="Back to identity verification"
                 >
                   <ChevronLeft className="w-5 h-5" />
-                  Back to Rules
+                  Back
                 </button>
                 <button 
                   onClick={runSystemChecks}

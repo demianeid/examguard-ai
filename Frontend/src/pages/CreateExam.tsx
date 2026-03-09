@@ -17,7 +17,6 @@ import {
 
 interface ExamFormData {
   examTitle: string;
-  selectedClass: string;
   description: string;
   duration: string;
   totalMarks: string;
@@ -56,11 +55,18 @@ interface Step {
   label: string;
 }
 
+interface QuestionErrors {
+  [key: string]: {
+    text?: string;
+    options?: string;
+    correctAnswer?: string;
+  };
+}
+
 export default function CreateExam() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<ExamFormData>({
     examTitle: "",
-    selectedClass: "",
     description: "",
     duration: "60",
     totalMarks: "100",
@@ -83,6 +89,7 @@ export default function CreateExam() {
   const [errors, setErrors] = useState<
     Partial<Record<keyof ExamFormData, string>>
   >({});
+  const [questionErrors, setQuestionErrors] = useState<QuestionErrors>({});
 
   const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>([
     {
@@ -177,7 +184,6 @@ export default function CreateExam() {
   const questionTypes: QuestionOption[] = [
     { value: "multiple-choice", label: "Multiple Choice" },
     { value: "true-false", label: "True/False" },
-    { value: "short-answer", label: "Short Answer" },
     { value: "essay", label: "Essay" },
   ];
 
@@ -201,22 +207,36 @@ export default function CreateExam() {
       correctAnswer: undefined,
     };
     setQuestions([...questions, newQuestion]);
+    // Clear errors for the new question
+    setQuestionErrors((prev) => ({ ...prev, [newQuestion.id]: {} }));
   };
 
   const handleDeleteQuestion = (id: string) => {
     setQuestions(questions.filter((q) => q.id !== id));
+    // Remove errors for deleted question
+    setQuestionErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[id];
+      return newErrors;
+    });
   };
 
-  const handleQuestionChange = (
-    id: string,
-    field: "type" | "text" | "marks",
-    value: string
-  ) => {
-    setQuestions(
-      questions.map((q) => (q.id === id ? { ...q, [field]: value } : q))
-    );
-  };
-
+ const handleQuestionChange = (
+  id: string,
+  field: "type" | "text" | "marks",
+  value: string
+) => {
+  setQuestions(
+    questions.map((q) => (q.id === id ? { ...q, [field]: value } : q))
+  );
+  // Only "text" has a corresponding error field
+  if (field === "text" && questionErrors[id]?.text) {
+    setQuestionErrors((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], text: undefined },
+    }));
+  }
+};
   const handleOptionChange = (
     questionId: string,
     optionIndex: number,
@@ -234,6 +254,13 @@ export default function CreateExam() {
           : q
       )
     );
+    // Clear options error when user starts typing
+    if (questionErrors[questionId]?.options) {
+      setQuestionErrors((prev) => ({
+        ...prev,
+        [questionId]: { ...prev[questionId], options: undefined },
+      }));
+    }
   };
 
   const handleCorrectAnswerChange = (questionId: string, optionIndex: number) => {
@@ -242,6 +269,13 @@ export default function CreateExam() {
         q.id === questionId ? { ...q, correctAnswer: optionIndex } : q
       )
     );
+    // Clear correct answer error when user selects an answer
+    if (questionErrors[questionId]?.correctAnswer) {
+      setQuestionErrors((prev) => ({
+        ...prev,
+        [questionId]: { ...prev[questionId], correctAnswer: undefined },
+      }));
+    }
   };
 
   const handleToggleSecurityFeature = (id: string) => {
@@ -261,10 +295,6 @@ export default function CreateExam() {
 
     if (!formData.examTitle.trim()) {
       newErrors.examTitle = "Exam title is required";
-    }
-
-    if (!formData.selectedClass) {
-      newErrors.selectedClass = "Please select a class";
     }
 
     if (!formData.duration || parseInt(formData.duration) <= 0) {
@@ -296,29 +326,50 @@ export default function CreateExam() {
   };
 
   const validateStep2 = (): boolean => {
+    const newQuestionErrors: QuestionErrors = {};
+    let isValid = true;
+
     if (questions.length === 0) {
-      alert("Please add at least one question");
+      // Show a general error when no questions are added
+      setQuestionErrors({ general: { text: "Please add at least one question" } });
       return false;
     }
 
-    for (const question of questions) {
+    questions.forEach((question) => {
+      const errors: { text?: string; options?: string; correctAnswer?: string } = {};
+
       if (!question.text.trim()) {
-        alert("Please fill in all question texts");
-        return false;
+        errors.text = "Question text is required";
+        isValid = false;
       }
 
       if (question.type === "multiple-choice") {
-        const filledOptions = question.options.filter(
-          (opt) => opt.trim() !== ""
-        );
+        const filledOptions = question.options.filter((opt) => opt.trim() !== "");
         if (filledOptions.length < 2) {
-          alert("Multiple choice questions need at least 2 options");
-          return false;
+          errors.options = "Multiple choice questions need at least 2 options";
+          isValid = false;
+        }
+        
+        if (question.correctAnswer === undefined) {
+          errors.correctAnswer = "Please select the correct answer";
+          isValid = false;
         }
       }
-    }
 
-    return true;
+      if (question.type === "true-false") {
+        if (question.correctAnswer === undefined) {
+          errors.correctAnswer = "Please select the correct answer (True/False)";
+          isValid = false;
+        }
+      }
+
+      if (Object.keys(errors).length > 0) {
+        newQuestionErrors[question.id] = errors;
+      }
+    });
+
+    setQuestionErrors(newQuestionErrors);
+    return isValid;
   };
 
   const handlePrevious = () => {
@@ -336,6 +387,13 @@ export default function CreateExam() {
 
     if (currentStep === 2) {
       if (!validateStep2()) {
+        // Scroll to the first error
+        setTimeout(() => {
+          const firstError = document.querySelector('[data-error="true"]');
+          if (firstError) {
+            firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, 100);
         return;
       }
     }
@@ -458,44 +516,6 @@ export default function CreateExam() {
               {errors.examTitle && (
                 <p id="examTitle-error" className="mt-1 text-sm text-red-600">
                   {errors.examTitle}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="selectedClass"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Select Class <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="selectedClass"
-                value={formData.selectedClass}
-                onChange={(e) =>
-                  handleInputChange("selectedClass", e.target.value)
-                }
-                className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent bg-white ${
-                  errors.selectedClass
-                    ? "border-red-300 focus:ring-red-500"
-                    : "border-gray-300 focus:ring-blue-500"
-                }`}
-                aria-required="true"
-                aria-describedby={
-                  errors.selectedClass ? "selectedClass-error" : undefined
-                }
-              >
-                <option value="">Choose a class...</option>
-                <option value="class-10">Class 10</option>
-                <option value="class-11">Class 11</option>
-                <option value="class-12">Class 12</option>
-              </select>
-              {errors.selectedClass && (
-                <p
-                  id="selectedClass-error"
-                  className="mt-1 text-sm text-red-600"
-                >
-                  {errors.selectedClass}
                 </p>
               )}
             </div>
@@ -767,6 +787,12 @@ export default function CreateExam() {
               </div>
             )}
 
+            {questionErrors.general && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-red-600">{questionErrors.general.text}</p>
+              </div>
+            )}
+
             {questions.length === 0 ? (
               <div className="text-center py-12 border border-gray-200 rounded-md bg-gray-50">
                 <p className="text-gray-600 mb-4">No questions added yet</p>
@@ -783,11 +809,16 @@ export default function CreateExam() {
                 {questions.map((question, index) => (
                   <div
                     key={question.id}
-                    className="border border-gray-300  rounded-md p-4"
+                    className={`border rounded-md p-4 ${
+                      questionErrors[question.id] ? "border-red-300 bg-red-50" : "border-gray-300"
+                    }`}
+                    data-error={questionErrors[question.id] ? "true" : "false"}
                   >
                     <div className="flex items-start gap-4 mb-4">
                       <div
-                        className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold text-sm"
+                        className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                          questionErrors[question.id] ? "bg-red-500 text-white" : "bg-blue-500 text-white"
+                        }`}
                         aria-label={`Question ${index + 1}`}
                       >
                         {index + 1}
@@ -851,32 +882,43 @@ export default function CreateExam() {
                       </button>
                     </div>
 
-                    <label
-                      htmlFor={`question-text-${question.id}`}
-                      className="sr-only"
-                    >
-                      Question text
-                    </label>
-                    <textarea
-                      id={`question-text-${question.id}`}
-                      value={question.text}
-                      onChange={(e) =>
-                        handleQuestionChange(
-                          question.id,
-                          "text",
-                          e.target.value
-                        )
-                      }
-                      placeholder="Enter your question here..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none mb-4"
-                      rows={3}
-                      aria-label={`Question text for question ${index + 1}`}
-                    />
+                    <div className="mb-4">
+                      <label
+                        htmlFor={`question-text-${question.id}`}
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Question Text <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        id={`question-text-${question.id}`}
+                        value={question.text}
+                        onChange={(e) =>
+                          handleQuestionChange(
+                            question.id,
+                            "text",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Enter your question here..."
+                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:border-transparent resize-none ${
+                          questionErrors[question.id]?.text
+                            ? "border-red-300 focus:ring-red-500"
+                            : "border-gray-300 focus:ring-blue-500"
+                        }`}
+                        rows={3}
+                        aria-label={`Question text for question ${index + 1}`}
+                      />
+                      {questionErrors[question.id]?.text && (
+                        <p className="mt-1 text-xs text-red-600">
+                          {questionErrors[question.id].text}
+                        </p>
+                      )}
+                    </div>
 
                     {question.type === "multiple-choice" && (
-                      <fieldset className="space-y-2 ml-8">
-                        <legend className="sr-only">
-                          Options for question {index + 1}
+                      <fieldset className="space-y-3 ml-8">
+                        <legend className="text-sm font-medium text-gray-700 mb-2">
+                          Options <span className="text-red-500">*</span>
                         </legend>
                         {question.options.map((option, optIdx) => (
                           <div key={optIdx} className="flex items-center gap-3">
@@ -907,18 +949,32 @@ export default function CreateExam() {
                                 )
                               }
                               placeholder={`Option ${optIdx + 1}`}
-                              className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              className={`flex-1 px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:border-transparent ${
+                                questionErrors[question.id]?.options && !option.trim()
+                                  ? "border-red-300 focus:ring-red-500"
+                                  : "border-gray-300 focus:ring-blue-500"
+                              }`}
                               aria-label={`Text for option ${optIdx + 1}`}
                             />
                           </div>
                         ))}
+                        {questionErrors[question.id]?.options && (
+                          <p className="text-xs text-red-600 mt-1">
+                            {questionErrors[question.id].options}
+                          </p>
+                        )}
+                        {questionErrors[question.id]?.correctAnswer && (
+                          <p className="text-xs text-red-600 mt-1">
+                            {questionErrors[question.id].correctAnswer}
+                          </p>
+                        )}
                       </fieldset>
                     )}
 
                     {question.type === "true-false" && (
                       <fieldset className="space-y-2 ml-8">
-                        <legend className="sr-only">
-                          True/False options for question {index + 1}
+                        <legend className="text-sm font-medium text-gray-700 mb-2">
+                          Correct Answer <span className="text-red-500">*</span>
                         </legend>
                         <div className="flex items-center gap-3">
                           <input
@@ -952,13 +1008,17 @@ export default function CreateExam() {
                             False
                           </label>
                         </div>
+                        {questionErrors[question.id]?.correctAnswer && (
+                          <p className="text-xs text-red-600 mt-1">
+                            {questionErrors[question.id].correctAnswer}
+                          </p>
+                        )}
                       </fieldset>
                     )}
 
-                    {(question.type === "short-answer" ||
-                      question.type === "essay") && (
+                    {question.type === "essay" && (
                       <div className="ml-8 p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-600">
-                        Student will provide their own answer
+                        Essay question - students will provide a written response
                       </div>
                     )}
                   </div>
@@ -1099,12 +1159,6 @@ export default function CreateExam() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Class</p>
-                  <p className="font-semibold text-gray-900">
-                    {formData.selectedClass || "Not selected"}
-                  </p>
-                </div>
-                <div>
                   <p className="text-sm text-gray-600 mb-1">Duration</p>
                   <p className="font-semibold text-gray-900">
                     {formData.duration} minutes
@@ -1181,6 +1235,30 @@ export default function CreateExam() {
                 )}
               </div>
             </div>
+
+            {formData.description && (
+              <div
+                className="border border-gray-300 rounded-lg p-6"
+                role="region"
+                aria-label="Description"
+              >
+                <h3 className="font-bold text-gray-900 mb-2">Description</h3>
+                <p className="text-sm text-gray-600">{formData.description}</p>
+              </div>
+            )}
+
+            {formData.instructions && (
+              <div
+                className="border border-gray-300 rounded-lg p-6"
+                role="region"
+                aria-label="Instructions"
+              >
+                <h3 className="font-bold text-gray-900 mb-2">
+                  Instructions for Students
+                </h3>
+                <p className="text-sm text-gray-600">{formData.instructions}</p>
+              </div>
+            )}
           </div>
         )}
 

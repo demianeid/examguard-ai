@@ -1,9 +1,8 @@
-// pages/AccountStudent.tsx
 import React, { useEffect, useState } from "react";
 import Header from '../components/Header';
 import { motion } from "framer-motion";
-import { Mail, Phone, Edit, TrendingUp, BookOpen, User } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Mail, Phone, Edit, TrendingUp, BookOpen, User, RefreshCw } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 interface ProfileData {
   student_id: string;
@@ -21,9 +20,12 @@ interface ProfileData {
 
 const AccountStudent: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [showRefreshNotice, setShowRefreshNotice] = useState(false);
 
   const enrolledClasses = [
     { name: "Data Structures & Algorithms", instructor: "Dr. Ahmed Hassan", progress: 75, color: "bg-blue-500" },
@@ -31,9 +33,30 @@ const AccountStudent: React.FC = () => {
     { name: "Web Development", instructor: "Dr. Omar Ali", progress: 91, color: "bg-blue-600" }
   ];
 
+  // Check if we're returning from settings
   useEffect(() => {
+    const fromSettings = location.state?.fromSettings;
+    const updated = location.state?.updated;
+    
+    if (fromSettings) {
+      console.log('Returning from settings page');
+      setShowRefreshNotice(true);
+      
+      // Hide notice after 3 seconds
+      const timer = setTimeout(() => {
+        setShowRefreshNotice(false);
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+    
+    if (updated) {
+      console.log('Profile was updated, refreshing data');
+    }
+    
+    // Always fetch fresh data when component mounts or when returning from settings
     fetchProfile();
-  }, []);
+  }, [location.state, refreshKey]);
 
   const fetchProfile = async () => {
     const token = localStorage.getItem('access_token');
@@ -74,6 +97,17 @@ const AccountStudent: React.FC = () => {
     }
   };
 
+  const handleEditProfile = () => {
+    navigate("/settings", { 
+      state: { from: 'student-account' } 
+    });
+  };
+
+  const handleRefresh = () => {
+    setLoading(true);
+    setRefreshKey(prev => prev + 1);
+  };
+
   // ============ Loading ============
   if (loading) {
     return (
@@ -108,6 +142,19 @@ const AccountStudent: React.FC = () => {
       <div className="w-full py-24 px-4">
         <div className="max-w-[800px] mx-auto space-y-6">
 
+          {/* Refresh Notice */}
+          {showRefreshNotice && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3"
+            >
+              <RefreshCw className="w-5 h-5 text-green-600" />
+              <p className="text-green-700">Profile updated successfully!</p>
+            </motion.div>
+          )}
+
           {/* Profile Card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -117,15 +164,36 @@ const AccountStudent: React.FC = () => {
           >
             <div className="h-24 bg-gradient-to-r from-blue-500 to-blue-600"></div>
 
-            <button className="absolute top-6 right-6 flex items-center gap-2 bg-white/90 hover:bg-white text-blue-600 hover:text-blue-700 transition-all px-3 py-2 rounded-lg shadow-md z-10">
+            {/* Edit Profile Button */}
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleEditProfile}
+              className="absolute top-6 right-6 flex items-center gap-2 bg-white/90 hover:bg-white text-blue-600 hover:text-blue-700 transition-all px-3 py-2 rounded-lg shadow-md z-10"
+            >
               <Edit className="w-4 h-4" />
               <span className="text-sm font-semibold">Edit Profile</span>
-            </button>
+            </motion.button>
+
+            {/* Refresh Button */}
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleRefresh}
+              className="absolute top-6 left-6 flex items-center gap-2 bg-white/90 hover:bg-white text-gray-600 hover:text-gray-700 transition-all px-3 py-2 rounded-lg shadow-md z-10"
+              title="Refresh Profile"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </motion.button>
 
             <div className="relative px-8 pb-8">
               {/* Avatar */}
               <div className="flex justify-center -mt-16 mb-4">
-                <div className="w-32 h-32 rounded-full shadow-xl border-4 border-white overflow-hidden bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.3 }}
+                  className="w-32 h-32 rounded-full shadow-xl border-4 border-white overflow-hidden bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center"
+                >
                   {profile?.profile_image ? (
                     <img
                       src={`http://127.0.0.1:8000${profile.profile_image}`}
@@ -135,16 +203,16 @@ const AccountStudent: React.FC = () => {
                   ) : (
                     <User className="w-16 h-16 text-white" />
                   )}
-                </div>
+                </motion.div>
               </div>
 
-              {/* Name & ID - من API */}
+              {/* Name & ID */}
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-900 mb-1">{profile?.full_name}</h1>
                 <p className="text-gray-500 text-lg">{profile?.student_id}</p>
               </div>
 
-              {/* Contact - من API */}
+              {/* Contact */}
               <div className="flex flex-wrap justify-center gap-6 text-sm">
                 <div className="flex items-center gap-2 text-gray-600">
                   <Mail className="w-5 h-5 text-blue-500" />
@@ -154,6 +222,13 @@ const AccountStudent: React.FC = () => {
                   <Phone className="w-5 h-5 text-blue-500" />
                   <span>{profile?.phone}</span>
                 </div>
+              </div>
+
+              {/* Last Updated Indicator */}
+              <div className="text-center mt-4">
+                <p className="text-xs text-gray-400">
+                  Last updated: {new Date().toLocaleTimeString()}
+                </p>
               </div>
             </div>
           </motion.div>
