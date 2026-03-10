@@ -204,6 +204,7 @@ INSTALLED_APPS = [
     # My Apps
     'authentication',
     'instructors',
+    'exam',
 ]
 
 MIDDLEWARE = [

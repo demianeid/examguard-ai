@@ -60,10 +60,11 @@ interface NotificationItem {
 
 interface Exam {
   id: number;
-  name: string;
-  date: string;
-  duration: string;
-  status: "upcoming" | "completed";
+  title: string;
+  start_datetime: string;
+  duration: number;
+  status: "upcoming" | "active" | "completed";
+  questions_count: number;
 }
 
 interface Student {
@@ -305,6 +306,10 @@ const ClassesInstructor = () => {
   const [classStudents, setClassStudents] = useState<Student[]>([]);
   const [studentsLoading, setStudentsLoading] = useState<boolean>(false);
 
+  // ✅ Exams state
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [examsLoading, setExamsLoading] = useState<boolean>(false);
+
   useEffect(() => {
     fetchClasses();
     fetchProfile();
@@ -358,6 +363,24 @@ const ClassesInstructor = () => {
     }
   };
 
+  // ✅ Fetch exams when tab is exams
+  useEffect(() => {
+  if ((tab === 'exams' || tab === 'overview') && classId) {
+    fetchExams(parseInt(classId));
+  }
+}, [tab, classId]);
+  const fetchExams = async (id: number) => {
+    setExamsLoading(true);
+    try {
+      const data = await apiRequest(`http://127.0.0.1:8000/api/exam/class/${id}/`);
+      setExams(data);
+    } catch {
+      setExams([]);
+    } finally {
+      setExamsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (location.state?.message) {
       setSuccessMessage(location.state.message);
@@ -373,12 +396,6 @@ const ClassesInstructor = () => {
       return () => clearTimeout(timer);
     }
   }, [errorMessage]);
-
-  const exams: Exam[] = [
-    { id: 1, name: "Midterm Exam", date: "2025-10-15", duration: "120 min", status: "upcoming" },
-    { id: 2, name: "Quiz 3", date: "2025-11-18", duration: "60 min", status: "upcoming" },
-    { id: 3, name: "Quiz 3", date: "2025-11-18", duration: "60 min", status: "completed" }
-  ];
 
   const selectedClass = classId ? instructorClasses.find(cls => cls.id === parseInt(classId)) : null;
   const activeTab = tab || "overview";
@@ -433,7 +450,12 @@ const ClassesInstructor = () => {
   const handleCreateExam = (e: React.MouseEvent, classId?: number) => { e.preventDefault(); e.stopPropagation(); navigate(classId ? `/CreateExam?classId=${classId}` : '/CreateExam'); };
   const handleEditExam = (examId: number) => navigate(`/edit-exam/${examId}`);
   const handleViewResults = (examId: number) => navigate(`/exam-results/${examId}`);
-  const handleViewProfile = (studentId: string) => navigate(`/instructor/student-profile/${studentId}`);
+ const handleViewProfile = (studentId: string) => {
+  const student = classStudents.find(s => s.student_custom_id === studentId);
+  navigate(`/instructor/student-profile/${studentId}`, { 
+    state: { studentData: student } 
+  });
+};
   const handleCopyCode = (code: string) => { navigator.clipboard.writeText(code); setCopiedCode(code); setTimeout(() => setCopiedCode(null), 2000); };
 
   // ✅ Helper: get first letter of instructor name for avatar fallback
@@ -443,7 +465,9 @@ const ClassesInstructor = () => {
   };
 
   // --- Tab Components ---
+  
   const OverviewTab = ({ cls }: { cls: ClassType }) => (
+    
     <div className="space-y-6">
       <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)}`}>
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -464,8 +488,25 @@ const ClassesInstructor = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-5 rounded-xl border border-blue-200 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-3"><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center"><Calendar className="text-[#1A80F6]" size={20} /></div><h3 className="font-semibold text-gray-800">Next Exam</h3></div>
-          <p className="text-gray-800 font-medium text-lg">Midterm Exam</p>
-          <p className="text-gray-600 text-sm mt-1">October 15, 2025 · 10:00 AM</p>
+   {examsLoading ? (
+  <div className="w-32 h-4 bg-gray-200 animate-pulse rounded" />
+) : (() => {
+  const nextExam = exams
+    .filter(e => e.status === "upcoming")
+    .sort((a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime())[0];
+  return nextExam ? (
+    <>
+      <p className="text-gray-800 font-medium text-lg">{nextExam.title}</p>
+      <p className="text-gray-600 text-sm mt-1">
+        {new Date(nextExam.start_datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+        {' · '}
+        {new Date(nextExam.start_datetime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+      </p>
+    </>
+  ) : (
+    <p className="text-gray-500 text-sm">No upcoming exams</p>
+  );
+})()}
           <button type="button" className={`mt-4 text-sm font-medium flex items-center gap-1 group ${getTextColorFromGradient(cls.color)}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTabChange("exams"); }}>View all exams <span className="group-hover:translate-x-1 transition-transform">→</span></button>
         </div>
 
@@ -545,34 +586,53 @@ const ClassesInstructor = () => {
     );
   };
 
-  const ExamsTab = ({ exams }: { exams: Exam[] }) => (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-gray-800 text-lg">Manage Exams</h3>
-        <button type="button" onClick={(e) => handleCreateExam(e, selectedClass?.id)} className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-5 py-2.5 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg`}><Plus size={18} /><span className="font-medium">Create New Exam</span></button>
-      </div>
-      {exams.map((exam, index) => (
-        <div key={`exam-${exam.id}-${index}`} className="bg-white border p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-center">
-            <div>
-              <h4 className="font-semibold text-gray-800 text-lg">{exam.name}</h4>
-              <div className="text-gray-600 text-sm flex gap-4 mt-2">
-                <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded"><Calendar size={14} className="text-gray-500" />{exam.date}</span>
-                <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded"><Clock size={14} className="text-gray-500" />{exam.duration}</span>
+  const ExamsTab = () => {
+    if (examsLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="w-12 h-12 border-4 border-[#1A80F6] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-600">Loading exams...</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800 text-lg">Manage Exams</h3>
+          <button type="button" onClick={(e) => handleCreateExam(e, selectedClass?.id)} className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-5 py-2.5 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg`}><Plus size={18} /><span className="font-medium">Create New Exam</span></button>
+        </div>
+        {exams.length === 0 ? (
+          <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+            <FileText size={48} className="text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Exams Yet</h3>
+            <p className="text-gray-500 text-sm">Create your first exam to get started</p>
+          </div>
+        ) : (
+          exams.map((exam, index) => (
+            <div key={`exam-${exam.id}-${index}`} className="bg-white border p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h4 className="font-semibold text-gray-800 text-lg">{exam.title}</h4>
+                  <div className="text-gray-600 text-sm flex gap-4 mt-2">
+                    <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded"><Calendar size={14} className="text-gray-500" />{exam.start_datetime.split('T')[0]}</span>
+                    <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded"><Clock size={14} className="text-gray-500" />{exam.duration} min</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {exam.status === "upcoming" ? (
+                    <><span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span><button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditExam(exam.id); }} className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"><FileEdit size={16} />Edit</button></>
+                  ) : (
+                    <><span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span><button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewResults(exam.id); }} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"><BarChart3 size={16} />View Results</button></>
+                  )}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {exam.status === "upcoming" ? (
-                <><span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span><button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditExam(exam.id); }} className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"><FileEdit size={16} />Edit</button></>
-              ) : (
-                <><span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span><button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewResults(exam.id); }} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"><BarChart3 size={16} />View Results</button></>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+          ))
+        )}
+      </div>
+    );
+  };
 
   const ProctoringTab = () => (
     <div className="space-y-4">
@@ -604,7 +664,7 @@ const ClassesInstructor = () => {
     switch (activeTab) {
       case "overview": return <OverviewTab key={`overview-${selectedClass.id}`} cls={selectedClass} />;
       case "students": return <StudentsTab key={`students-${selectedClass.id}`} />;
-      case "exams": return <ExamsTab key={`exams-${selectedClass.id}`} exams={exams} />;
+      case "exams": return <ExamsTab key={`exams-${selectedClass.id}`} />;
       case "proctoring": return <ProctoringTab key={`proctoring-${selectedClass.id}`} />;
       case "analytics": return <AnalyticsTab key={`analytics-${selectedClass.id}`} />;
       default: return <OverviewTab key={`overview-${selectedClass.id}`} cls={selectedClass} />;

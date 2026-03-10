@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   X,
   Clock,
@@ -17,6 +18,15 @@ import {
   UserMinus,
   Search,
 } from "lucide-react";
+
+const BASE_URL = 'http://127.0.0.1:8000';
+const getToken = () => localStorage.getItem('access_token');
+
+interface InstructorClass {
+  id: number;
+  name: string;
+  code: string;
+}
 
 interface ExamFormData {
   examTitle: string;
@@ -89,7 +99,14 @@ const MOCK_STUDENTS: Student[] = [
 ];
 
 export default function CreateExam() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [currentStep, setCurrentStep] = useState<number>(1);
+  const [instructorClasses, setInstructorClasses] = useState<InstructorClass[]>([]);
+  const [classesLoading, setClassesLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [formData, setFormData] = useState<ExamFormData>({
     examTitle: "",
     description: "",
@@ -101,7 +118,9 @@ export default function CreateExam() {
     endTime: "",
     instructions: "",
     studentSelectionType: "all",
+    selectedClass: searchParams.get('classId') || "",
   });
+  
   const [questions, setQuestions] = useState<Question[]>([
     {
       id: "1",
@@ -206,6 +225,24 @@ export default function CreateExam() {
     },
   ]);
 
+  useEffect(() => {
+    const fetchClasses = async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/api/instructors/classes/`, {
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+        });
+        if (!res.ok) throw new Error('Failed to load classes');
+        const data = await res.json();
+        setInstructorClasses(data.map((c: any) => ({ id: c.id, name: c.name, code: c.code })));
+      } catch {
+        setApiError('Could not load your classes. Please try again.');
+      } finally {
+        setClassesLoading(false);
+      }
+    };
+    fetchClasses();
+  }, []);
+
   const steps: Step[] = [
     { number: 1, label: "Basic Info" },
     { number: 2, label: "Questions" },
@@ -273,7 +310,14 @@ const uniqueClasses = Array.from(
     value: string
   ) => {
     setQuestions(
-      questions.map((q) => (q.id === id ? { ...q, [field]: value } : q))
+      questions.map((q) => {
+        if (q.id !== id) return q;
+        if (field !== "type") return { ...q, [field]: value };
+        const base = { ...q, type: value, correctAnswer: undefined };
+        if (value === "multiple-choice") return { ...base, options: ["", "", "", ""] };
+        if (value === "true-false") return { ...base, options: ["True", "False"] };
+        return { ...base, options: [] };
+      })
     );
     if (field === "text" && questionErrors[id]?.text) {
       setQuestionErrors((prev) => ({
@@ -366,6 +410,10 @@ const uniqueClasses = Array.from(
 
     if (!formData.examTitle.trim()) {
       newErrors.examTitle = "Exam title is required";
+    }
+
+    if (!formData.selectedClass) {
+      newErrors.selectedClass = "Please select a class";
     }
 
     if (!formData.duration || parseInt(formData.duration) <= 0) {
@@ -488,32 +536,73 @@ const validateStep3 = (): boolean => {
     }
   };
 
-  const handlePublish = () => {
-    const examData = {
-      ...formData,
-      questions,
-      securityFeatures: securitySettings.filter((f) => f.enabled),
-      totalQuestions: questions.length,
-      totalMarks: questions.reduce(
-        (sum, q) => sum + parseInt(q.marks || "0"),
-        0
-      ),
-      students: formData.studentSelectionType === "all" 
-        ? "All students" 
-        : selectedStudents.map(s => ({
-            id: s.id,
-            name: s.name,
-            email: s.email,
-            class: s.class,
-            rollNumber: s.rollNumber
-          })),
-      studentCount: formData.studentSelectionType === "all" 
-        ? MOCK_STUDENTS.length 
-        : selectedStudents.length,
+  const handlePublish = async () => {
+    setIsSubmitting(true);
+    setApiError(null);
+
+    const typeMap: Record<string, string> = {
+      'multiple-choice': 'multiple_choice',
+      'true-false': 'true_false',
+      'essay': 'essay',
     };
 
-    console.log("Publishing exam:", examData);
-    alert(`Exam published successfully!\nAssigned to: ${formData.studentSelectionType === "all" ? "All students" : selectedStudents.length + " specific students"}`);
+    const buildChoices = (q: Question) => {
+      if (q.type === 'essay') return [];
+      if (q.type === 'true-false') {
+        return [
+          { choice_text: 'True', is_correct: q.correctAnswer === 0 },
+          { choice_text: 'False', is_correct: q.correctAnswer === 1 },
+        ];
+      }
+      return q.options
+        .filter((opt) => opt.trim() !== '')
+        .map((opt, idx) => ({ choice_text: opt, is_correct: q.correctAnswer === idx }));
+    };
+
+    const body = {
+      title: formData.examTitle,
+      description: formData.description,
+      duration: parseInt(formData.duration),
+      total_marks: parseInt(formData.totalMarks),
+      start_datetime: `${formData.startDate}T${formData.startTime}:00`,
+      end_datetime: `${formData.endDate}T${formData.endTime}:00`,
+      instructions: formData.instructions,
+      questions: questions.map((q, idx) => ({
+        question_text: q.text,
+        question_type: typeMap[q.type] || q.type,
+        marks: parseInt(q.marks || '1'),
+        order: idx + 1,
+        choices: buildChoices(q),
+      })),
+      // Student assignment data (you may need to adjust this based on your backend)
+      assigned_students: formData.studentSelectionType === 'all' 
+        ? null 
+        : selectedStudents.map(s => s.id),
+      student_selection_type: formData.studentSelectionType,
+    };
+
+    try {
+      const classId = searchParams.get('classId') || formData.selectedClass;
+      const res = await fetch(`${BASE_URL}/api/exam/class/${classId}/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.detail || data?.message || `Server error (${res.status})`);
+      }
+
+      navigate('/classes-instructor', { state: { message: 'Exam published successfully!' } });
+    } catch (err: any) {
+      setApiError(err.message || 'Failed to publish exam. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
@@ -522,7 +611,7 @@ const validateStep3 = (): boolean => {
         "Are you sure you want to close? All unsaved changes will be lost."
       )
     ) {
-      window.history.back();
+      navigate(-1);
     }
   };
 
@@ -550,6 +639,14 @@ const validateStep3 = (): boolean => {
             ×
           </button>
         </div>
+
+        {apiError && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span className="text-sm flex-1">{apiError}</span>
+            <button onClick={() => setApiError(null)} className="text-red-500 hover:text-red-700" aria-label="Dismiss error"><X size={16} /></button>
+          </div>
+        )}
 
         <div className="flex items-center justify-center mb-8 gap-2 overflow-x-auto pb-2">
           {steps.map((step, index) => (
@@ -585,7 +682,6 @@ const validateStep3 = (): boolean => {
 
         {currentStep === 1 && (
           <div className="space-y-5">
-            {/* Step 1 content - same as before */}
             <div>
               <label
                 htmlFor="examTitle"
@@ -612,6 +708,44 @@ const validateStep3 = (): boolean => {
               {errors.examTitle && (
                 <p id="examTitle-error" className="mt-1 text-sm text-red-600">
                   {errors.examTitle}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="selectedClass"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Select Class <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="selectedClass"
+                value={formData.selectedClass}
+                onChange={(e) =>
+                  handleInputChange("selectedClass", e.target.value)
+                }
+                className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent bg-white ${
+                  errors.selectedClass
+                    ? "border-red-300 focus:ring-red-500"
+                    : "border-gray-300 focus:ring-blue-500"
+                }`}
+                aria-required="true"
+                aria-describedby={
+                  errors.selectedClass ? "selectedClass-error" : undefined
+                }
+              >
+                <option value="">{classesLoading ? 'Loading classes...' : 'Choose a class...'}</option>
+                {instructorClasses.map((cls) => (
+                  <option key={cls.id} value={cls.id}>{cls.name}</option>
+                ))}
+              </select>
+              {errors.selectedClass && (
+                <p
+                  id="selectedClass-error"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {errors.selectedClass}
                 </p>
               )}
             </div>
@@ -854,7 +988,6 @@ const validateStep3 = (): boolean => {
 
         {currentStep === 2 && (
           <div className="space-y-4">
-            {/* Step 2 content - same as before */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-semibold text-gray-900">
                 Exam Questions
@@ -1447,6 +1580,12 @@ const validateStep3 = (): boolean => {
                   </p>
                 </div>
                 <div>
+                  <p className="text-sm text-gray-600 mb-1">Class</p>
+                  <p className="font-semibold text-gray-900">
+                    {instructorClasses.find(c => String(c.id) === formData.selectedClass)?.name || "Not selected"}
+                  </p>
+                </div>
+                <div>
                   <p className="text-sm text-gray-600 mb-1">Duration</p>
                   <p className="font-semibold text-gray-900">
                     {formData.duration} minutes
@@ -1587,14 +1726,15 @@ const validateStep3 = (): boolean => {
           </button>
           <button
             onClick={handleNextStep}
-            className={`px-6 py-2 rounded-md font-medium text-white transition-colors ${
+            disabled={isSubmitting}
+            className={`px-6 py-2 rounded-md font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               currentStep === 5
                 ? "bg-green-600 hover:bg-green-700"
                 : "bg-blue-600 hover:bg-blue-700"
             }`}
             aria-label={currentStep === 5 ? "Publish exam" : "Go to next step"}
           >
-            {currentStep === 5 ? "Publish Exam" : "Next Step"}
+            {isSubmitting ? "Publishing..." : currentStep === 5 ? "Publish Exam" : "Next Step"}
           </button>
         </div>
       </div>

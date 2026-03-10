@@ -9,20 +9,21 @@ class MultiUserBackend(ModelBackend):
 
         username = username.lower()
 
-        if username.endswith("@examguard.ed"):
-            try:
-                user = Student.objects.get(email=username)
-                if user.check_password(password):
-                    return user
-            except Student.DoesNotExist:
-                return None
-        else:
-            try:
-                user = Professor.objects.get(real_email=username)
-                if user.check_password(password):
-                    return user
-            except Professor.DoesNotExist:
-                return None
+        # دور على الـ Student بالـ real_email
+        try:
+            student = Student.objects.get(real_email=username)
+            if student.check_password(password):
+                return student
+        except Student.DoesNotExist:
+            pass
+
+        # دور على الـ Professor بالـ real_email
+        try:
+            professor = Professor.objects.get(real_email=username)
+            if professor.check_password(password):
+                return professor
+        except Professor.DoesNotExist:
+            pass
 
         return None
 

@@ -143,14 +143,24 @@ const SettingsPage: React.FC = () => {
   // ============================================
   // Save Profile to API
   // ============================================
-  const handleSaveProfile = async () => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setError('No access token found');
-      return;
-    }
+ const handleSaveProfile = async () => {
+  if (!firstName.trim()) {
+    setError('First name is required');
+    return;
+  }
+  if (!lastName.trim()) {
+    setError('Last name is required');
+    return;
+  }
 
-    setIsSaving(true);
+  const token = localStorage.getItem('access_token');
+  if (!token) {
+    setError('No access token found');
+    return;
+  }
+
+  setError(null);
+  setIsSaving(true);
 
     try {
       const formData = new FormData();

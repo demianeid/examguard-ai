@@ -1,56 +1,29 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Mail, Phone, TrendingUp, BookOpen, ArrowLeft, User, BarChart3 } from "lucide-react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 
 const AccountStudentInstructorView: React.FC = () => {
   const { studentId } = useParams<{ studentId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const studentData = location.state?.studentData;
 
-  const handleBack = () => {
-    navigate(-1); // العودة للصفحة السابقة
-  };
+  const handleBack = () => navigate(-1);
 
-  // بيانات الطالب (في الواقع بتكون جاية من API بناءً على studentId)
-  const studentData = {
-    name: "Demian Eid Lamey",
-    email: "demian.eid@example.com",
-    phone: "+20 123 456 7890",
-    avgScore: 78,
-    completedExams: "12/15",
-    enrolledClasses: [
-      {
-        name: "Data Structures & Algorithms",
-        instructor: "Dr. Ahmed Hassan",
-        progress: 75,
-        color: "bg-blue-500",
-        grade: "A-"
-      },
-      {
-        name: "Database Systems",
-        instructor: "Dr. Sara Mohamed",
-        progress: 60,
-        color: "bg-blue-400",
-        grade: "B+"
-      },
-      {
-        name: "Web Development",
-        instructor: "Dr. Omar Ali",
-        progress: 91,
-        color: "bg-blue-600",
-        grade: "A"
-      }
-    ],
-    recentActivity: [
-      { exam: "Midterm Exam", date: "2024-10-15", score: 85, status: "Completed" },
-      { exam: "Quiz 3", date: "2024-10-10", score: 92, status: "Completed" },
-      { exam: "Assignment 2", date: "2024-10-05", score: 78, status: "Submitted" }
-    ]
-  };
+  if (!studentData) return (
+    <div className="min-h-screen bg-[#E8F1FA] flex items-center justify-center">
+      <div className="text-center bg-white p-8 rounded-2xl shadow-lg">
+        <p className="text-red-500 mb-4">Student data not found</p>
+        <button onClick={handleBack} className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
+          Go Back
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="w-full min-h-screen bg-[#E8F1FA] relative">
-      {/* زر Back في الزاوية */}
       <button
         onClick={handleBack}
         className="absolute top-6 right-6 flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors font-medium text-sm z-10"
@@ -61,6 +34,7 @@ const AccountStudentInstructorView: React.FC = () => {
 
       <div className="w-full py-8 px-4">
         <div className="max-w-[1000px] mx-auto space-y-6">
+
           {/* Profile Card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -68,34 +42,51 @@ const AccountStudentInstructorView: React.FC = () => {
             transition={{ duration: 0.6 }}
             className="bg-white rounded-2xl shadow-lg overflow-hidden"
           >
-            {/* Header متدرج أزرق */}
             <div className="h-32 bg-gradient-to-r from-blue-500 to-blue-600 rounded-t-2xl"></div>
 
-            {/* المحتوى على خلفية بيضاء */}
             <div className="bg-white px-6 pb-8 -mt-16 relative">
-              {/* Avatar في المنتصف */}
               <div className="flex flex-col items-center">
-                <div className="w-40 h-40 bg-blue-100 rounded-full flex items-center justify-center mb-4 shadow-lg">
-                  <div className="w-32 h-32 bg-blue-500 rounded-full flex items-center justify-center">
+                {/* Avatar */}
+                <div className="w-40 h-40 rounded-full shadow-lg border-4 border-white overflow-hidden bg-blue-500 flex items-center justify-center mb-4">
+                  {studentData.profile_image ? (
+                    <img
+                      src={studentData.profile_image}
+                      alt={studentData.full_name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
                     <User className="w-16 h-16 text-white" />
-                  </div>
+                  )}
                 </div>
-                
-                {/* الاسم والـ ID */}
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">{studentData.name}</h1>
-                <p className="text-gray-600 text-lg mb-6">{studentId}</p>
-                
-                {/* Contact Info */}
+
+                {/* Name & ID */}
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">{studentData.full_name}</h1>
+                <p className="text-gray-600 text-lg mb-6">{studentData.student_custom_id}</p>
+
+                {/* Contact */}
                 <div className="flex flex-wrap justify-center gap-8 text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-5 h-5 text-blue-500" />
-                    <span>{studentData.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-5 h-5 text-green-500" />
-                    <span>{studentData.phone}</span>
-                  </div>
+                  {studentData.real_email && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-5 h-5 text-blue-500" />
+                      <span>{studentData.real_email}</span>
+                    </div>
+                  )}
+                  {studentData.phone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-5 h-5 text-green-500" />
+                      <span>{studentData.phone}</span>
+                    </div>
+                  )}
                 </div>
+
+                {/* Enrolled At */}
+                {studentData.enrolled_at && (
+                  <p className="text-sm text-gray-400 mt-4">
+                    Enrolled: {new Date(studentData.enrolled_at).toLocaleDateString('en-US', {
+                      year: 'numeric', month: 'long', day: 'numeric'
+                    })}
+                  </p>
+                )}
               </div>
             </div>
           </motion.div>
@@ -112,87 +103,29 @@ const AccountStudentInstructorView: React.FC = () => {
               <h2 className="text-2xl font-bold text-gray-900">Performance Dashboard</h2>
             </div>
 
-            {/* Stats Cards */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 mb-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="text-center">
                   <div className="text-white/80 text-sm mb-1">Average Score</div>
-                  <div className="text-4xl font-bold text-white">{studentData.avgScore}%</div>
+                  <div className="text-4xl font-bold text-white">—</div>
                 </div>
                 <div className="text-center border-x border-white/20">
                   <div className="text-white/80 text-sm mb-1">Completed Exams</div>
-                  <div className="text-4xl font-bold text-white">{studentData.completedExams}</div>
+                  <div className="text-4xl font-bold text-white">—</div>
                 </div>
                 <div className="text-center">
                   <div className="text-white/80 text-sm mb-1">Attendance Rate</div>
-                  <div className="text-4xl font-bold text-white">92%</div>
+                  <div className="text-4xl font-bold text-white">—</div>
                 </div>
               </div>
             </div>
 
-            {/* Two Column Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Enrolled Classes */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <BookOpen className="w-5 h-5 text-blue-600" />
-                  <h3 className="text-lg font-bold text-gray-900">Enrolled Classes</h3>
-                </div>
-
-                <div className="space-y-3">
-                  {studentData.enrolledClasses.map((course, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 ${course.color} rounded-full`}></div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900 text-sm">{course.name}</h4>
-                          <p className="text-xs text-gray-500">{course.instructor}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-semibold text-blue-600">{course.grade}</div>
-                        <div className="text-xs text-gray-500">{course.progress}%</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Recent Activity */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <TrendingUp className="w-5 h-5 text-blue-600" />
-                  <h3 className="text-lg font-bold text-gray-900">Recent Activity</h3>
-                </div>
-
-                <div className="space-y-3">
-                  {studentData.recentActivity.map((activity, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                    >
-                      <div>
-                        <h4 className="font-semibold text-gray-900 text-sm">{activity.exam}</h4>
-                        <p className="text-xs text-gray-500">{activity.date}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-sm font-semibold ${
-                          activity.score >= 90 ? 'text-green-600' : 
-                          activity.score >= 80 ? 'text-blue-600' : 'text-orange-600'
-                        }`}>
-                          {activity.score}%
-                        </div>
-                        <div className="text-xs text-gray-500">{activity.status}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div className="text-center text-gray-400 py-8">
+              <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>Performance data will be available after exams are completed</p>
             </div>
           </motion.div>
+
         </div>
       </div>
     </div>
