@@ -3,179 +3,160 @@ import string
 import os
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from django.contrib.auth.hashers import make_password, check_password as django_check_password
 from django.core.mail import EmailMultiAlternatives
 
-
+# ─── Upload Paths ────────────────────────────────────────────────
 def professor_upload_path(instance, filename):
-    folder_name = f"{instance.first_name}_{instance.last_name}".replace(" ", "_")
+    folder_name = f"{instance.user.first_name}_{instance.user.last_name}".replace(" ", "_")
     return os.path.join('professors', folder_name, filename)
 
+# ─── Base User ───────────────────────────────────────────────────
+class BaseUser(AbstractUser):
+    class Role(models.TextChoices):
+        STUDENT   = 'student',   'Student'  # Use lowercase to match frontend/logic
+        PROFESSOR = 'professor', 'Professor'
 
-# =================================================== STUDENT ===================================================
-class Student(AbstractUser):
-    student_custom_id = models.CharField(
-        max_length=6, unique=True, editable=False,
-        help_text="Unique ID starting with ST followed by 4 digits"
-    )
-    real_email = models.EmailField(unique=True)
-    phone_number = models.CharField(max_length=15)
-    profile_image = models.ImageField(upload_to='profiles/students/', blank=False, null=False)
-    email_sent = models.BooleanField(default=False)
-    otp_code = models.CharField(max_length=6, blank=True, null=True)
-    otp_expiry = models.DateTimeField(blank=True, null=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    email         = models.EmailField(unique=True) # Ensure email is primary
+    role          = models.CharField(max_length=10, choices=Role.choices)
+    phone_number  = models.CharField(max_length=15, blank=True, null=True)
+    profile_image = models.ImageField(upload_to='profiles/', blank=True, null=True)
+    email_sent    = models.BooleanField(default=False)
+    otp_code      = models.CharField(max_length=6, blank=True, null=True)
+    otp_expiry    = models.DateTimeField(blank=True, null=True)
+    updated_at    = models.DateTimeField(auto_now=True)
+    custom_id     = models.CharField(max_length=10, unique=True, editable=False)
+
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
+
+    class Meta:
+        db_table = 'base_users'
 
     def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        raw_password = getattr(self, '_raw_password', None)
+        # 1. Generate custom ID automatically if not provided
+        if not self.custom_id:
+            # Fix: Ensure we check against the actual Role enum values
+            prefix = 'ST' if self.role == self.Role.STUDENT else 'DR'
+            self._generate_custom_id(prefix)
 
-        if not self.student_custom_id:
-            while True:
-                random_digits = ''.join(random.choices(string.digits, k=4))
-                new_id = f"ST{random_digits}"
-                if not Student.objects.filter(student_custom_id=new_id).exists():
-                    self.student_custom_id = new_id
-                    break
-
+        # 2. Generate username automatically if not provided
         if not self.username:
-            base_username = f"{self.first_name}{self.last_name}".lower().replace(" ", "")
-            username = base_username
-            counter = 1
-            while Student.objects.filter(username=username).exists():
-                username = f"{base_username}{counter}"
-                counter += 1
-            self.username = username
-
-        # ✅ الـ email بيبقى نفس الـ real_email
-        self.email = self.real_email
-        if is_new and self.password:
-            if not self.password.startswith(('pbkdf2_', 'bcrypt', 'argon2')):
-                if not raw_password:
-                    raw_password = self.password
-                self.password = make_password(self.password)
+            self._generate_username()
+        
+        # 3. Handle email/username sync
+        if self.email and not self.username:
+            self.username = self.email
 
         super().save(*args, **kwargs)
 
-        if is_new and not self.email_sent:
-            self.send_welcome_email(raw_password)
+    def _generate_custom_id(self, prefix):
+        while True:
+            candidate = f"{prefix}{''.join(random.choices(string.digits, k=4))}"
+            if not BaseUser.objects.filter(custom_id=candidate).exists():
+                self.custom_id = candidate
+                break
+
+    def _generate_username(self):
+        # Fallback to email if name is missing, otherwise use name
+        base = f"{self.first_name}{self.last_name}".lower().replace(" ", "")
+        if not base and self.email:
+            base = self.email.split('@')[0]
+        if not base: 
+            base = "user"
+            
+        username, counter = base, 1
+        while BaseUser.objects.filter(username=username).exists():
+            username = f"{base}{counter}"
+            counter += 1
+        self.username = username
+
+    def __str__(self):
+        return f"{self.custom_id} - {self.get_full_name()}"
+
+
+# ─── Shared email helper ─────────────────────────────────────────
+def _send_email(subject, text_content, html_content, to_email):
+    try:
+        msg = EmailMultiAlternatives(subject, text_content, None, [to_email])
+        msg.attach_alternative(html_content, "text/html")
+        msg.send()
+    except Exception as e:
+        print(f"SMTP Error: {e}")
+
+
+# ─── Student Profile ─────────────────────────────────────────────
+class StudentProfile(models.Model):
+    user = models.OneToOneField(
+        BaseUser, on_delete=models.CASCADE,
+        related_name='student_profile',
+        limit_choices_to={'role': 'student'}
+    )
+
+    class Meta:
+        db_table = 'student_profiles'
+        verbose_name = 'Student'
+        verbose_name_plural = 'Students'
 
     def send_welcome_email(self, raw_password=None):
+        u = self.user
         subject = 'Welcome to ExamGuard — Your Academic Account is Ready'
-        password_display = raw_password if raw_password else "[Your provided password]"
+        password_display = raw_password or "[Your provided password]"
 
         html_content = f"""
         <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: auto;">
-            <p>Dear <strong>{self.first_name} {self.last_name}</strong>,</p>
+            <p>Dear <strong>{u.first_name} {u.last_name}</strong>,</p>
             <p>Welcome to <strong>ExamGuard</strong>!</p>
             <p>
-                🆔 <strong>Student ID:</strong> {self.student_custom_id}<br>
+                🆔 <strong>Student ID:</strong> {u.custom_id}<br>
                 🔑 <strong>Password:</strong> {password_display}
             </p>
             <p><strong>⚠️ Important:</strong> Please change your password after your first login.</p>
-            <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 24px 0;">
-            <p style="color: #555; font-size: 13px;">
-                Best regards,<br>
-                <strong>The ExamGuard Team</strong>
-            </p>
-        </div>
-        """
+            <hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0;">
+            <p style="color:#555;font-size:13px;">Best regards,<br><strong>The ExamGuard Team</strong></p>
+        </div>"""
 
-        text_content = f"Dear {self.first_name} {self.last_name},\n\nStudent ID: {self.student_custom_id}\nPassword: {password_display}"
-
-        try:
-            msg = EmailMultiAlternatives(subject, text_content, None, [self.real_email])
-            msg.attach_alternative(html_content, "text/html")
-            msg.send()
-            Student.objects.filter(pk=self.pk).update(email_sent=True)
-        except Exception as e:
-            print(f"SMTP Error (Student): {e}")
-
-    class Meta:
-        db_table = 'students'
-        verbose_name = 'Student'
-        verbose_name_plural = 'Students'
-        ordering = ['-date_joined']
+        text_content = f"Dear {u.first_name} {u.last_name},\n\nStudent ID: {u.custom_id}\nPassword: {password_display}"
+        
+        # Fixed: Use u.email instead of old fields
+        _send_email(subject, text_content, html_content, u.email)
+        BaseUser.objects.filter(pk=u.pk).update(email_sent=True)
 
     def __str__(self):
-        return f"{self.student_custom_id} - {self.first_name} {self.last_name}"
-# =================================================== PROFESSOR ===================================================
-class Professor(models.Model):
-    professor_custom_id = models.CharField(
-        max_length=6, unique=True, editable=False,
-        help_text="Unique ID starting with DR followed by 4 digits"
+        return f"Student — {self.user}"
+    
+    
+# ─── Professor Profile ───────────────────────────────────────────
+class ProfessorProfile(models.Model):
+    user = models.OneToOneField(
+        BaseUser, on_delete=models.CASCADE,
+        related_name='professor_profile',
+        limit_choices_to={'role': 'professor'}
     )
-    first_name = models.CharField(max_length=50)
-    last_name = models.CharField(max_length=50)
-    real_email = models.EmailField(unique=True)
-    phone_number = models.CharField(max_length=15)
     identity_card = models.ImageField(upload_to=professor_upload_path)
-    profile_image = models.ImageField(upload_to=professor_upload_path, blank=True, null=True)
-    is_active = models.BooleanField(default=False)
-    password = models.CharField(max_length=255)
-    email_sent = models.BooleanField(default=False)
-    otp_code = models.CharField(max_length=6, blank=True, null=True)
-    otp_expiry = models.DateTimeField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    last_login = models.DateTimeField(null=True, blank=True)
+    is_verified   = models.BooleanField(default=False)
 
-    @property
-    def is_authenticated(self):
-        return True
-
-    def check_password(self, raw_password):
-        return django_check_password(raw_password, self.password)
-
-    def set_password(self, raw_password):
-        self.password = make_password(raw_password)
-        self.save()
-
-    def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        if not self.professor_custom_id:
-            while True:
-                random_digits = ''.join(random.choices(string.digits, k=4))
-                new_id = f"DR{random_digits}"
-                if not Professor.objects.filter(professor_custom_id=new_id).exists():
-                    self.professor_custom_id = new_id
-                    break
-
-        if is_new and self.password:
-            if not self.password.startswith(('pbkdf2_', 'bcrypt', 'argon2')):
-                self.password = make_password(self.password)
-
-        super().save(*args, **kwargs)
-
-        if is_new and not self.email_sent:
-            self.send_review_notification()
+    class Meta:
+        db_table = 'professor_profiles'
+        verbose_name = 'Professor'
+        verbose_name_plural = 'Professors'
 
     def send_review_notification(self):
+        u = self.user
         subject = 'Application Received — ExamGuard Academic Staff Portal'
 
         html_content = f"""
         <div style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 600px; margin: auto;">
-            <p>Dear <strong>Dr. {self.first_name} {self.last_name}</strong>,</p>
+            <p>Dear <strong>Dr. {u.first_name} {u.last_name}</strong>,</p>
             <p>Your application has been received. Status: <strong>PENDING VERIFICATION</strong></p>
-            <p>🆔 <strong>Tracking ID:</strong> {self.professor_custom_id}</p>
+            <p>🆔 <strong>Tracking ID:</strong> {u.custom_id}</p>
             <p>Best regards,<br><strong>The ExamGuard Team</strong></p>
-        </div>
-        """
+        </div>"""
 
-        text_content = f"Dear Dr. {self.first_name} {self.last_name},\n\nTracking ID: {self.professor_custom_id}\nStatus: PENDING VERIFICATION"
-
-        try:
-            msg = EmailMultiAlternatives(subject, text_content, None, [self.real_email])
-            msg.attach_alternative(html_content, "text/html")
-            msg.send()
-            Professor.objects.filter(pk=self.pk).update(email_sent=True)
-        except Exception as e:
-            print(f"SMTP Error (Professor): {e}")
-
-    class Meta:
-        db_table = 'professors'
-        verbose_name = 'Professor'
-        verbose_name_plural = 'Professors'
-        ordering = ['-created_at']
+        text_content = f"Dear Dr. {u.first_name} {u.last_name},\n\nTracking ID: {u.custom_id}\nStatus: PENDING VERIFICATION"
+        
+        # Fixed: Use u.email
+        _send_email(subject, text_content, html_content, u.email)
+        BaseUser.objects.filter(pk=u.pk).update(email_sent=True)
 
     def __str__(self):
-        return f"{self.professor_custom_id} - Dr. {self.first_name} {self.last_name}"
+        return f"Professor — {self.user}"

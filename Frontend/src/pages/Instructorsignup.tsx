@@ -383,8 +383,6 @@
 
 
 
-
-
 import React, { useState } from "react";
 import { ArrowLeft, Upload, FileCheck, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -437,7 +435,6 @@ export default function ProfessorSignup() {
         return;
       }
 
-      // ✅ عمل Preview
       const previewUrl = URL.createObjectURL(file);
       if (field === "profileImage") setProfilePreview(previewUrl);
       if (field === "identityCard") setIdentityPreview(previewUrl);
@@ -460,7 +457,7 @@ export default function ProfessorSignup() {
     else if (formData.password.length < 6) newErrors.password = "Password must be at least 6 characters.";
     if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords do not match.";
     if (!formData.profileImage) newErrors.profileImage = "Profile photo is required.";
-    if (!formData.identityCard) newErrors.identityCard = "Identity card image is required for verification.";
+    if (!formData.identityCard) newErrors.identityCard = "Identity card image is required.";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -473,11 +470,13 @@ export default function ProfessorSignup() {
     setServerError("");
 
     const data = new FormData();
+    // ✅ Updated keys to match Django BaseUser & ProfessorProfile
     data.append("first_name", formData.firstName);
     data.append("last_name", formData.lastName);
-    data.append("real_email", formData.email);
+    data.append("email", formData.email); // Changed from real_email
     data.append("phone_number", formData.phone);
     data.append("password", formData.password);
+    
     if (formData.profileImage) data.append("profile_image", formData.profileImage);
     if (formData.identityCard) data.append("identity_card", formData.identityCard);
 
@@ -489,9 +488,15 @@ export default function ProfessorSignup() {
     } catch (err: unknown) {
       const axiosError = err as AxiosError<DjangoErrorData>;
       const errorData = axiosError.response?.data;
-      setServerError(
-        errorData ? Object.values(errorData)[0][0] : "Registration failed. Try again."
-      );
+      
+      // Better error parsing for Django Rest Framework
+      if (errorData) {
+        const firstKey = Object.keys(errorData)[0];
+        const errorMessage = errorData[firstKey][0];
+        setServerError(`${firstKey.replace('_', ' ')}: ${errorMessage}`);
+      } else {
+        setServerError("Registration failed. Try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -505,10 +510,8 @@ export default function ProfessorSignup() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
             className="bg-white rounded-2xl shadow-xl p-10 max-w-lg w-full text-center"
           >
-            {/* صورة البروفايل لو متحملة */}
             {profilePreview ? (
               <img src={profilePreview} alt="Profile" className="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-4 border-green-200 shadow" />
             ) : (
@@ -516,22 +519,18 @@ export default function ProfessorSignup() {
                 <CheckCircle className="w-10 h-10 text-green-500" />
               </div>
             )}
-
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Application Submitted!</h2>
             <p className="text-gray-500 mb-6">
-              Your account is currently <strong>under review</strong> by our administration team.
-              You will receive a confirmation email within <strong>24–48 hours</strong> once approved.
+              Your account is currently <strong>under review</strong>.
+              Approval usually takes <strong>24–48 hours</strong>.
             </p>
-
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-left mb-6 space-y-2 text-sm text-gray-600">
-              <p>📧 <strong>Email sent to:</strong> {formData.email}</p>
+              <p>📧 <strong>Email:</strong> {formData.email}</p>
               <p>⚖️ <strong>Status:</strong> Pending Verification</p>
-              <p>⏱️ <strong>Review time:</strong> 24–48 hours</p>
             </div>
-
             <button
               onClick={() => navigate("/Login")}
-              className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-md"
+              className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
             >
               Go to Login
             </button>
@@ -544,18 +543,14 @@ export default function ProfessorSignup() {
   return (
     <div className="bg-background px-4 py-8 md:p-20">
       <Header hideSignup={true} />
-
       <div className="min-h-screen bg-background px-4 py-6 md:px-8">
         <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-8">
-
           <Link to="/Signup" className="flex items-center gap-2 text-gray-600 mb-6 hover:text-gray-800">
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back to role selection</span>
           </Link>
 
           <div className="flex flex-col items-center">
-
-            {/* ✅ Avatar — بيتغير لما يرفع صورة */}
             <div className="w-28 h-28 md:w-40 md:h-40 rounded-full bg-blue-200 flex items-center justify-center mb-4 shadow-lg overflow-hidden">
               <img
                 src={profilePreview || "/images/ilogin.png"}
@@ -564,7 +559,7 @@ export default function ProfessorSignup() {
               />
             </div>
 
-            <h1 className="text-2xl md:text-3xl font-bold text-primary mb-1 text-center">LET'S GET STARTED</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-primary mb-1 text-center uppercase">Let's Get Started</h1>
             <p className="text-primary font-semibold mb-6 md:mb-8 text-center">PROFESSOR SIGN UP</p>
 
             <AnimatePresence>
@@ -582,96 +577,89 @@ export default function ProfessorSignup() {
 
             <div className="w-full max-w-2xl">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-
                 <div>
-                  <label className="block text-left text-sm text-gray-600 mb-1">First name <span className="text-red-500">*</span></label>
+                  <label className="block text-sm text-gray-600 mb-1 text-left">First name <span className="text-red-500">*</span></label>
                   <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="John"
                     className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${errors.firstName ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
-                  {errors.firstName && <p className="text-red-500 text-sm mt-1 text-left">{errors.firstName}</p>}
+                  {errors.firstName && <p className="text-red-500 text-xs mt-1 text-left">{errors.firstName}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-left text-sm text-gray-600 mb-1">Last name <span className="text-red-500">*</span></label>
+                  <label className="block text-sm text-gray-600 mb-1 text-left">Last name <span className="text-red-500">*</span></label>
                   <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Doe"
                     className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${errors.lastName ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
-                  {errors.lastName && <p className="text-red-500 text-sm mt-1 text-left">{errors.lastName}</p>}
+                  {errors.lastName && <p className="text-red-500 text-xs mt-1 text-left">{errors.lastName}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-left text-sm text-gray-600 mb-1">Email <span className="text-red-500">*</span></label>
+                  <label className="block text-sm text-gray-600 mb-1 text-left">Email <span className="text-red-500">*</span></label>
                   <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="example@mail.com"
                     className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${errors.email ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
-                  {errors.email && <p className="text-red-500 text-sm mt-1 text-left">{errors.email}</p>}
+                  {errors.email && <p className="text-red-500 text-xs mt-1 text-left">{errors.email}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-left text-sm text-gray-600 mb-1">Phone number <span className="text-red-500">*</span></label>
+                  <label className="block text-sm text-gray-600 mb-1 text-left">Phone number <span className="text-red-500">*</span></label>
                   <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="012 3456 789"
                     className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${errors.phone ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
-                  {errors.phone && <p className="text-red-500 text-sm mt-1 text-left">{errors.phone}</p>}
+                  {errors.phone && <p className="text-red-500 text-xs mt-1 text-left">{errors.phone}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-left text-sm text-gray-600 mb-1">Password <span className="text-red-500">*</span></label>
+                  <label className="block text-sm text-gray-600 mb-1 text-left">Password <span className="text-red-500">*</span></label>
                   <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="••••••••"
                     className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${errors.password ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
-                  {errors.password && <p className="text-red-500 text-sm mt-1 text-left">{errors.password}</p>}
+                  {errors.password && <p className="text-red-500 text-xs mt-1 text-left">{errors.password}</p>}
                 </div>
 
                 <div>
-                  <label className="block text-left text-sm text-gray-600 mb-1">Confirm Password <span className="text-red-500">*</span></label>
+                  <label className="block text-sm text-gray-600 mb-1 text-left">Confirm Password <span className="text-red-500">*</span></label>
                   <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} placeholder="••••••••"
                     className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 ${errors.confirmPassword ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
-                  {errors.confirmPassword && <p className="text-red-500 text-sm mt-1 text-left">{errors.confirmPassword}</p>}
+                  {errors.confirmPassword && <p className="text-red-500 text-xs mt-1 text-left">{errors.confirmPassword}</p>}
                 </div>
-
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-
-                {/* Profile Image Upload */}
+                {/* Profile Image */}
                 <div>
-                  <label className="block text-left text-sm text-gray-600 mb-2">Upload Profile Image <span className="text-red-500">*</span></label>
+                  <label className="block text-left text-sm text-gray-600 mb-2">Profile Image <span className="text-red-500">*</span></label>
                   <label className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center bg-white hover:border-blue-400 transition cursor-pointer flex flex-col items-center justify-center min-h-[140px]">
                     <Upload className="w-8 h-8 text-blue-500 mb-2" />
-                    <span className="text-sm text-gray-600">
-                      {formData.profileImage ? formData.profileImage.name : "Click or drag and drop"}
+                    <span className="text-xs text-gray-600 truncate max-w-[150px]">
+                      {formData.profileImage ? formData.profileImage.name : "Choose File"}
                     </span>
-                    <span className="text-xs text-gray-400">PNG, JPG (max. 5MB)</span>
-                    <input type="file" accept="image/png, image/jpeg, image/jpg" className="hidden" onChange={(e) => handleFileUpload(e, "profileImage")} />
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, "profileImage")} />
                   </label>
-                  {errors.profileImage && <p className="text-red-500 text-sm mt-1 text-left">{errors.profileImage}</p>}
+                  {errors.profileImage && <p className="text-red-500 text-xs mt-1 text-left">{errors.profileImage}</p>}
                 </div>
 
-                {/* Identity Card Upload */}
+                {/* Identity Card */}
                 <div>
-                  <label className="block text-left text-sm text-gray-600 mb-2">Faculty ID (Karnieh) <span className="text-red-500">*</span></label>
+                  <label className="block text-left text-sm text-gray-600 mb-2">Faculty ID <span className="text-red-500">*</span></label>
                   <label className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center bg-white hover:border-blue-400 transition cursor-pointer flex flex-col items-center justify-center min-h-[140px]">
                     <FileCheck className="w-8 h-8 text-blue-500 mb-2" />
-                    <span className="text-sm text-gray-600">
-                      {formData.identityCard ? formData.identityCard.name : "Click or drag and drop"}
+                    <span className="text-xs text-gray-600 truncate max-w-[150px]">
+                      {formData.identityCard ? formData.identityCard.name : "Choose File"}
                     </span>
-                    <span className="text-xs text-gray-400">PNG, JPG (max. 5MB)</span>
-                    <input type="file" accept="image/png, image/jpeg, image/jpg" className="hidden" onChange={(e) => handleFileUpload(e, "identityCard")} />
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, "identityCard")} />
                   </label>
-                  {errors.identityCard && <p className="text-red-500 text-sm mt-1 text-left">{errors.identityCard}</p>}
+                  {errors.identityCard && <p className="text-red-500 text-xs mt-1 text-left">{errors.identityCard}</p>}
                 </div>
-
               </div>
 
               <button
                 onClick={handleSubmit}
                 disabled={loading}
-                className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-md disabled:opacity-60"
               >
-                {loading ? "Processing..." : "Sign Up"}
+                {loading ? "Creating Account..." : "Sign Up"}
               </button>
 
               <p className="text-center mt-4 text-sm text-gray-600">
-                <span className="text-blue-500">Already Have An Account?</span>{" "}
-                <Link to="/Login" className="text-gray-800 font-semibold hover:text-blue-600">Sign In</Link>
+                Already Have An Account?{" "}
+                <Link to="/Login" className="text-gray-800 font-semibold hover:text-blue-600 underline">Sign In</Link>
               </p>
-
             </div>
           </div>
         </div>

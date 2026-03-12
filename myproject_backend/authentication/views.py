@@ -8,57 +8,47 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import authenticate
 
 from .serializers import StudentRegisterSerializer, ProfessorRegisterSerializer
-from .models import Student, Professor
+from .models import BaseUser
 
-
-# ============================================================
-# STUDENT REGISTER
-# ============================================================
+# ─── Student Register ─────────────────────────────────────────────
 class StudentRegisterView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request):
         serializer = StudentRegisterSerializer(data=request.data)
         if serializer.is_valid():
-            student = serializer.save()
+            user = serializer.save()
             return Response({
                 "message": "Student registered successfully!",
                 "data": {
-                    "student_id": student.student_custom_id,
-                    "username": student.username,
-                    "profile_image": student.profile_image.url if student.profile_image else None
+                    "student_id":    user.custom_id,
+                    "username":      user.username,
+                    "profile_image": user.profile_image.url if user.profile_image else None
                 }
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-# ============================================================
-# PROFESSOR REGISTER
-# ============================================================
+# ─── Professor Register ───────────────────────────────────────────
 class ProfessorRegisterView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request):
         serializer = ProfessorRegisterSerializer(data=request.data)
         if serializer.is_valid():
-            professor = serializer.save()
+            user = serializer.save()
             return Response({
                 "message": "Application submitted! Your account is under review.",
                 "data": {
-                    "professor_id": professor.professor_custom_id,
-                    "full_name": f"{professor.first_name} {professor.last_name}",
-                    "profile_image": professor.profile_image.url if professor.profile_image else None
+                    "professor_id":  user.custom_id,
+                    "full_name":     user.get_full_name(),
+                    "profile_image": user.profile_image.url if user.profile_image else None
                 }
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-# ============================================================
-# LOGIN
-# ============================================================
+# ─── Login ────────────────────────────────────────────────────────
 class LoginView(APIView):
     def post(self, request):
         email    = request.data.get("email", "").strip()
@@ -67,91 +57,55 @@ class LoginView(APIView):
         if not email or not password:
             return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ------- Student -->> platform email -------
-        student = None
-        try:
-           student = Student.objects.get(real_email=email)
-        except Student.DoesNotExist:
-            pass
+        # Updated to use 'email'
+        user = BaseUser.objects.filter(email=email).first()
 
-        if student is not None:
-            if not student.check_password(password):
-                return Response({"detail": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
-            if not student.is_active:
-                return Response({"detail": "Account is inactive."}, status=status.HTTP_403_FORBIDDEN)
-            refresh = RefreshToken.for_user(student)
-            return Response({
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-                "user_role": "student",
-                "name": f"{student.first_name} {student.last_name}",
-                "student_id": student.student_custom_id,
-            }, status=status.HTTP_200_OK)
+        if not user or not user.check_password(password):
+            return Response({"detail": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # ------- Professor -->> real_email -------
-        professor = None
-        try:
-            professor = Professor.objects.get(real_email=email)
-        except Professor.DoesNotExist:
-            pass
-
-        if professor is not None:
-            from django.contrib.auth.hashers import check_password
-            if not check_password(password, professor.password):
-                return Response({"detail": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
-            if not professor.is_active:
+        if not user.is_active:
+            if user.role == BaseUser.Role.PROFESSOR:
                 return Response({"detail": "Your account is still under review by the administration."}, status=status.HTTP_403_FORBIDDEN)
-            refresh = RefreshToken()
-            refresh["professor_id"] = professor.professor_custom_id
-            refresh["user_role"]    = "professor"
-            refresh["name"]         = f"{professor.first_name} {professor.last_name}"
-            return Response({
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-                "user_role": "professor",
-                "name": f"{professor.first_name} {professor.last_name}",
-                "professor_id": professor.professor_custom_id,
-            }, status=status.HTTP_200_OK)
+            return Response({"detail": "Account is inactive."}, status=status.HTTP_403_FORBIDDEN)
 
-        return Response({"detail": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            "refresh":   str(refresh),
+            "access":    str(refresh.access_token),
+            "user_role": user.role.lower(),
+            "name":      user.get_full_name(),
+            "id":        user.custom_id,
+        }, status=status.HTTP_200_OK)
 
-
-# ============================================================
-# FORGET PASSWORD
-# ============================================================
+# ─── Forget Password ──────────────────────────────────────────────
 class ForgetPasswordView(APIView):
     def post(self, request):
         email = request.data.get("email", "").strip().lower()
         if not email:
-            return Response({"error": "Personal email is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = Student.objects.filter(real_email=email).first() or \
-               Professor.objects.filter(real_email=email).first()
+        user = BaseUser.objects.filter(email=email).first()
+        if not user:
+            return Response({"error": "This email is not registered."}, status=status.HTTP_404_NOT_FOUND)
 
-        if user:
-            otp = str(random.randint(100000, 999999))
-            user.otp_code   = otp
-            user.otp_expiry = timezone.now() + timedelta(seconds=70)
-            user.save()
+        otp = str(random.randint(100000, 999999))
+        user.otp_code   = otp
+        user.otp_expiry = timezone.now() + timedelta(seconds=70)
+        user.save()
 
-            try:
-                send_mail(
-                    'ExamGuard - Reset Code',
-                    f'Hello {user.first_name},\n\nYour password reset code is: {otp}\nValid for 60 seconds.',
-                    settings.EMAIL_HOST_USER,
-                    [user.real_email],
-                    fail_silently=False,
-                )
-                return Response({"message": "OTP sent to your personal email."}, status=status.HTTP_200_OK)
-            except Exception:
-                return Response({"error": "Failed to send email."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            send_mail(
+                'ExamGuard - Reset Code',
+                f'Hello {user.first_name},\n\nYour password reset code is: {otp}\nValid for 60 seconds.',
+                settings.EMAIL_HOST_USER,
+                [user.email], 
+                fail_silently=False,
+            )
+            return Response({"message": "OTP sent to your email."}, status=status.HTTP_200_OK)
+        except Exception:
+            return Response({"error": "Failed to send email."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({"error": "This email is not registered as a recovery email."}, status=status.HTTP_404_NOT_FOUND)
-
-
-# ============================================================
-# VERIFY OTP
-# ============================================================
+# ─── Verify OTP ───────────────────────────────────────────────────
 class VerifyOtpView(APIView):
     def post(self, request):
         email = request.data.get("email", "").strip().lower()
@@ -160,9 +114,7 @@ class VerifyOtpView(APIView):
         if not email or not otp:
             return Response({"error": "Email and OTP are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = Student.objects.filter(real_email=email, otp_code=otp).first() or \
-               Professor.objects.filter(real_email=email, otp_code=otp).first()
-
+        user = BaseUser.objects.filter(email=email, otp_code=otp).first()
         if not user:
             return Response({"error": "Invalid verification code."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -171,10 +123,7 @@ class VerifyOtpView(APIView):
 
         return Response({"message": "OTP verified successfully."}, status=status.HTTP_200_OK)
 
-
-# ============================================================
-# RESET PASSWORD
-# ============================================================
+# ─── Reset Password ───────────────────────────────────────────────
 class ResetPasswordView(APIView):
     def post(self, request):
         email        = request.data.get("email", "").strip().lower()
@@ -184,9 +133,7 @@ class ResetPasswordView(APIView):
         if not all([email, otp, new_password]):
             return Response({"error": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = Student.objects.filter(real_email=email, otp_code=otp).first() or \
-               Professor.objects.filter(real_email=email, otp_code=otp).first()
-
+        user = BaseUser.objects.filter(email=email, otp_code=otp).first()
         if not user:
             return Response({"error": "Invalid code or email mismatch."}, status=status.HTTP_400_BAD_REQUEST)
 

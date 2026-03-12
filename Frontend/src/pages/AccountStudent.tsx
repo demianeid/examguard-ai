@@ -5,11 +5,12 @@ import { Mail, Phone, Edit, TrendingUp, BookOpen, User, RefreshCw } from "lucide
 import { useNavigate, useLocation } from "react-router-dom";
 
 interface ProfileData {
-  student_id: string;
+  user_role: string;
+  id: string;
   first_name: string;
   last_name: string;
   full_name: string;
-  real_email: string;
+  email: string;
   phone: string;
   username: string;
   profile_image: string | null;
@@ -33,32 +34,18 @@ const AccountStudent: React.FC = () => {
     { name: "Web Development", instructor: "Dr. Omar Ali", progress: 91, color: "bg-blue-600" }
   ];
 
-  // Check if we're returning from settings
   useEffect(() => {
     const fromSettings = location.state?.fromSettings;
-    const updated = location.state?.updated;
-    
     if (fromSettings) {
-      console.log('Returning from settings page');
       setShowRefreshNotice(true);
-      
-      // Hide notice after 3 seconds
-      const timer = setTimeout(() => {
-        setShowRefreshNotice(false);
-      }, 3000);
-      
-      return () => clearTimeout(timer);
+      const timer = setTimeout(() => setShowRefreshNotice(false), 3000);
+      setTimeout(() => clearTimeout(timer), 3000);
     }
-    
-    if (updated) {
-      console.log('Profile was updated, refreshing data');
-    }
-    
-    // Always fetch fresh data when component mounts or when returning from settings
-    fetchProfile();
+    fetchProfile(); // ← always called
   }, [location.state, refreshKey]);
 
   const fetchProfile = async () => {
+    setLoading(true);
     const token = localStorage.getItem('access_token');
 
     if (!token) {
@@ -84,7 +71,6 @@ const AccountStudent: React.FC = () => {
       }
 
       const data = await response.json();
-
       if (response.ok) {
         setProfile(data);
       } else {
@@ -97,18 +83,9 @@ const AccountStudent: React.FC = () => {
     }
   };
 
-  const handleEditProfile = () => {
-    navigate("/settings", { 
-      state: { from: 'student-account' } 
-    });
-  };
+  const handleEditProfile = () => navigate("/settings", { state: { from: 'student-account' } });
+  const handleRefresh = () => { setLoading(true); setRefreshKey(prev => prev + 1); };
 
-  const handleRefresh = () => {
-    setLoading(true);
-    setRefreshKey(prev => prev + 1);
-  };
-
-  // ============ Loading ============
   if (loading) {
     return (
       <div className="w-full min-h-screen bg-[#E8F1FA] flex items-center justify-center">
@@ -120,7 +97,6 @@ const AccountStudent: React.FC = () => {
     );
   }
 
-  // ============ Error ============
   if (error) {
     return (
       <div className="w-full min-h-screen bg-[#E8F1FA] flex items-center justify-center">
@@ -134,7 +110,6 @@ const AccountStudent: React.FC = () => {
     );
   }
 
-  // ============ Main ============
   return (
     <div className="w-full min-h-screen bg-[#E8F1FA]">
       <Header showAccount={true} isRegistered={true} isAccountPage={true} />
@@ -142,7 +117,6 @@ const AccountStudent: React.FC = () => {
       <div className="w-full py-24 px-4">
         <div className="max-w-[800px] mx-auto space-y-6">
 
-          {/* Refresh Notice */}
           {showRefreshNotice && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
@@ -164,8 +138,7 @@ const AccountStudent: React.FC = () => {
           >
             <div className="h-24 bg-gradient-to-r from-blue-500 to-blue-600"></div>
 
-            {/* Edit Profile Button */}
-            <motion.button 
+            <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleEditProfile}
@@ -175,19 +148,16 @@ const AccountStudent: React.FC = () => {
               <span className="text-sm font-semibold">Edit Profile</span>
             </motion.button>
 
-            {/* Refresh Button */}
-            <motion.button 
+            <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleRefresh}
               className="absolute top-6 left-6 flex items-center gap-2 bg-white/90 hover:bg-white text-gray-600 hover:text-gray-700 transition-all px-3 py-2 rounded-lg shadow-md z-10"
-              title="Refresh Profile"
             >
               <RefreshCw className="w-4 h-4" />
             </motion.button>
 
             <div className="relative px-8 pb-8">
-              {/* Avatar */}
               <div className="flex justify-center -mt-16 mb-4">
                 <motion.div
                   whileHover={{ scale: 1.05 }}
@@ -206,29 +176,26 @@ const AccountStudent: React.FC = () => {
                 </motion.div>
               </div>
 
-              {/* Name & ID */}
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-900 mb-1">{profile?.full_name}</h1>
-                <p className="text-gray-500 text-lg">{profile?.student_id}</p>
+                <p className="text-gray-500 text-lg bg-slate-100 inline-block px-4 py-1 rounded-full">
+                  {profile?.id || "—"}
+                </p>
               </div>
 
-              {/* Contact */}
               <div className="flex flex-wrap justify-center gap-6 text-sm">
                 <div className="flex items-center gap-2 text-gray-600">
                   <Mail className="w-5 h-5 text-blue-500" />
-                  <span>{profile?.real_email}</span>
+                  <span>{profile?.email || "—"}</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <Phone className="w-5 h-5 text-blue-500" />
-                  <span>{profile?.phone}</span>
+                  <span>{profile?.phone || "—"}</span>
                 </div>
               </div>
 
-              {/* Last Updated Indicator */}
               <div className="text-center mt-4">
-                <p className="text-xs text-gray-400">
-                  Last updated: {new Date().toLocaleTimeString()}
-                </p>
+                <p className="text-xs text-gray-400">Last updated: {new Date().toLocaleTimeString()}</p>
               </div>
             </div>
           </motion.div>
@@ -258,7 +225,6 @@ const AccountStudent: React.FC = () => {
                   </div>
                 </div>
               </div>
-
               <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
                 <p className="text-sm font-semibold mb-2 opacity-90">Completed Exams</p>
                 <div className="flex items-end gap-3">
@@ -271,7 +237,6 @@ const AccountStudent: React.FC = () => {
               </div>
             </div>
 
-            {/* Enrolled Classes */}
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <BookOpen className="w-5 h-5 text-gray-700" />
@@ -302,7 +267,6 @@ const AccountStudent: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer */}
       <div className="border-t border-[#1d1d1d]/20 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-[#E3F0FE] px-6 pb-4">
         <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">© 2024 ExamGuard. All rights reserved.</p>
         <div className="flex flex-wrap gap-3 justify-center md:justify-end">

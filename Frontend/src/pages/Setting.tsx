@@ -1,35 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { 
-  User, 
-  Lock, 
-  Shield, 
-  Moon, 
-  Globe, 
-  Bell, 
-  Database, 
-  Trash2, 
-  HelpCircle, 
-  MessageCircle, 
-  FileText, 
-  Eye,
-  ChevronRight,
-  ArrowLeft,
-  Settings,
-  Save
+  User, Lock, Shield, Moon, Globe, Bell, Database, Trash2, 
+  HelpCircle, MessageCircle, FileText, Eye, ChevronRight, 
+  ArrowLeft, Settings, Save, CheckCircle
 } from "lucide-react";
 import Header from '../components/Header';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from "framer-motion";
 
 interface ProfileData {
-  student_id?: string;
-  professor_id?: string;
-  instructor_id?: string;
+  id?: string;
   first_name: string;
   last_name: string;
   phone?: string;
   phone_number?: string;
-  real_email?: string;
+  email?: string;
   profile_image?: string | null;
+  user_role?: string;
 }
 
 const SettingsPage: React.FC = () => {
@@ -39,30 +26,21 @@ const SettingsPage: React.FC = () => {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [language, setLanguage] = useState("English");
   const [isSaving, setIsSaving] = useState(false);
-  
-  // Store the full profile data
+  const [showSuccess, setShowSuccess] = useState(false);
+
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  
-  // Form states
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isStudent, setIsStudent] = useState(false);
-  
-  // Track if we're coming from a specific page
   const [returnPath, setReturnPath] = useState<string>('');
 
-  // ============================================
-  // Fetch Profile from API and check return path
-  // ============================================
   useEffect(() => {
-    // Check if we have navigation state
-    if (location.state && location.state.from) {
-      console.log('Coming from:', location.state.from);
-      
+    if (location.state?.from) {
       if (location.state.from === 'student-account') {
         setReturnPath('/account-student');
         setIsStudent(true);
@@ -71,14 +49,13 @@ const SettingsPage: React.FC = () => {
         setIsStudent(false);
       }
     }
-    
     fetchProfile();
   }, [location.state]);
 
   const fetchProfile = async () => {
     const token = localStorage.getItem('access_token');
     if (!token) {
-      setError('No access token found');
+      setFetchError('No access token found');
       setLoading(false);
       return;
     }
@@ -93,74 +70,46 @@ const SettingsPage: React.FC = () => {
       });
 
       if (response.status === 401) {
-        setError('Session expired. Please login again.');
+        setFetchError('Session expired. Please login again.');
         setTimeout(() => navigate('/Login'), 2000);
         return;
       }
 
       const data = await response.json();
-      console.log('Profile data from API:', data);
-      
+
       if (response.ok) {
         setProfile(data);
-        // Set form fields
         setFirstName(data.first_name || "");
         setLastName(data.last_name || "");
         setPhone(data.phone || data.phone_number || "");
-        
-        // Determine if user is student or instructor (if not already set from navigation state)
-        if (!returnPath) {
-          if (data.student_id) {
-            console.log('User is a student');
-            setUserId(data.student_id);
-            setIsStudent(true);
-            setReturnPath('/account-student');
-          } else if (data.professor_id || data.instructor_id) {
-            console.log('User is an instructor');
-            setUserId(data.professor_id || data.instructor_id || "");
-            setIsStudent(false);
-            setReturnPath('/account-instructor');
-          }
+        setUserId(data.id || "");
+
+        if (data.user_role === 'student') {
+          setIsStudent(true);
+          setReturnPath(prev => prev || '/account-student');
         } else {
-          // Set user ID based on role
-          if (isStudent) {
-            setUserId(data.student_id || "");
-          } else {
-            setUserId(data.professor_id || data.instructor_id || "");
-          }
+          setIsStudent(false);
+          setReturnPath(prev => prev || '/account-instructor');
         }
       } else {
-        setError(data.error || 'Failed to load profile');
+        setFetchError(data.error || 'Failed to load profile');
       }
     } catch (err) {
-      console.error('Settings fetch error:', err);
-      setError('Network error. Please check your connection.');
+      setFetchError('Network error. Please check your connection.');
     } finally {
       setLoading(false);
     }
   };
 
-  // ============================================
-  // Save Profile to API
-  // ============================================
- const handleSaveProfile = async () => {
-  if (!firstName.trim()) {
-    setError('First name is required');
-    return;
-  }
-  if (!lastName.trim()) {
-    setError('Last name is required');
-    return;
-  }
+  const handleSaveProfile = async () => {
+    setSaveError(null);
+    if (!firstName.trim()) { setSaveError('First name is required'); return; }
+    if (!lastName.trim())  { setSaveError('Last name is required');  return; }
 
-  const token = localStorage.getItem('access_token');
-  if (!token) {
-    setError('No access token found');
-    return;
-  }
+    const token = localStorage.getItem('access_token');
+    if (!token) { setSaveError('No access token found'); return; }
 
-  setError(null);
-  setIsSaving(true);
+    setIsSaving(true);
 
     try {
       const formData = new FormData();
@@ -170,73 +119,33 @@ const SettingsPage: React.FC = () => {
 
       const response = await fetch('http://127.0.0.1:8000/api/auth/profile/update/', {
         method: 'PATCH',
-        headers: { 
-          'Authorization': `Bearer ${token}` 
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
 
       const data = await response.json();
-      
+
       if (response.ok) {
-        console.log('Profile updated successfully');
-        
-        // Navigate back to the appropriate account page with state
-        if (returnPath) {
-          navigate(returnPath, { 
-            state: { 
-              fromSettings: true,
-              updated: true,
-              timestamp: Date.now() 
-            } 
-          });
-        } else {
-          // Fallback if returnPath is not set
-          if (isStudent) {
-            navigate('/account-student', { 
-              state: { fromSettings: true, updated: true } 
-            });
-          } else {
-            navigate('/account-instructor', { 
-              state: { fromSettings: true, updated: true } 
-            });
-          }
-        }
+        setShowSuccess(true);
+        setTimeout(() => {
+          const path = returnPath || (isStudent ? '/account-student' : '/account-instructor');
+          navigate(path, { state: { fromSettings: true, updated: true } });
+        }, 2500);
       } else {
-        console.error("Failed to update profile:", data.error);
-        setError(data.error || 'Failed to update profile');
+        setSaveError(data.error || 'Failed to update profile');
       }
     } catch (err) {
-      console.error("Network error:", err);
-      setError('Network error. Please try again.');
+      setSaveError('Network error. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleBack = () => {
-    // Navigate back to the appropriate account page
-    if (returnPath) {
-      navigate(returnPath, { 
-        state: { fromSettings: true } 
-      });
-    } else {
-      // Fallback if returnPath is not set
-      if (isStudent) {
-        navigate('/account-student', { 
-          state: { fromSettings: true } 
-        });
-      } else {
-        navigate('/account-instructor', { 
-          state: { fromSettings: true } 
-        });
-      }
-    }
+    const path = returnPath || (isStudent ? '/account-student' : '/account-instructor');
+    navigate(path, { state: { fromSettings: true } });
   };
 
-  // ============================================
-  // Loading State
-  // ============================================
   if (loading) {
     return (
       <div className="min-h-screen bg-[#E8F1FA] pt-20 flex items-center justify-center">
@@ -248,18 +157,12 @@ const SettingsPage: React.FC = () => {
     );
   }
 
-  // ============================================
-  // Error State
-  // ============================================
-  if (error) {
+  if (fetchError) {
     return (
       <div className="min-h-screen bg-[#E8F1FA] pt-20 flex items-center justify-center">
         <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
-          <p className="text-red-500 mb-4">{error}</p>
-          <button 
-            onClick={() => navigate('/Login')} 
-            className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600"
-          >
+          <p className="text-red-500 mb-4">{fetchError}</p>
+          <button onClick={() => navigate('/Login')} className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
             Go to Login
           </button>
         </div>
@@ -269,18 +172,36 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#E8F1FA] pt-20 overflow-hidden">
+
+      {/* ✅ Success Alert */}
+      <AnimatePresence>
+        {showSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -60 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -60 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-2xl px-8 py-5 flex items-center gap-4 border border-green-100"
+          >
+            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle className="text-green-500 w-7 h-7" />
+            </div>
+            <div>
+              <p className="font-bold text-gray-800 text-lg">Profile Updated!</p>
+              <p className="text-gray-500 text-sm">Redirecting to your profile...</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Header showAccount={true} isRegistered={true} />
 
       <div className="max-w-3xl mx-auto px-6 py-16">
-        {/* Header with Back Button */}
+
+        {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button 
-                onClick={handleBack} 
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors" 
-                title="Back to Profile"
-              >
+              <button onClick={handleBack} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                 <ArrowLeft className="w-5 h-5 text-slate-600" />
               </button>
               <div className="flex items-center gap-3">
@@ -290,7 +211,6 @@ const SettingsPage: React.FC = () => {
                 <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
               </div>
             </div>
-            {/* Show user type badge */}
             <div className="bg-blue-50 px-3 py-1 rounded-full">
               <span className="text-sm font-medium text-[#3F72B7]">
                 {isStudent ? 'Student Account' : 'Instructor Account'}
@@ -299,7 +219,7 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Profile Information Section */}
+        {/* Profile Information */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-blue-50 rounded-lg">
@@ -309,99 +229,71 @@ const SettingsPage: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            {/* First Name */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">First Name</label>
               <input
-                placeholder="Enter your first name"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Enter your first name" disabled={isSaving}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
-                disabled={isSaving}
               />
             </div>
-
-            {/* Last Name */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Last Name</label>
               <input
-                placeholder="Enter your last name"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+                type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}
+                placeholder="Enter your last name" disabled={isSaving}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
-                disabled={isSaving}
               />
             </div>
-
-            {/* Phone Number */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Phone Number</label>
               <input
-                placeholder="Enter your phone number"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                placeholder="Enter your phone number" disabled={isSaving}
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
-                disabled={isSaving}
               />
             </div>
-
-            {/* ID - readonly */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
                 {isStudent ? 'Student ID' : 'Professor ID'}
               </label>
               <input
-                placeholder="ID"
-                type="text"
-                value={userId}
+                type="text" value={userId} disabled
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500"
-                disabled
               />
             </div>
-
-            {/* Email - readonly */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
               <input
-                placeholder="Email"
-                type="email"
-                value={profile?.real_email || ''}
+                type="email" value={profile?.email || ''} disabled
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500"
-                disabled
               />
               <p className="text-xs text-slate-500 mt-1">Email cannot be changed</p>
             </div>
 
-            {/* Save Button */}
+            {saveError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-red-600 text-sm">{saveError}</p>
+              </div>
+            )}
+
             <button
-              onClick={handleSaveProfile}
-              disabled={isSaving}
+              onClick={handleSaveProfile} disabled={isSaving}
               className="w-full bg-[#3F72B7] hover:bg-[#3565A3] text-white font-semibold py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4"
             >
               {isSaving ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Saving...</span>
-                </>
+                <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div><span>Saving...</span></>
               ) : (
-                <>
-                  <Save className="w-5 h-5" />
-                  <span>Save Changes</span>
-                </>
+                <><Save className="w-5 h-5" /><span>Save Changes</span></>
               )}
             </button>
           </div>
         </div>
 
-        {/* Security Section */}
+        {/* Security */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Shield className="w-5 h-5 text-[#3F72B7]" />
-            </div>
+            <div className="p-2 bg-blue-50 rounded-lg"><Shield className="w-5 h-5 text-[#3F72B7]" /></div>
             <h2 className="text-xl font-bold text-slate-900">Security</h2>
           </div>
           <div className="space-y-4">
@@ -428,12 +320,10 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Preferences Section */}
+        {/* Preferences */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Settings className="w-5 h-5 text-[#3F72B7]" />
-            </div>
+            <div className="p-2 bg-blue-50 rounded-lg"><Settings className="w-5 h-5 text-[#3F72B7]" /></div>
             <h2 className="text-xl font-bold text-slate-900">Preferences</h2>
           </div>
           <div className="space-y-4">
@@ -446,13 +336,7 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  title="Toggle dark mode" 
-                  type="checkbox" 
-                  checked={darkMode} 
-                  onChange={() => setDarkMode(!darkMode)} 
-                  className="sr-only peer" 
-                />
+                <input title="Toggle dark mode" type="checkbox" checked={darkMode} onChange={() => setDarkMode(!darkMode)} className="sr-only peer" />
                 <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F72B7]"></div>
               </label>
             </div>
@@ -478,25 +362,17 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  title="Toggle email notifications" 
-                  type="checkbox" 
-                  checked={emailNotifications} 
-                  onChange={() => setEmailNotifications(!emailNotifications)} 
-                  className="sr-only peer" 
-                />
+                <input title="Toggle email notifications" type="checkbox" checked={emailNotifications} onChange={() => setEmailNotifications(!emailNotifications)} className="sr-only peer" />
                 <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F72B7]"></div>
               </label>
             </div>
           </div>
         </div>
 
-        {/* Data & Privacy Section */}
+        {/* Data & Privacy */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Database className="w-5 h-5 text-[#3F72B7]" />
-            </div>
+            <div className="p-2 bg-blue-50 rounded-lg"><Database className="w-5 h-5 text-[#3F72B7]" /></div>
             <h2 className="text-xl font-bold text-slate-900">Data & Privacy</h2>
           </div>
           <div className="space-y-4">
@@ -523,55 +399,30 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Help & Support Section */}
+        {/* Help & Support */}
         <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-200">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <HelpCircle className="w-5 h-5 text-[#3F72B7]" />
-            </div>
+            <div className="p-2 bg-blue-50 rounded-lg"><HelpCircle className="w-5 h-5 text-[#3F72B7]" /></div>
             <h2 className="text-xl font-bold text-slate-900">Help & Support</h2>
           </div>
           <div className="space-y-4">
-            <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
-              <div className="flex items-center gap-3">
-                <HelpCircle className="w-5 h-5 text-slate-600" />
-                <div className="text-left">
-                  <p className="font-semibold text-slate-900">Help Center</p>
-                  <p className="text-sm text-slate-500">Find answers to common questions</p>
+            {[
+              { icon: HelpCircle, title: "Help Center", sub: "Find answers to common questions" },
+              { icon: MessageCircle, title: "Contact Support", sub: "Get help from our support team" },
+              { icon: FileText, title: "Terms & Conditions", sub: "Read our terms of services" },
+              { icon: Eye, title: "Privacy Policy", sub: "Learn how we protect your data" },
+            ].map(({ icon: Icon, title, sub }, idx) => (
+              <button key={idx} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
+                <div className="flex items-center gap-3">
+                  <Icon className="w-5 h-5 text-slate-600" />
+                  <div className="text-left">
+                    <p className="font-semibold text-slate-900">{title}</p>
+                    <p className="text-sm text-slate-500">{sub}</p>
+                  </div>
                 </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-400" />
-            </button>
-            <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
-              <div className="flex items-center gap-3">
-                <MessageCircle className="w-5 h-5 text-slate-600" />
-                <div className="text-left">
-                  <p className="font-semibold text-slate-900">Contact Support</p>
-                  <p className="text-sm text-slate-500">Get help from our support team</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-400" />
-            </button>
-            <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
-              <div className="flex items-center gap-3">
-                <FileText className="w-5 h-5 text-slate-600" />
-                <div className="text-left">
-                  <p className="font-semibold text-slate-900">Terms & Conditions</p>
-                  <p className="text-sm text-slate-500">Read our terms of services</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-400" />
-            </button>
-            <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
-              <div className="flex items-center gap-3">
-                <Eye className="w-5 h-5 text-slate-600" />
-                <div className="text-left">
-                  <p className="font-semibold text-slate-900">Privacy Policy</p>
-                  <p className="text-sm text-slate-500">Learn how we protect your data</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-400" />
-            </button>
+                <ChevronRight className="w-5 h-5 text-slate-400" />
+              </button>
+            ))}
           </div>
         </div>
       </div>

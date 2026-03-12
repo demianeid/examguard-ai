@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowLeft, Upload } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
@@ -25,6 +25,15 @@ export default function StudentSignup() {
   const [serverError, setServerError] = useState("");
   const navigate = useNavigate();
 
+  // Cleanup object URL to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (formData.profileImage) {
+        URL.revokeObjectURL(URL.createObjectURL(formData.profileImage));
+      }
+    };
+  }, [formData.profileImage]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
@@ -38,7 +47,7 @@ export default function StudentSignup() {
       const validTypes = ["image/png", "image/jpeg", "image/jpg"];
 
       if (!validTypes.includes(file.type)) {
-        setErrors({ ...errors, profileImage: "Invalid file type." });
+        setErrors({ ...errors, profileImage: "Invalid file type. Please use PNG or JPG." });
         return;
       }
       if (file.size > 3 * 1024 * 1024) {
@@ -75,11 +84,14 @@ export default function StudentSignup() {
     setServerError("");
 
     const data = new FormData();
+    // These keys MUST match your Django Serializer fields exactly
     data.append("first_name", formData.firstName);
     data.append("last_name", formData.lastName);
-    data.append("real_email", formData.email);
+    data.append("email", formData.email); // FIXED: Changed from "Email address"
     data.append("phone_number", formData.phone);
     data.append("password", formData.password);
+    data.append("role", "student"); // Good practice to include the role explicitly
+
     if (formData.profileImage) {
       data.append("profile_image", formData.profileImage);
     }
@@ -89,16 +101,17 @@ export default function StudentSignup() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // التوجيه المباشر بدون alert
       navigate("/Login");
     } catch (err: unknown) {
       const axiosError = err as AxiosError<DjangoErrorData>;
       const errorData = axiosError.response?.data;
-      let message = "Registration failed. Try again.";
+      let message = "Registration failed. Please try again.";
 
       if (errorData) {
+        // Extract the first error message from the dictionary
         const firstErrorKey = Object.keys(errorData)[0];
-        message = `${firstErrorKey}: ${errorData[firstErrorKey][0]}`;
+        const errorVal = errorData[firstErrorKey];
+        message = `${firstErrorKey}: ${Array.isArray(errorVal) ? errorVal[0] : errorVal}`;
       }
       setServerError(message);
     } finally {
@@ -126,7 +139,7 @@ export default function StudentSignup() {
               />
             </div>
 
-            <h1 className="text-2xl md:text-3xl font-bold text-primary mb-1 text-center">LET'S GET STARTED</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-primary mb-1 text-center uppercase">Let's Get Started</h1>
             <p className="text-primary font-semibold mb-6 md:mb-8 text-center uppercase">Student Sign Up</p>
 
             {serverError && (
@@ -181,7 +194,7 @@ export default function StudentSignup() {
               </div>
 
               <div className="mb-6">
-                <label className="block text-left text-sm text-gray-600 mb-2 font-medium text-left">Upload Profile Image *</label>
+                <label className="block text-left text-sm text-gray-600 mb-2 font-medium">Upload Profile Image *</label>
                 <label className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50 hover:border-blue-400 transition cursor-pointer flex flex-col items-center justify-center">
                   <Upload className="w-8 h-8 text-blue-500 mb-2" />
                   <span className="text-sm text-gray-600 italic">

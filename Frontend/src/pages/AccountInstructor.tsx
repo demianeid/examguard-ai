@@ -1,37 +1,20 @@
-// pages/AccountInstructor.tsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import Header from '../components/Header';
 import { motion } from "framer-motion";
 import { 
-  Mail, 
-  Phone, 
-  Edit, 
-  Users, 
-  TrendingUp, 
-  Video, 
-  AlertCircle, 
-  CheckCircle, 
-  Eye, 
-  BarChart3, 
-  Calendar, 
-  Clock, 
-  ChevronDown, 
-  ChevronUp,
-  User,
-  BookOpen
+  Mail, Phone, Edit, Users, Video, AlertCircle, 
+  Eye, BarChart3, Calendar, Clock, ChevronDown, 
+  ChevronUp, User, BookOpen, RefreshCw
 } from "lucide-react";
 
-// ============================================
-// TYPES
-// ============================================
 interface ProfileData {
   user_role: string;
-  professor_id: string;
+  id: string;
   first_name: string;
   last_name: string;
   full_name: string;
-  real_email: string;
+  email: string;
   phone: string;
   profile_image: string | null;
   is_active: boolean;
@@ -42,21 +25,28 @@ interface ProfileData {
 const AccountInstructor: React.FC = () => {
   const [showAllMonitoring, setShowAllMonitoring] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // ============================================
-  // Profile State
-  // ============================================
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [showRefreshNotice, setShowRefreshNotice] = useState(false);
 
   useEffect(() => {
-    fetchProfile();
-  }, []);
+    const fromSettings = location.state?.fromSettings;
+    if (fromSettings) {
+      setShowRefreshNotice(true);
+      const timer = setTimeout(() => setShowRefreshNotice(false), 3000);
+      setTimeout(() => clearTimeout(timer), 3000);
+    }
+    fetchProfile(); // ← always called
+  }, [location.state, refreshKey]);
 
   const fetchProfile = async () => {
+    setLoading(true);
     const token = localStorage.getItem('access_token');
-    
+
     if (!token) {
       setError('No access token found. Please login again.');
       setLoading(false);
@@ -80,7 +70,6 @@ const AccountInstructor: React.FC = () => {
       }
 
       const data = await response.json();
-      
       if (response.ok) {
         setProfile(data);
       } else {
@@ -93,11 +82,9 @@ const AccountInstructor: React.FC = () => {
     }
   };
 
-  const handleEditProfile = () => {
-    navigate("/settings");
-  };
+  const handleEditProfile = () => navigate("/settings", { state: { from: 'instructor-account' } });
+  const handleRefresh = () => { setLoading(true); setRefreshKey(prev => prev + 1); };
 
-  // Static data (will be replaced with API later)
   const upcomingExams = [
     { exam: "Software Engineering", subject: "Midterm", dateTime: "June 15, 10:00 AM", enrolled: 25 },
     { exam: "Computer Network", subject: "Quiz1", dateTime: "July 02, 08:00 AM", enrolled: 28 }
@@ -127,9 +114,6 @@ const AccountInstructor: React.FC = () => {
     { value: "12%", label: "Avg Suspicion", icon: AlertCircle, color: "bg-[#3F72B7]" }
   ];
 
-  // ============================================
-  // Loading State
-  // ============================================
   if (loading) {
     return (
       <div className="w-full min-h-screen bg-[#E8F1FA] flex items-center justify-center">
@@ -141,18 +125,12 @@ const AccountInstructor: React.FC = () => {
     );
   }
 
-  // ============================================
-  // Error State
-  // ============================================
   if (error) {
     return (
       <div className="w-full min-h-screen bg-[#E8F1FA] flex items-center justify-center">
         <div className="text-center bg-white p-8 rounded-2xl shadow-lg">
           <p className="text-red-500 mb-4">{error}</p>
-          <button 
-            onClick={() => navigate('/Login')} 
-            className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600"
-          >
+          <button onClick={() => navigate('/Login')} className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
             Go to Login
           </button>
         </div>
@@ -163,24 +141,32 @@ const AccountInstructor: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-[#E8F1FA]">
       <Header showAccount={true} isRegistered={true} isAccountPage={true} userType="instructor" />
-      
+
       <div className="w-full py-24 px-4">
         <div className="max-w-[1100px] mx-auto space-y-6">
 
-          {/* ============================================ */}
-          {/* Profile Card - متربط بالـ API               */}
-          {/* ============================================ */}
+          {showRefreshNotice && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3"
+            >
+              <RefreshCw className="w-5 h-5 text-green-600" />
+              <p className="text-green-700">Profile updated successfully!</p>
+            </motion.div>
+          )}
+
+          {/* Profile Card */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200 relative"
           >
-            {/* Header Gradient */}
             <div className="h-24 bg-gradient-to-r from-[#3F72B7] to-[#3DA5FA]"></div>
-            
-            {/* Edit Profile Button */}
-            <motion.button 
+
+            <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleEditProfile}
@@ -190,9 +176,16 @@ const AccountInstructor: React.FC = () => {
               <span className="text-sm font-semibold">Edit Profile</span>
             </motion.button>
 
-            {/* Profile Content */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleRefresh}
+              className="absolute top-6 left-6 flex items-center gap-2 bg-white/90 hover:bg-white text-gray-600 hover:text-gray-700 transition-all px-3 py-2 rounded-lg shadow-md z-10"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </motion.button>
+
             <div className="relative px-8 pb-8">
-              {/* Avatar */}
               <div className="flex justify-center -mt-16 mb-4">
                 <motion.div
                   whileHover={{ scale: 1.05 }}
@@ -208,31 +201,32 @@ const AccountInstructor: React.FC = () => {
                   ) : (
                     <User className="w-16 h-16 text-white" />
                   )}
-                  {/* Active Status Indicator */}
                   <div className="absolute bottom-0 right-0 w-5 h-5 bg-green-500 rounded-full border-2 border-white"></div>
                 </motion.div>
               </div>
 
-              {/* Name & ID - من الـ API */}
               <div className="text-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-900 mb-1">
                   {profile?.full_name || "Loading..."}
                 </h1>
                 <p className="text-gray-500 text-lg bg-slate-100 inline-block px-4 py-1 rounded-full">
-                  {profile?.professor_id || "—"}
+                  {profile?.id || "—"}
                 </p>
               </div>
 
-              {/* Contact Info - من الـ API */}
               <div className="flex flex-wrap justify-center gap-6 text-sm">
                 <div className="flex items-center gap-2 text-gray-600">
                   <Mail className="w-5 h-5 text-[#3F72B7]" />
-                  <span>{profile?.real_email || "—"}</span>
+                  <span>{profile?.email || "—"}</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-600">
                   <Phone className="w-5 h-5 text-[#3F72B7]" />
                   <span>{profile?.phone || "—"}</span>
                 </div>
+              </div>
+
+              <div className="text-center mt-4">
+                <p className="text-xs text-gray-400">Last updated: {new Date().toLocaleTimeString()}</p>
               </div>
             </div>
           </motion.div>
@@ -249,7 +243,6 @@ const AccountInstructor: React.FC = () => {
               <h2 className="text-2xl font-bold text-gray-900">Performance Dashboard</h2>
             </div>
 
-            {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               {stats.map((stat, idx) => (
                 <motion.div
@@ -257,22 +250,18 @@ const AccountInstructor: React.FC = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.3 + idx * 0.1 }}
-                  className={`${stat.color} rounded-xl p-6 text-white shadow-lg relative overflow-hidden`}
+                  className={`${stat.color} rounded-xl p-6 text-white shadow-lg`}
                 >
-                  <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-2">
-                      <stat.icon className="w-8 h-8 opacity-80" />
-                    </div>
-                    <h3 className="text-3xl font-bold mb-1">{stat.value}</h3>
-                    <p className="text-sm opacity-90">{stat.label}</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <stat.icon className="w-8 h-8 opacity-80" />
                   </div>
+                  <h3 className="text-3xl font-bold mb-1">{stat.value}</h3>
+                  <p className="text-sm opacity-90">{stat.label}</p>
                 </motion.div>
               ))}
             </div>
 
-            {/* Main Content Grid */}
             <div className="grid lg:grid-cols-3 gap-6">
-              {/* Upcoming Exams */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -299,8 +288,7 @@ const AccountInstructor: React.FC = () => {
                         </div>
                         <div className="text-right">
                           <p className="text-sm flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {exam.dateTime}
+                            <Clock className="w-3 h-3" />{exam.dateTime}
                           </p>
                           <p className="text-sm text-blue-100">{exam.enrolled} students</p>
                         </div>
@@ -310,7 +298,6 @@ const AccountInstructor: React.FC = () => {
                 </div>
               </motion.div>
 
-              {/* Quick Stats */}
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -318,14 +305,12 @@ const AccountInstructor: React.FC = () => {
                 className="bg-gradient-to-br from-[#3DA5FA] to-[#2B8CDB] rounded-xl p-6 text-white"
               >
                 <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <BookOpen className="w-5 h-5" />
-                  Quick Overview
+                  <BookOpen className="w-5 h-5" />Quick Overview
                 </h3>
                 <div className="space-y-4">
                   <div>
                     <div className="flex justify-between text-sm mb-1">
-                      <span>Total Exams Created</span>
-                      <span className="font-bold">24</span>
+                      <span>Total Exams Created</span><span className="font-bold">24</span>
                     </div>
                     <div className="w-full bg-white/20 rounded-full h-2">
                       <div className="bg-white h-2 rounded-full" style={{ width: '80%' }}></div>
@@ -333,8 +318,7 @@ const AccountInstructor: React.FC = () => {
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-1">
-                      <span>Active Classes</span>
-                      <span className="font-bold">6</span>
+                      <span>Active Classes</span><span className="font-bold">6</span>
                     </div>
                     <div className="w-full bg-white/20 rounded-full h-2">
                       <div className="bg-white h-2 rounded-full" style={{ width: '60%' }}></div>
@@ -348,9 +332,7 @@ const AccountInstructor: React.FC = () => {
               </motion.div>
             </div>
 
-            {/* Bottom Grid */}
             <div className="grid lg:grid-cols-2 gap-6 mt-6">
-              {/* Live Monitoring */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -362,9 +344,7 @@ const AccountInstructor: React.FC = () => {
                     <Eye className="w-5 h-5" />
                     <h3 className="text-xl font-bold">Live Monitoring</h3>
                   </div>
-                  <span className="text-sm bg-white/20 px-2 py-1 rounded-full">
-                    {allLiveMonitoring.length} students
-                  </span>
+                  <span className="text-sm bg-white/20 px-2 py-1 rounded-full">{allLiveMonitoring.length} students</span>
                 </div>
                 <div className="space-y-3">
                   {liveMonitoring.map((student, idx) => (
@@ -384,10 +364,7 @@ const AccountInstructor: React.FC = () => {
                       </div>
                       <p className="text-xs text-blue-100 mb-2">{student.exam}</p>
                       <div className="w-full bg-white/20 rounded-full h-1.5 mb-2">
-                        <div 
-                          className="bg-green-400 h-1.5 rounded-full" 
-                          style={{ width: `${student.progress}%` }}
-                        ></div>
+                        <div className="bg-green-400 h-1.5 rounded-full" style={{ width: `${student.progress}%` }}></div>
                       </div>
                       <div className="flex justify-between text-xs">
                         <span>Progress: {student.progress}%</span>
@@ -401,16 +378,11 @@ const AccountInstructor: React.FC = () => {
                     onClick={() => setShowAllMonitoring(!showAllMonitoring)}
                     className="mt-4 w-full bg-white/20 hover:bg-white/30 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
-                    {showAllMonitoring ? (
-                      <>Show Less <ChevronUp className="w-4 h-4" /></>
-                    ) : (
-                      <>See More ({allLiveMonitoring.length - 3}) <ChevronDown className="w-4 h-4" /></>
-                    )}
+                    {showAllMonitoring ? (<>Show Less <ChevronUp className="w-4 h-4" /></>) : (<>See More ({allLiveMonitoring.length - 3}) <ChevronDown className="w-4 h-4" /></>)}
                   </button>
                 )}
               </motion.div>
 
-              {/* Alert Feed */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -428,9 +400,7 @@ const AccountInstructor: React.FC = () => {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: 0.9 + idx * 0.1 }}
-                      className={`bg-white/10 rounded-lg p-3 border-l-4 ${
-                        alert.type === 'warning' ? 'border-yellow-400' : 'border-blue-300'
-                      } hover:bg-white/20 transition-colors`}
+                      className={`bg-white/10 rounded-lg p-3 border-l-4 ${alert.type === 'warning' ? 'border-yellow-400' : 'border-blue-300'} hover:bg-white/20 transition-colors`}
                     >
                       <div className="flex justify-between items-start mb-1">
                         <p className="font-semibold text-sm">{alert.message}</p>
@@ -446,7 +416,6 @@ const AccountInstructor: React.FC = () => {
         </div>
       </div>
 
-      {/* Footer */}
       <div className="border-t border-[#1d1d1d]/20 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-[#E3F0FE] px-6 pb-4">
         <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">© 2024 ExamGuard. All rights reserved.</p>
         <div className="flex flex-wrap gap-3 justify-center md:justify-end">
