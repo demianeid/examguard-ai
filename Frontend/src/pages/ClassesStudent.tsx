@@ -175,7 +175,6 @@ const ClassesStudent = () => {
   const { classId, tab } = useParams<{ classId?: string; tab?: string }>();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [completedExams, setCompletedExams] = useState<number[]>([]);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>("all");
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
@@ -183,80 +182,7 @@ const ClassesStudent = () => {
   const [selectedNotification, setSelectedNotification] = useState<number | null>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
 
-  const [studentClasses, setStudentClasses] = useState<ClassType[]>([
-    {
-      id: 1,
-      name: "Data Structures & Algorithms",
-      instructor: "Dr. Ahmed Hassan",
-      upcomingExams: 2,
-      progress: 75,
-      lastActivity: "2 days ago",
-      color: "bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]",
-      code: generateClassCode(),
-      subject: "Computer Science",
-      description: "This course covers fundamental data structures and algorithms including arrays, linked lists, trees, graphs, sorting, and searching algorithms."
-    },
-    {
-      id: 2,
-      name: "Database Systems",
-      instructor: "Dr. Sara Mohamed",
-      upcomingExams: 1,
-      progress: 60,
-      lastActivity: "1 day ago",
-      color: "bg-gradient-to-r from-[#0E6AD0] to-[#3A80D2]",
-      code: generateClassCode(),
-      subject: "Computer Science",
-      description: "Introduction to database design, SQL, and data modeling."
-    },
-    {
-      id: 3,
-      name: "Web Development",
-      instructor: "Dr. Omar Ali",
-      upcomingExams: 0,
-      progress: 90,
-      lastActivity: "5 hours ago",
-      color: "bg-gradient-to-r from-[#2C8F8F] to-[#4CAF92]",
-      code: generateClassCode(),
-      subject: "Computer Science",
-      description: "Learn modern web development with HTML, CSS, JavaScript, and React."
-    },
-    {
-      id: 4,
-      name: "Operating Systems",
-      instructor: "Dr. Fatima Ahmed",
-      upcomingExams: 2,
-      progress: 45,
-      lastActivity: "3 days ago",
-      color: "bg-gradient-to-r from-[#00A8B5] to-[#00C2C7]",
-      code: generateClassCode(),
-      subject: "Computer Science",
-      description: "Study of process management, memory management, and file systems."
-    },
-    {
-      id: 5,
-      name: "Computer Networks",
-      instructor: "Dr. Khaled Mohamed",
-      upcomingExams: 1,
-      progress: 70,
-      lastActivity: "12 hours ago",
-      color: "bg-gradient-to-r from-[#1A5F8F] to-[#2E7DA2]",
-      code: generateClassCode(),
-      subject: "Computer Science",
-      description: "Study of network architectures, protocols, and security."
-    },
-    {
-      id: 6,
-      name: "Artificial Intelligence",
-      instructor: "Dr. Noha Ibrahim",
-      upcomingExams: 3,
-      progress: 30,
-      lastActivity: "1 week ago",
-      color: "bg-gradient-to-r from-[#006994] to-[#2196F3]",
-      code: generateClassCode(),
-      subject: "Computer Science",
-      description: "Introduction to AI concepts, machine learning, and neural networks."
-    }
-  ]);
+  const [studentClasses, setStudentClasses] = useState<ClassType[]>([]);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([
     {
@@ -393,10 +319,33 @@ const ClassesStudent = () => {
   const selectedClass = classId ? studentClasses.find(cls => cls.id === parseInt(classId)) : null;
   const activeTab = tab || "overview";
 
-  // Load completed exams from localStorage on component mount
+  const fetchMyClasses = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/api/student/classes/', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch classes');
+      const data = await res.json();
+      const mapped: ClassType[] = data.map((cls: any, index: number) => ({
+        id: cls.id,
+        name: cls.name,
+        instructor: cls.instructor || '',
+        upcomingExams: cls.upcoming_exams ?? 0,
+        progress: cls.progress ?? 0,
+        lastActivity: cls.last_activity || '',
+        color: `bg-gradient-to-r ${oceanGradients[index % oceanGradients.length]}`,
+        code: cls.code || '',
+        subject: cls.subject || '',
+        description: cls.description || '',
+      }));
+      setStudentClasses(mapped);
+    } catch {
+      setStudentClasses([]);
+    }
+  };
+
   useEffect(() => {
-    const completed = JSON.parse(localStorage.getItem('completedExams') || '[]');
-    setCompletedExams(completed);
+    fetchMyClasses();
   }, []);
 
   // Prevent default button submits
@@ -682,21 +631,6 @@ const ClassesStudent = () => {
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
-  // Update exams based on completion status
-  const exams: Exam[] = [
-    { 
-      id: 1, 
-      name: "Midterm Exam", 
-      date: "2025-10-15", 
-      duration: "120 min", 
-      status: completedExams.includes(1) ? "completed" : "upcoming", 
-      score: completedExams.includes(1) ? 88 : null
-    },
-    { id: 2, name: "Quiz 3", date: "2025-10-20", duration: "30 min", status: "upcoming", score: null },
-    { id: 3, name: "Quiz 2", date: "2025-09-28", duration: "30 min", status: "completed", score: 85 },
-    { id: 4, name: "Quiz 1", date: "2025-09-15", duration: "30 min", status: "completed", score: 92 },
-  ];
-
   const handleClassClick = (cls: ClassType) => {
     navigate(`/classes/${cls.id}/overview`);
   };
@@ -720,209 +654,270 @@ const ClassesStudent = () => {
   };
 
   // Tab Components
-  const OverviewTab = ({ class: cls }: { class: ClassType }) => (
-    <div className="space-y-6">
-      <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)}`}>
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-full ${cls.color} flex items-center justify-center text-white shadow-lg`}>
-              <School size={24} />
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-600">Class Code</h3>
-              <div className="flex items-center gap-2">
-                <p className={`text-2xl font-mono font-bold ${getTextColorFromGradient(cls.color)}`}>
-                  {cls.code}
-                </p>
+  const OverviewTab = ({ class: cls }: { class: ClassType }) => {
+    const [nextExam, setNextExam] = useState<Exam | null>(null);
+    const [examLoading, setExamLoading] = useState(true);
+
+    useEffect(() => {
+      const fetchNextExam = async () => {
+        setExamLoading(true);
+        try {
+          const res = await fetch(`http://localhost:8000/api/student/classes/${cls.id}/exams/`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+          });
+          if (!res.ok) throw new Error('Failed');
+          const data = await res.json();
+          const upcoming = data
+            .filter((e: any) => e.status === 'upcoming')
+            .sort((a: any, b: any) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime());
+          if (upcoming.length > 0) {
+            const e = upcoming[0];
+            setNextExam({
+              id: e.id,
+              name: e.title,
+              date: e.start_datetime?.split('T')[0] || '',
+              duration: `${e.duration} min`,
+              status: 'upcoming',
+              score: null,
+            });
+          }
+        } catch {
+          setNextExam(null);
+        } finally {
+          setExamLoading(false);
+        }
+      };
+      fetchNextExam();
+    }, [cls.id]);
+
+    return (
+      <div className="space-y-6">
+        <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)}`}>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-full ${cls.color} flex items-center justify-center text-white shadow-lg`}>
+                <School size={24} />
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-600">Class Code</h3>
+                <div className="flex items-center gap-2">
+                  <p className={`text-2xl font-mono font-bold ${getTextColorFromGradient(cls.color)}`}>
+                    {cls.code}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-          <button
-            onClick={(e) => handleCopyCode(cls.code || '', e)}
-            className={`flex items-center gap-2 bg-white hover:bg-opacity-90 px-4 py-2 rounded-lg border transition-all duration-200 shadow-sm hover:shadow ${getTextColorFromGradient(cls.color)} border-current hover:bg-opacity-10`}
-          >
-            {copiedCode === cls.code ? (
-              <>
-                <Check size={16} className="text-green-600" />
-                <span className="font-medium text-sm">Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy size={16} />
-                <span className="font-medium text-sm">Copy Code</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)} hover:shadow-md transition-shadow`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className={`w-10 h-10 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
-              <Calendar className={getTextColorFromGradient(cls.color)} size={20} />
-            </div>
-            <h3 className="font-semibold text-gray-800">Next Exam</h3>
-          </div>
-          <p className="text-gray-800 font-medium text-lg">Midterm Exam</p>
-          <p className="text-gray-600 text-sm mt-1">October 15, 2025 · 10:00 AM</p>
-          <p className="text-gray-600 text-sm">120 minutes</p>
-          <button 
-            type="button"
-            className={`mt-4 text-sm font-medium flex items-center gap-1 group ${getTextColorFromGradient(cls.color)}`}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleTabChange("exams");
-            }}
-          >
-            View all exams 
-            <span className="group-hover:translate-x-1 transition-transform">→</span>
-          </button>
-        </div>
-
-        <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)} hover:shadow-md transition-shadow`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className={`w-10 h-10 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
-              <Award className={getTextColorFromGradient(cls.color)} size={20} />
-            </div>
-            <h3 className="font-semibold text-gray-800">Overall Grades</h3>
-          </div>
-          <p className={`text-3xl font-bold ${getTextColorFromGradient(cls.color)} mb-1`}>88.5%</p>
-          <p className="text-gray-600 text-sm mb-2">Excellent Performance!</p>
-          <div className="mt-2 text-sm">
-            <p className="text-gray-600">
-              <span className="font-medium">Quiz 1:</span> 92%
-            </p>
-            <p className="text-gray-600">
-              <span className="font-medium">Quiz 2:</span> 85%
-            </p>
-            <p className="text-gray-600">
-              <span className="font-medium">Average:</span> 88.5%
-            </p>
-          </div>
-          <button 
-            type="button"
-            className={`mt-4 text-sm font-medium flex items-center gap-1 group ${getTextColorFromGradient(cls.color)}`}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              handleTabChange("grades");
-            }}
-          >
-            View detailed grades 
-            <span className="group-hover:translate-x-1 transition-transform">→</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-        <div className="flex items-center gap-3 mb-3">
-          <div className={`w-8 h-8 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
-            <BookOpen size={16} className={getTextColorFromGradient(cls.color)} />
-          </div>
-          <h3 className="font-semibold text-gray-800 text-lg">Course Description</h3>
-        </div>
-        <p className="text-gray-600 leading-relaxed">
-          {cls.description || "This course covers fundamental concepts and principles."}
-        </p>
-        {cls.subject && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <span className="text-sm font-medium text-gray-500">Subject:</span>
-            <span className="ml-2 text-gray-800">{cls.subject}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
-        <div className="flex items-center gap-3 mb-3">
-          <div className={`w-8 h-8 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
-            <TrendingUp size={16} className={getTextColorFromGradient(cls.color)} />
-          </div>
-          <h3 className="font-semibold text-gray-800 text-lg">Your Progress</h3>
-        </div>
-        <div className="flex justify-between text-sm mb-2">
-          <span className="text-gray-600">Overall Progress</span>
-          <span className={`font-semibold ${getTextColorFromGradient(cls.color)}`}>{cls.progress}%</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
-          <div
-            className={`bg-gradient-to-r ${cls.color.replace('bg-gradient-to-r ', '')} h-2.5 rounded-full transition-all duration-500`}
-            style={{ width: `${cls.progress}%` }}
-          />
-        </div>
-        <p className="text-gray-500 text-sm mt-3">
-          Last activity: {cls.lastActivity}
-        </p>
-      </div>
-    </div>
-  );
-
-  const ExamsTab = ({ exams }: { exams: Exam[] }) => (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-semibold text-gray-800 text-lg">Your Exams</h3>
-        {selectedClass && (
-          <span className={`px-3 py-1 ${getLightColorFromGradient(selectedClass.color)} ${getTextColorFromGradient(selectedClass.color)} rounded-full text-sm font-medium`}>
-            {selectedClass.upcomingExams} Upcoming
-          </span>
-        )}
-      </div>
-      {exams.map((exam) => (
-        <div key={exam.id} className="bg-white border p-5 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-center">
-            <div>
-              <h4 className="font-semibold text-gray-800 text-lg">{exam.name}</h4>
-              <div className="text-gray-600 text-sm flex gap-4 mt-2">
-                <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
-                  <Calendar size={14} className="text-gray-500" />
-                  {exam.date}
-                </span>
-                <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
-                  <Clock size={14} className="text-gray-500" />
-                  {exam.duration}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {exam.status === "upcoming" ? (
+            <button
+              onClick={(e) => handleCopyCode(cls.code || '', e)}
+              className={`flex items-center gap-2 bg-white hover:bg-opacity-90 px-4 py-2 rounded-lg border transition-all duration-200 shadow-sm hover:shadow ${getTextColorFromGradient(cls.color)} border-current hover:bg-opacity-10`}
+            >
+              {copiedCode === cls.code ? (
                 <>
-                  <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">
-                    Upcoming
-                  </span>
-                  <Link 
-                    to="/StartExam" 
-                    className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-4 py-2 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg`}
-                  >
-                    <Sparkles size={16} />
-                    Start Exam
-                  </Link>
+                  <Check size={16} className="text-green-600" />
+                  <span className="font-medium text-sm">Copied!</span>
                 </>
               ) : (
                 <>
-                  <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">
-                    Completed
-                  </span>
-                  {exam.score && (
-                    <div className="text-right">
-                      <span className="text-sm text-gray-500">Score</span>
-                      <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>{exam.score}%</p>
-                    </div>
-                  )}
+                  <Copy size={16} />
+                  <span className="font-medium text-sm">Copy Code</span>
                 </>
               )}
-            </div>
+            </button>
           </div>
         </div>
-      ))}
-    </div>
-  );
 
-  const GradesTab = ({ exams }: { exams: Exam[] }) => {
-    const completedExamsList = exams.filter((e) => e.status === "completed");
-    const averageScore = completedExamsList.reduce((acc, exam) => acc + (exam.score || 0), 0) / completedExamsList.length || 0;
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)} hover:shadow-md transition-shadow`}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className={`w-10 h-10 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
+                <Calendar className={getTextColorFromGradient(cls.color)} size={20} />
+              </div>
+              <h3 className="font-semibold text-gray-800">Next Exam</h3>
+            </div>
+            {examLoading ? (
+              <div className="w-32 h-4 bg-gray-200 animate-pulse rounded mt-1" />
+            ) : nextExam ? (
+              <>
+                <p className="text-gray-800 font-medium text-lg">{nextExam.name}</p>
+                <p className="text-gray-600 text-sm mt-1">{nextExam.date}</p>
+                <p className="text-gray-600 text-sm">{nextExam.duration}</p>
+              </>
+            ) : (
+              <p className="text-gray-500 text-sm">No upcoming exams</p>
+            )}
+            <button
+              type="button"
+              className={`mt-4 text-sm font-medium flex items-center gap-1 group ${getTextColorFromGradient(cls.color)}`}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTabChange("exams"); }}
+            >
+              View all exams
+              <span className="group-hover:translate-x-1 transition-transform">→</span>
+            </button>
+          </div>
 
+          <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)} hover:shadow-md transition-shadow`}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className={`w-10 h-10 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
+                <Award className={getTextColorFromGradient(cls.color)} size={20} />
+              </div>
+              <h3 className="font-semibold text-gray-800">Overall Grades</h3>
+            </div>
+            <p className="text-gray-500 text-sm">No grades available yet</p>
+            <button
+              type="button"
+              className={`mt-4 text-sm font-medium flex items-center gap-1 group ${getTextColorFromGradient(cls.color)}`}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTabChange("grades"); }}
+            >
+              View detailed grades
+              <span className="group-hover:translate-x-1 transition-transform">→</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-8 h-8 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
+              <BookOpen size={16} className={getTextColorFromGradient(cls.color)} />
+            </div>
+            <h3 className="font-semibold text-gray-800 text-lg">Course Description</h3>
+          </div>
+          <p className="text-gray-600 leading-relaxed">
+            {cls.description || "This course covers fundamental concepts and principles."}
+          </p>
+          {cls.subject && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <span className="text-sm font-medium text-gray-500">Subject:</span>
+              <span className="ml-2 text-gray-800">{cls.subject}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-8 h-8 rounded-full ${getLightColorFromGradient(cls.color)} flex items-center justify-center`}>
+              <TrendingUp size={16} className={getTextColorFromGradient(cls.color)} />
+            </div>
+            <h3 className="font-semibold text-gray-800 text-lg">Your Progress</h3>
+          </div>
+          <div className="flex justify-between text-sm mb-2">
+            <span className="text-gray-600">Overall Progress</span>
+            <span className={`font-semibold ${getTextColorFromGradient(cls.color)}`}>{cls.progress}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div
+              className={`bg-gradient-to-r ${cls.color.replace('bg-gradient-to-r ', '')} h-2.5 rounded-full transition-all duration-500`}
+              style={{ width: `${cls.progress}%` }}
+            />
+          </div>
+          <p className="text-gray-500 text-sm mt-3">
+            Last activity: {cls.lastActivity}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  const ExamsTab = () => {
+    const [exams, setExams] = useState<Exam[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      if (!selectedClass) return;
+      const fetchExams = async () => {
+        setLoading(true);
+        try {
+          const res = await fetch(`http://localhost:8000/api/student/classes/${selectedClass.id}/exams/`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+          });
+          if (!res.ok) throw new Error('Failed');
+          const data = await res.json();
+          setExams(data.map((e: any) => ({
+            id: e.id,
+            name: e.title,
+            date: e.start_datetime?.split('T')[0] || '',
+            duration: `${e.duration} min`,
+            status: e.status,
+            score: e.score ?? null,
+          })));
+        } catch {
+          setExams([]);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchExams();
+    }, [selectedClass?.id]);
+
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="w-12 h-12 border-4 border-[#1A80F6] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-600">Loading exams...</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-800 text-lg">Your Exams</h3>
+        </div>
+        {exams.length === 0 ? (
+          <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+            <FileText size={48} className="text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Exams Yet</h3>
+            <p className="text-gray-500 text-sm">Exams will appear here once your instructor creates them</p>
+          </div>
+        ) : (
+          exams.map((exam) => (
+            <div key={exam.id} className="bg-white border p-5 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h4 className="font-semibold text-gray-800 text-lg">{exam.name}</h4>
+                  <div className="text-gray-600 text-sm flex gap-4 mt-2">
+                    <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
+                      <Calendar size={14} className="text-gray-500" />
+                      {exam.date}
+                    </span>
+                    <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
+                      <Clock size={14} className="text-gray-500" />
+                      {exam.duration}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {exam.status === "upcoming" ? (
+                    <>
+                      <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span>
+                      <Link
+                        to="/StartExam"
+                        className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-4 py-2 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg`}
+                      >
+                        <Sparkles size={16} />
+                        Start Exam
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span>
+                      {exam.score && (
+                        <div className="text-right">
+                          <span className="text-sm text-gray-500">Score</span>
+                          <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>{exam.score}%</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    );
+  };
+
+  const GradesTab = () => {
     return (
       <div className="space-y-6">
         <div className={`${getLightColorFromGradient(selectedClass?.color || '')} p-6 rounded-xl border ${getBorderColorFromGradient(selectedClass?.color || '')} shadow-sm`}>
@@ -932,32 +927,9 @@ const ClassesStudent = () => {
             </div>
             <div>
               <h3 className="text-2xl font-bold text-gray-800">Overall Grade</h3>
-              <p className={`text-4xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>
-                {averageScore.toFixed(1)}%
-              </p>
+              <p className="text-gray-500 mt-1">No grades available yet</p>
             </div>
           </div>
-          <p className="text-gray-600">
-            Based on {completedExamsList.length} completed {completedExamsList.length === 1 ? 'exam' : 'exams'}
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <h4 className="font-semibold text-gray-800 text-lg">Completed Exams</h4>
-          {completedExamsList.map((exam) => (
-            <div key={exam.id} className="bg-white border p-4 rounded-lg flex justify-between items-center hover:shadow-md transition-shadow">
-              <div>
-                <h4 className="font-semibold text-gray-800">{exam.name}</h4>
-                <p className="text-gray-500 text-sm">{exam.date}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>
-                  {exam.score}%
-                </span>
-                <CheckCircle className="text-green-500" size={20} />
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     );
@@ -971,9 +943,9 @@ const ClassesStudent = () => {
       case "overview":
         return <OverviewTab class={selectedClass} />;
       case "exams":
-        return <ExamsTab exams={exams} />;
+        return <ExamsTab />;
       case "grades":
-        return <GradesTab exams={exams} />;
+        return <GradesTab />;
       default:
         return <OverviewTab class={selectedClass} />;
     }
@@ -1540,6 +1512,28 @@ const ClassesStudent = () => {
     </div>
   );
 
+  const handleJoinClass = async () => {
+    const code = searchQuery.trim();
+    if (!code) return;
+    try {
+      const res = await fetch('http://localhost:8000/api/student/classes/join/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.message || 'Failed to join class');
+      alert(`Successfully joined "${data.class_name || data.name || 'the class'}"!`);
+      setSearchQuery('');
+      fetchMyClasses();
+    } catch (err: any) {
+      alert(err.message || 'Failed to join class. Please try again.');
+    }
+  };
+
   return (
     <div className="w-full pt-20 min-h-screen bg-gradient-to-br from-[#E3F0FE] to-[#F0F7FF]">
       <div className="min-h-screen p-6">
@@ -1571,9 +1565,10 @@ const ClassesStudent = () => {
                   placeholder="Enter Class ID to join"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleJoinClass(); }}
                   className="flex-1 border border-gray-300 px-3 sm:px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent text-sm sm:text-base"
                 />
-                <button className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-4 sm:px-6 py-2.5 rounded-lg hover:from-[#0E6AD0] hover:to-[#3A80D2] transition-all duration-200 text-sm sm:text-base whitespace-nowrap shadow-md hover:shadow-lg">
+                <button onClick={handleJoinClass} className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-4 sm:px-6 py-2.5 rounded-lg hover:from-[#0E6AD0] hover:to-[#3A80D2] transition-all duration-200 text-sm sm:text-base whitespace-nowrap shadow-md hover:shadow-lg">
                   Join Class
                 </button>
               </div>

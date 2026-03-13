@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/auth/', include('authentication.urls')),
     path('api/instructors/', include('instructors.urls')), 
     path('api/exam/', include('exam.urls')),
+    path('api/student/', include('student.urls')),
 ]
 
 # Serve media files in development

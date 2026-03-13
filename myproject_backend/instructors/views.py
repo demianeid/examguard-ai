@@ -55,7 +55,6 @@
 
 #         return Response(students_data)
 
-
 from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -98,13 +97,52 @@ class ClassStudentsView(APIView):
         for enrollment in enrollments:
             student = enrollment.student
             students_data.append({
-                'id':            student.id,
-                'student_id':    student.custom_id,
-                'first_name':    student.first_name,
-                'last_name':     student.last_name,
-                'full_name':     student.get_full_name(),
-                'profile_image': request.build_absolute_uri(student.profile_image.url) if student.profile_image else None,
-                'enrolled_at':   enrollment.enrolled_at,
+                'id':                student.id,
+                'student_id':        student.custom_id,
+                'student_custom_id': student.custom_id,
+                'first_name':        student.first_name,
+                'last_name':         student.last_name,
+                'full_name':         student.get_full_name(),
+                'profile_image':     request.build_absolute_uri(student.profile_image.url) if student.profile_image else None,
+                'enrolled_at':       enrollment.enrolled_at,
             })
 
         return Response(students_data)
+
+
+# ✅ ClassStudentsView
+class JoinClassView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        code = request.data.get('code', '').upper().strip()
+        
+        if not code:
+            return Response(
+                {'detail': 'Class code is required.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            cls = Class.objects.get(code=code)
+        except Class.DoesNotExist:
+            return Response(
+                {'detail': 'Class not found.'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if ClassEnrollment.objects.filter(student=request.user, class_enrolled=cls).exists():
+            return Response(
+                {'detail': 'Already enrolled in this class.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        ClassEnrollment.objects.create(student=request.user, class_enrolled=cls)
+        
+        return Response({
+            'detail': 'Joined successfully!',
+            'class_id': cls.id,
+            'class_name': cls.name,
+            'class_code': cls.code,
+            'instructor': cls.instructor.get_full_name(),
+        }, status=status.HTTP_201_CREATED)

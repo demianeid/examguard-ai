@@ -351,6 +351,7 @@ INSTALLED_APPS = [
     'authentication',
     'instructors',
     'exam',
+    'student',
 ]
 
 # ─── Middleware ───────────────────────────────────────────────────
@@ -451,5 +452,5 @@ EMAIL_HOST          = 'smtp.gmail.com'
 EMAIL_PORT          = 587
 EMAIL_USE_TLS       = True
 EMAIL_HOST_USER     ='albertogeorge789@gmail.com'
-EMAIL_HOST_PASSWORD = 'qochlbzlljqlyaqa'
+EMAIL_HOST_PASSWORD = 'knvufjtxodjkkswm'
 DEFAULT_FROM_EMAIL = f'ExamGuard <{EMAIL_HOST_USER}>'

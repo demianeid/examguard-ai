@@ -70,7 +70,8 @@ interface Exam {
 interface Student {
   id: number;
   full_name: string;
-  student_custom_id: string;
+  student_id?: string;
+  student_custom_id?: string;
   profile_image: string | null;
   enrolled_at: string;
 }
@@ -570,12 +571,12 @@ const ClassesInstructor = () => {
               )}
               <div>
                 <h4 className="font-semibold text-gray-800">{student.full_name}</h4>
-                <p className="text-gray-500 text-sm">ID: {student.student_custom_id}</p>
+                <p className="text-gray-500 text-sm">ID: {student.student_id || student.student_custom_id || 'N/A'}</p>
               </div>
             </div>
             <button
               type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewProfile(student.student_custom_id); }}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewProfile(student.student_id || student.student_custom_id || ''); }}
               className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-4 py-2 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 shadow-md hover:shadow-lg`}
             >
               View Profile
