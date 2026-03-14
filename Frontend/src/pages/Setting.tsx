@@ -201,7 +201,9 @@ const SettingsPage: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button onClick={handleBack} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <button
+              title="Back"
+               onClick={handleBack} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                 <ArrowLeft className="w-5 h-5 text-slate-600" />
               </button>
               <div className="flex items-center gap-3">
@@ -258,6 +260,7 @@ const SettingsPage: React.FC = () => {
                 {isStudent ? 'Student ID' : 'Professor ID'}
               </label>
               <input
+              title="Student ID or Professor ID"
                 type="text" value={userId} disabled
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500"
               />
@@ -265,6 +268,7 @@ const SettingsPage: React.FC = () => {
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
               <input
+              title="Email Address"
                 type="email" value={profile?.email || ''} disabled
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500"
               />

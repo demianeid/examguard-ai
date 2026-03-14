@@ -21,7 +21,8 @@ import {
   Check,
   Sparkles,
   ChevronDown,
-  Trash2
+  Trash2,
+  LogOut
 } from "lucide-react";
 
 // --- Types ---
@@ -86,12 +87,12 @@ interface NotificationItem {
 
 // --- Ocean Blue Color Helper Functions (Same as Instructor) ---
 const oceanGradients = [
-  'from-[#1A80F6] to-[#4A90E2]', // Bright Blue
-  'from-[#0E6AD0] to-[#3A80D2]', // Deep Blue
-  'from-[#2C8F8F] to-[#4CAF92]', // Teal
-  'from-[#00A8B5] to-[#00C2C7]', // Cyan
-  'from-[#1A5F8F] to-[#2E7DA2]', // Navy Blue
-  'from-[#006994] to-[#2196F3]'   // Ocean Blue
+  'from-[#1A80F6] to-[#4A90E2]',
+  'from-[#0E6AD0] to-[#3A80D2]',
+  'from-[#2C8F8F] to-[#4CAF92]',
+  'from-[#00A8B5] to-[#00C2C7]',
+  'from-[#1A5F8F] to-[#2E7DA2]',
+  'from-[#006994] to-[#2196F3]'
 ];
 
 const oceanLightGradients = [
@@ -159,7 +160,6 @@ const generateClassCode = (): string => {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const numbers = '0123456789';
   let code = '';
-  
   for (let i = 0; i < 3; i++) {
     code += letters.charAt(Math.floor(Math.random() * letters.length));
   }
@@ -167,7 +167,6 @@ const generateClassCode = (): string => {
   for (let i = 0; i < 4; i++) {
     code += numbers.charAt(Math.floor(Math.random() * numbers.length));
   }
-  
   return code;
 };
 
@@ -183,6 +182,9 @@ const ClassesStudent = () => {
   const notificationRef = useRef<HTMLDivElement>(null);
 
   const [studentClasses, setStudentClasses] = useState<ClassType[]>([]);
+  const [joinMessage, setJoinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [leaveConfirm, setLeaveConfirm] = useState<ClassType | null>(null);
+  const [leaveLoading, setLeaveLoading] = useState(false);
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([
     {
@@ -193,9 +195,9 @@ const ClassesStudent = () => {
       time: "2 hours ago",
       isRead: false,
       priority: "high",
-      metadata: { 
-        classId: 1, 
-        className: "Data Structures & Algorithms", 
+      metadata: {
+        classId: 1,
+        className: "Data Structures & Algorithms",
         examId: 101,
         examTime: "10:00 AM",
         examDate: "2025-10-15",
@@ -210,9 +212,9 @@ const ClassesStudent = () => {
       time: "5 hours ago",
       isRead: false,
       priority: "medium",
-      metadata: { 
-        classId: 1, 
-        className: "Data Structures & Algorithms", 
+      metadata: {
+        classId: 1,
+        className: "Data Structures & Algorithms",
         examId: 102,
         score: 85,
         maxScore: 100,
@@ -228,7 +230,7 @@ const ClassesStudent = () => {
       time: "1 day ago",
       isRead: true,
       priority: "medium",
-      metadata: { 
+      metadata: {
         type: "device_check",
         estimatedTime: "2 min"
       }
@@ -241,8 +243,8 @@ const ClassesStudent = () => {
       time: "2 days ago",
       isRead: true,
       priority: "low",
-      metadata: { 
-        classId: 1, 
+      metadata: {
+        classId: 1,
         className: "Data Structures & Algorithms",
         instructor: "Dr. Ahmed Hassan",
         originalTime: "Tuesday 2-4 PM",
@@ -257,9 +259,9 @@ const ClassesStudent = () => {
       time: "1 day ago",
       isRead: false,
       priority: "high",
-      metadata: { 
-        classId: 2, 
-        className: "Database Systems", 
+      metadata: {
+        classId: 2,
+        className: "Database Systems",
         examId: 203,
         deadline: "11:59 PM",
         submissionsStatus: "not_submitted"
@@ -273,9 +275,9 @@ const ClassesStudent = () => {
       time: "3 days ago",
       isRead: false,
       priority: "medium",
-      metadata: { 
-        classId: 2, 
-        className: "Database Systems", 
+      metadata: {
+        classId: 2,
+        className: "Database Systems",
         assignmentId: 301,
         score: 92,
         maxScore: 100,
@@ -290,9 +292,9 @@ const ClassesStudent = () => {
       time: "1 week ago",
       isRead: true,
       priority: "critical",
-      metadata: { 
-        classId: 1, 
-        className: "Data Structures & Algorithms", 
+      metadata: {
+        classId: 1,
+        className: "Data Structures & Algorithms",
         examId: 102,
         incidentId: 456,
         severity: "warning"
@@ -306,16 +308,15 @@ const ClassesStudent = () => {
       time: "4 days ago",
       isRead: false,
       priority: "medium",
-      metadata: { 
-        classId: 1, 
-        className: "Data Structures & Algorithms", 
+      metadata: {
+        classId: 1,
+        className: "Data Structures & Algorithms",
         resources: 5,
         type: "practice_problems"
       }
     }
   ]);
 
-  // Calculate selectedClass and activeTab BEFORE using them in hooks
   const selectedClass = classId ? studentClasses.find(cls => cls.id === parseInt(classId)) : null;
   const activeTab = tab || "overview";
 
@@ -348,45 +349,37 @@ const ClassesStudent = () => {
     fetchMyClasses();
   }, []);
 
-  // Prevent default button submits
   useEffect(() => {
     const preventButtonSubmit = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const button = target.closest('button');
-      
       if (button && !button.hasAttribute('type')) {
         button.setAttribute('type', 'button');
       }
     };
-
     document.addEventListener('click', preventButtonSubmit, true);
-    
     return () => {
       document.removeEventListener('click', preventButtonSubmit, true);
     };
   }, []);
 
-  // Close notifications when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
-  // Simulate real-time notifications
   useEffect(() => {
     const interval = setInterval(() => {
       const newNotification = getMockNotification();
       if (newNotification) {
         setNotifications(prev => [newNotification, ...prev]);
-        
         if (Notification.permission === 'granted') {
           new Notification('New Notification', {
             body: newNotification.title,
@@ -394,24 +387,20 @@ const ClassesStudent = () => {
             badge: '/notification-badge.png'
           });
         }
-        
         const audio = new Audio('/notification.mp3');
         audio.volume = 0.3;
         audio.play().catch(() => {});
       }
     }, 45000);
-
     return () => clearInterval(interval);
   }, []);
 
-  // Request notification permission
   useEffect(() => {
     if (Notification.permission === 'default') {
       Notification.requestPermission();
     }
   }, []);
 
-  // Update URL when class or tab changes
   useEffect(() => {
     if (classId && !selectedClass) {
       navigate("/classes");
@@ -428,12 +417,7 @@ const ClassesStudent = () => {
         time: "Just now",
         isRead: false,
         priority: "high" as const,
-        metadata: { 
-          classId: 3, 
-          className: "Web Development", 
-          examId: 304,
-          startsIn: "15 min"
-        }
+        metadata: { classId: 3, className: "Web Development", examId: 304, startsIn: "15 min" }
       },
       {
         id: Date.now() + 1,
@@ -443,13 +427,7 @@ const ClassesStudent = () => {
         time: "Just now",
         isRead: false,
         priority: "medium" as const,
-        metadata: { 
-          classId: 4, 
-          className: "Operating Systems", 
-          examId: 405,
-          score: 88,
-          maxScore: 100
-        }
+        metadata: { classId: 4, className: "Operating Systems", examId: 405, score: 88, maxScore: 100 }
       },
       {
         id: Date.now() + 2,
@@ -459,28 +437,22 @@ const ClassesStudent = () => {
         time: "Just now",
         isRead: false,
         priority: "low" as const,
-        metadata: { 
-          maintenanceStart: "2:00 AM",
-          duration: "30 min"
-        }
+        metadata: { maintenanceStart: "2:00 AM", duration: "30 min" }
       }
     ];
-    
-    return Math.random() > 0.8 ? mockNotifications[Math.floor(Math.random() * mockNotifications.length)] as NotificationItem : null;
+    return Math.random() > 0.8
+      ? mockNotifications[Math.floor(Math.random() * mockNotifications.length)] as NotificationItem
+      : null;
   };
 
   const markAsRead = (notificationId: number) => {
-    setNotifications(prev => 
-      prev.map(notif => 
-        notif.id === notificationId ? { ...notif, isRead: true } : notif
-      )
+    setNotifications(prev =>
+      prev.map(notif => notif.id === notificationId ? { ...notif, isRead: true } : notif)
     );
   };
 
   const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notif => ({ ...notif, isRead: true }))
-    );
+    setNotifications(prev => prev.map(notif => ({ ...notif, isRead: true })));
   };
 
   const deleteNotification = (notificationId: number, e: React.MouseEvent) => {
@@ -497,7 +469,6 @@ const ClassesStudent = () => {
 
   const getFilteredNotifications = () => {
     let filtered = notifications;
-    
     if (filterType !== 'all') {
       if (filterType === 'classes') {
         filtered = notifications.filter(n => n.metadata?.classId !== undefined);
@@ -505,20 +476,17 @@ const ClassesStudent = () => {
         filtered = notifications.filter(n => n.type === filterType);
       }
     }
-    
     return showAll ? filtered : filtered.slice(0, 5);
   };
 
-  const getUnreadClassesCount = () => {
-    return notifications.filter(n => !n.isRead && n.metadata?.classId !== undefined).length;
-  };
+  const getUnreadClassesCount = () =>
+    notifications.filter(n => !n.isRead && n.metadata?.classId !== undefined).length;
 
-  const getTotalClassesCount = () => {
-    return notifications.filter(n => n.metadata?.classId !== undefined).length;
-  };
+  const getTotalClassesCount = () =>
+    notifications.filter(n => n.metadata?.classId !== undefined).length;
 
   const getPriorityColor = (priority: string = 'medium') => {
-    switch(priority) {
+    switch (priority) {
       case 'critical': return 'bg-red-500';
       case 'high': return 'bg-orange-500';
       case 'medium': return 'bg-blue-500';
@@ -528,31 +496,22 @@ const ClassesStudent = () => {
   };
 
   const getPriorityBadge = (priority: string = 'medium') => {
-    switch(priority) {
-      case 'critical': 
-        return <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5">
-          <AlertCircle size={10} />
-          Urgent
-        </span>;
-      case 'high': 
-        return <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded-full">
-          Important
-        </span>;
-      case 'medium': 
-        return <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">
-          Update
-        </span>;
-      case 'low': 
-        return <span className="bg-gray-100 text-gray-700 text-[10px] px-2 py-0.5 rounded-full">
-          Info
-        </span>;
+    switch (priority) {
+      case 'critical':
+        return <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5"><AlertCircle size={10} />Urgent</span>;
+      case 'high':
+        return <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded-full">Important</span>;
+      case 'medium':
+        return <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Update</span>;
+      case 'low':
+        return <span className="bg-gray-100 text-gray-700 text-[10px] px-2 py-0.5 rounded-full">Info</span>;
       default: return null;
     }
   };
 
   const getNotificationIcon = (type: string, priority: string = 'medium') => {
     const iconClasses = "p-1.5 rounded-lg";
-    switch(type) {
+    switch (type) {
       case "exam":
         return <div className={`${iconClasses} bg-blue-100`}><Calendar className="text-blue-600" size={18} /></div>;
       case "grade":
@@ -570,35 +529,26 @@ const ClassesStudent = () => {
     markAsRead(notification.id);
     setSelectedNotification(notification.id);
     setShowNotifications(false);
-    
-    // Safe navigation with null checks
+
     if (notification?.metadata?.classId) {
-      // Verify if the class exists
       const classExists = studentClasses.some(cls => cls.id === notification.metadata?.classId);
-      
       if (classExists) {
-        // Navigate to appropriate class tab based on notification type
-        switch(notification.type) {
+        switch (notification.type) {
           case 'exam':
             navigate(`/classes/${notification.metadata.classId}/exams`);
             break;
           case 'grade':
             navigate(`/classes/${notification.metadata.classId}/grades`);
             break;
-          case 'system':
-          case 'announcement':
           default:
             navigate(`/classes/${notification.metadata.classId}/overview`);
             break;
         }
       } else {
-        // Class doesn't exist - navigate to classes list
-        console.error('Class not found');
         navigate('/classes');
       }
     } else {
-      // Handle notifications without classId
-      switch(notification.type) {
+      switch (notification.type) {
         case 'system':
           if (notification.metadata?.type === 'device_check') {
             navigate('/system-check');
@@ -651,6 +601,64 @@ const ClassesStudent = () => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  // ── Join Class ──────────────────────────────────────────────────────────────
+  const handleJoinClass = async () => {
+    const code = searchQuery.trim();
+    if (!code) return;
+    try {
+      const res = await fetch('http://localhost:8000/api/student/classes/join/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.message || 'Failed to join class');
+      setJoinMessage({
+        type: 'success',
+        text: `Successfully joined "${data.class_name || data.name || 'the class'}"!`,
+      });
+      setSearchQuery('');
+      fetchMyClasses();
+    } catch (err: any) {
+      setJoinMessage({
+        type: 'error',
+        text: err.message || 'Failed to join class. Please try again.',
+      });
+    }
+    setTimeout(() => setJoinMessage(null), 4000);
+  };
+
+  // ── Leave Class ──────────────────────────────────────────────────────────────
+  const handleLeaveClass = async (cls: ClassType) => {
+    setLeaveLoading(true);
+    try {
+      const res = await fetch(`http://localhost:8000/api/student/classes/${cls.id}/leave/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || data.message || 'Failed to leave class');
+      }
+      setStudentClasses(prev => prev.filter(c => c.id !== cls.id));
+      setJoinMessage({ type: 'success', text: `You have left "${cls.name}".` });
+      setTimeout(() => setJoinMessage(null), 4000);
+      navigate('/classes');
+    } catch (err: any) {
+      setJoinMessage({ type: 'error', text: err.message || 'Failed to leave class. Please try again.' });
+      setTimeout(() => setJoinMessage(null), 4000);
+    } finally {
+      setLeaveLoading(false);
+      setLeaveConfirm(null);
+    }
   };
 
   // Tab Components
@@ -712,15 +720,9 @@ const ClassesStudent = () => {
               className={`flex items-center gap-2 bg-white hover:bg-opacity-90 px-4 py-2 rounded-lg border transition-all duration-200 shadow-sm hover:shadow ${getTextColorFromGradient(cls.color)} border-current hover:bg-opacity-10`}
             >
               {copiedCode === cls.code ? (
-                <>
-                  <Check size={16} className="text-green-600" />
-                  <span className="font-medium text-sm">Copied!</span>
-                </>
+                <><Check size={16} className="text-green-600" /><span className="font-medium text-sm">Copied!</span></>
               ) : (
-                <>
-                  <Copy size={16} />
-                  <span className="font-medium text-sm">Copy Code</span>
-                </>
+                <><Copy size={16} /><span className="font-medium text-sm">Copy Code</span></>
               )}
             </button>
           </div>
@@ -809,10 +811,80 @@ const ClassesStudent = () => {
               style={{ width: `${cls.progress}%` }}
             />
           </div>
-          <p className="text-gray-500 text-sm mt-3">
-            Last activity: {cls.lastActivity}
-          </p>
+          <p className="text-gray-500 text-sm mt-3">Last activity: {cls.lastActivity}</p>
         </div>
+
+        {/* ── Leave Class ── */}
+        <div className="bg-white p-5 rounded-xl border border-red-100 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-800">Leave Class</h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                You will lose access to all materials and exams. You can rejoin with the class code.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLeaveConfirm(cls)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 transition-all duration-200 text-sm font-medium whitespace-nowrap ml-4"
+            >
+              <LogOut size={15} />
+              Leave Class
+            </button>
+          </div>
+        </div>
+
+        {/* ── Leave Confirmation Modal ── */}
+        <AnimatePresence>
+          {leaveConfirm?.id === cls.id && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+              onClick={() => setLeaveConfirm(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.92, opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm"
+              >
+                <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+                  <LogOut size={26} className="text-red-500" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800 text-center mb-1">Leave Class?</h3>
+                <p className="text-sm text-gray-500 text-center mb-1">You are about to leave</p>
+                <p className="text-sm font-semibold text-gray-800 text-center mb-3">"{cls.name}"</p>
+                <p className="text-xs text-gray-400 text-center mb-6">
+                  You will lose access to all class materials and exams. You can rejoin using the class code.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setLeaveConfirm(null)}
+                    className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={leaveLoading}
+                    onClick={() => handleLeaveClass(cls)}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {leaveLoading
+                      ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <LogOut size={15} />}
+                    {leaveLoading ? 'Leaving...' : 'Leave Class'}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   };
@@ -876,12 +948,10 @@ const ClassesStudent = () => {
                   <h4 className="font-semibold text-gray-800 text-lg">{exam.name}</h4>
                   <div className="text-gray-600 text-sm flex gap-4 mt-2">
                     <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
-                      <Calendar size={14} className="text-gray-500" />
-                      {exam.date}
+                      <Calendar size={14} className="text-gray-500" />{exam.date}
                     </span>
                     <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
-                      <Clock size={14} className="text-gray-500" />
-                      {exam.duration}
+                      <Clock size={14} className="text-gray-500" />{exam.duration}
                     </span>
                   </div>
                 </div>
@@ -893,8 +963,7 @@ const ClassesStudent = () => {
                         to="/StartExam"
                         className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-4 py-2 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg`}
                       >
-                        <Sparkles size={16} />
-                        Start Exam
+                        <Sparkles size={16} />Start Exam
                       </Link>
                     </>
                   ) : (
@@ -917,52 +986,41 @@ const ClassesStudent = () => {
     );
   };
 
-  const GradesTab = () => {
-    return (
-      <div className="space-y-6">
-        <div className={`${getLightColorFromGradient(selectedClass?.color || '')} p-6 rounded-xl border ${getBorderColorFromGradient(selectedClass?.color || '')} shadow-sm`}>
-          <div className="flex items-center gap-4 mb-4">
-            <div className={`w-16 h-16 rounded-full ${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} flex items-center justify-center text-white shadow-lg`}>
-              <Award size={32} />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-gray-800">Overall Grade</h3>
-              <p className="text-gray-500 mt-1">No grades available yet</p>
-            </div>
+  const GradesTab = () => (
+    <div className="space-y-6">
+      <div className={`${getLightColorFromGradient(selectedClass?.color || '')} p-6 rounded-xl border ${getBorderColorFromGradient(selectedClass?.color || '')} shadow-sm`}>
+        <div className="flex items-center gap-4 mb-4">
+          <div className={`w-16 h-16 rounded-full ${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} flex items-center justify-center text-white shadow-lg`}>
+            <Award size={32} />
+          </div>
+          <div>
+            <h3 className="text-2xl font-bold text-gray-800">Overall Grade</h3>
+            <p className="text-gray-500 mt-1">No grades available yet</p>
           </div>
         </div>
       </div>
-    );
-  };
+    </div>
+  );
 
-  // Render tab content based on activeTab
   const renderTabContent = () => {
     if (!selectedClass) return null;
-
     switch (activeTab) {
-      case "overview":
-        return <OverviewTab class={selectedClass} />;
-      case "exams":
-        return <ExamsTab />;
-      case "grades":
-        return <GradesTab />;
-      default:
-        return <OverviewTab class={selectedClass} />;
+      case "overview": return <OverviewTab class={selectedClass} />;
+      case "exams": return <ExamsTab />;
+      case "grades": return <GradesTab />;
+      default: return <OverviewTab class={selectedClass} />;
     }
   };
 
-  // Class Details Component
   const ClassDetails = () => {
     if (!selectedClass) return null;
-
     return (
       <div className="bg-white rounded-xl shadow-lg p-6">
         <div className="flex justify-between items-start mb-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-800">{selectedClass.name}</h2>
             <p className="text-gray-600 mt-1 flex items-center gap-2">
-              <Users size={16} />
-              {selectedClass.instructor}
+              <Users size={16} />{selectedClass.instructor}
             </p>
             <div className="flex items-center gap-2 mt-2">
               <span className={`px-3 py-1 ${getLightColorFromGradient(selectedClass.color)} ${getTextColorFromGradient(selectedClass.color)} rounded-full text-sm font-medium`}>
@@ -970,8 +1028,8 @@ const ClassesStudent = () => {
               </span>
             </div>
           </div>
-          <button 
-            onClick={handleBackToList} 
+          <button
+            onClick={handleBackToList}
             className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2"
           >
             ← Back to Classes
@@ -989,13 +1047,12 @@ const ClassesStudent = () => {
               type="button"
               onClick={() => handleTabChange(id)}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-200 ${
-                activeTab === id 
-                  ? selectedClass.color + ' text-white shadow-md' 
+                activeTab === id
+                  ? selectedClass.color + ' text-white shadow-md'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              <Icon size={18} />
-              {label}
+              <Icon size={18} />{label}
             </button>
           ))}
         </div>
@@ -1005,100 +1062,83 @@ const ClassesStudent = () => {
     );
   };
 
-  // Classes List Component
   const ClassesList = () => (
-    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {studentClasses.map((cls) => (
-        <div
-          key={cls.id}
-          onClick={() => handleClassClick(cls)}
-          className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer transform hover:scale-[1.02]"
-        >
-          <div className={`h-2 ${cls.color}`}></div>
+    <>
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {studentClasses.map((cls) => (
+          <div
+            key={cls.id}
+            onClick={() => handleClassClick(cls)}
+            className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer transform hover:scale-[1.02]"
+          >
+            <div className={`h-2 ${cls.color}`}></div>
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">{cls.name}</h3>
+                  <p className="text-gray-600 text-sm flex items-center gap-2">
+                    <Users size={16} /> {cls.instructor}
+                  </p>
+                  {cls.code && (
+                    <div className="flex items-center gap-2 mt-2 text-gray-600 text-sm bg-gray-50 px-3 py-1.5 rounded-lg">
+                      <School size={14} />
+                      <span className="font-mono font-medium">{cls.code}</span>
+                      <button
+                        onClick={(e) => handleCopyCode(cls.code || '', e)}
+                        className="text-gray-500 hover:text-gray-700 ml-1"
+                        title="Copy class code"
+                      >
+                        {copiedCode === cls.code
+                          ? <Check size={14} className="text-green-600" />
+                          : <Copy size={14} />}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className={`w-12 h-12 rounded-full ${cls.color} flex items-center justify-center text-white shadow-md`}>
+                  <BookOpen size={24} />
+                </div>
+              </div>
 
-          <div className="p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-xl font-bold text-gray-800 mb-2">{cls.name}</h3>
-                <p className="text-gray-600 text-sm flex items-center gap-2">
-                  <Users size={16} /> {cls.instructor}
-                </p>
-                {cls.code && (
-                  <div className="flex items-center gap-2 mt-2 text-gray-600 text-sm bg-gray-50 px-3 py-1.5 rounded-lg">
-                    <School size={14} />
-                    <span className="font-mono font-medium">{cls.code}</span>
-                    <button
-                      onClick={(e) => handleCopyCode(cls.code || '', e)}
-                      className="text-gray-500 hover:text-gray-700 ml-1"
-                      title="Copy class code"
-                    >
-                      {copiedCode === cls.code ? (
-                        <Check size={14} className="text-green-600" />
-                      ) : (
-                        <Copy size={14} />
-                      )}
-                    </button>
-                  </div>
-                )}
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-2 text-gray-600"><FileText size={16} /> Upcoming Exams</span>
+                  <span className={`font-semibold ${getTextColorFromGradient(cls.color)}`}>{cls.upcomingExams}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-2 text-gray-600"><Clock size={16} /> Last Activity</span>
+                  <span className="text-gray-500">{cls.lastActivity}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-2 text-gray-600"><TrendingUp size={16} /> Progress</span>
+                  <span className={`font-semibold ${getTextColorFromGradient(cls.color)}`}>{cls.progress}%</span>
+                </div>
               </div>
-              <div className={`w-12 h-12 rounded-full ${cls.color} flex items-center justify-center text-white shadow-md`}>
-                <BookOpen size={24} />
+
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+                <div
+                  className={`bg-gradient-to-r ${cls.color.replace('bg-gradient-to-r ', '')} h-2 rounded-full transition-all duration-500`}
+                  style={{ width: `${cls.progress}%` }}
+                />
               </div>
+
+              <button className={`w-full ${cls.color} text-white py-2.5 rounded-lg font-semibold ${getHoverGradientFromColor(cls.color)} transition-all duration-200 shadow-md hover:shadow-lg`}>
+                View Details
+              </button>
             </div>
-
-            <div className="space-y-3 mb-4">
-              <div className="flex justify-between items-center">
-                <span className="flex items-center gap-2 text-gray-600">
-                  <FileText size={16} /> Upcoming Exams
-                </span>
-                <span className={`font-semibold ${getTextColorFromGradient(cls.color)}`}>{cls.upcomingExams}</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="flex items-center gap-2 text-gray-600">
-                  <Clock size={16} /> Last Activity
-                </span>
-                <span className="text-gray-500">{cls.lastActivity}</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="flex items-center gap-2 text-gray-600">
-                  <TrendingUp size={16} /> Progress
-                </span>
-                <span className={`font-semibold ${getTextColorFromGradient(cls.color)}`}>{cls.progress}%</span>
-              </div>
-            </div>
-
-            <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
-              <div
-                className={`bg-gradient-to-r ${cls.color.replace('bg-gradient-to-r ', '')} h-2 rounded-full transition-all duration-500`}
-                style={{ width: `${cls.progress}%` }}
-              />
-            </div>
-
-            <button 
-              className={`w-full ${cls.color} text-white py-2.5 rounded-lg font-semibold ${getHoverGradientFromColor(cls.color)} transition-all duration-200 shadow-md hover:shadow-lg`}
-            >
-              View Details
-            </button>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 
-  // Notification Dropdown Component
   const NotificationDropdown = () => (
     <div className="relative" ref={notificationRef}>
-      <button 
-        title="Notifications" 
+      <button
+        title="Notifications"
         type="button"
         className="relative p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 group"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setShowNotifications(!showNotifications);
-        }}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNotifications(!showNotifications); }}
       >
         <Bell size={20} className="sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" />
         {unreadCount > 0 && (
@@ -1130,34 +1170,22 @@ const ClassesStudent = () => {
                   </div>
                   <div>
                     <h3 className="font-semibold text-lg">Notifications</h3>
-                    <p className="text-xs text-blue-100 mt-0.5">
-                      {unreadCount} unread · {notifications.length} total
-                    </p>
+                    <p className="text-xs text-blue-100 mt-0.5">{unreadCount} unread · {notifications.length} total</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {unreadCount > 0 && (
-                    <button 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        markAllAsRead();
-                      }}
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); markAllAsRead(); }}
                       className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-                      title="Mark all as read"
                     >
-                      <Check size={14} />
-                      Mark all read
+                      <Check size={14} />Mark all read
                     </button>
                   )}
-                  <button 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowNotifications(false);
-                    }}
+                  <button
+                  title='close'
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNotifications(false); }}
                     className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
-                    title="Close"
                   >
                     <X size={16} />
                   </button>
@@ -1172,33 +1200,25 @@ const ClassesStudent = () => {
                   { id: 'grade', label: 'Grades' },
                   { id: 'system', label: 'System' },
                   { id: 'announcement', label: 'Announcements' }
-                ].map((tab) => (
+                ].map((tabItem) => (
                   <button
-                    key={tab.id}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setFilterType(tab.id);
-                    }}
-                    className={`
-                      px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-all relative
-                      ${filterType === tab.id 
-                        ? 'bg-white text-[#1A80F6] shadow-md' 
-                        : 'bg-white/20 text-white hover:bg-white/30'
-                      }
-                    `}
+                    key={tabItem.id}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFilterType(tabItem.id); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-all relative ${
+                      filterType === tabItem.id ? 'bg-white text-[#1A80F6] shadow-md' : 'bg-white/20 text-white hover:bg-white/30'
+                    }`}
                   >
                     <span className="flex items-center gap-1.5">
-                      {tab.id === 'classes' && <School size={12} />}
-                      {tab.label}
-                      {tab.id !== 'all' && (
+                      {tabItem.id === 'classes' && <School size={12} />}
+                      {tabItem.label}
+                      {tabItem.id !== 'all' && (
                         <span className="px-1.5 py-0.5 bg-white/30 rounded-full text-[10px]">
-                          {tab.id === 'classes' 
+                          {tabItem.id === 'classes'
                             ? getTotalClassesCount()
-                            : notifications.filter(n => n.type === tab.id).length}
+                            : notifications.filter(n => n.type === tabItem.id).length}
                         </span>
                       )}
-                      {tab.id === 'classes' && getUnreadClassesCount() > 0 && (
+                      {tabItem.id === 'classes' && getUnreadClassesCount() > 0 && (
                         <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-300 rounded-full"></span>
                       )}
                     </span>
@@ -1214,7 +1234,7 @@ const ClassesStudent = () => {
                 </div>
               )}
             </div>
-            
+
             <div className="max-h-[32rem] overflow-y-auto divide-y divide-gray-100">
               {getFilteredNotifications().length > 0 ? (
                 getFilteredNotifications().map((notification, index) => (
@@ -1224,63 +1244,40 @@ const ClassesStudent = () => {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}
                     onClick={() => handleNotificationClick(notification)}
-                    className={`
-                      relative px-5 py-4 hover:bg-gray-50 cursor-pointer transition-all duration-200
-                      ${!notification.isRead ? 'bg-blue-50/50' : ''}
-                      ${selectedNotification === notification.id ? 'bg-blue-100/50' : ''}
-                      ${filterType === 'classes' ? 'border-l-4 border-l-[#1A80F6]' : ''}
-                    `}
+                    className={`relative px-5 py-4 hover:bg-gray-50 cursor-pointer transition-all duration-200 ${!notification.isRead ? 'bg-blue-50/50' : ''} ${selectedNotification === notification.id ? 'bg-blue-100/50' : ''} ${filterType === 'classes' ? 'border-l-4 border-l-[#1A80F6]' : ''}`}
                   >
                     {notification.priority && ['critical', 'high'].includes(notification.priority) && (
                       <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 ${getPriorityColor(notification.priority)} rounded-r-full`}></div>
                     )}
-
                     <div className="flex gap-4">
                       <div className="flex-shrink-0">
-                        {filterType === 'classes' ? (
-                          <div className="p-1.5 rounded-lg bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white">
-                            <School size={18} />
-                          </div>
-                        ) : (
-                          getNotificationIcon(notification.type, notification.priority)
-                        )}
+                        {filterType === 'classes'
+                          ? <div className="p-1.5 rounded-lg bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white"><School size={18} /></div>
+                          : getNotificationIcon(notification.type, notification.priority)}
                       </div>
-
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start gap-2">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-semibold text-gray-900 text-sm">
-                                {notification.title}
-                              </h4>
+                              <h4 className="font-semibold text-gray-900 text-sm">{notification.title}</h4>
                               {!notification.isRead && (
-                                <span className="bg-[#1A80F6] text-white text-[10px] px-2 py-0.5 rounded-full">
-                                  New
-                                </span>
+                                <span className="bg-[#1A80F6] text-white text-[10px] px-2 py-0.5 rounded-full">New</span>
                               )}
                               {getPriorityBadge(notification.priority)}
                             </div>
-                            
-                            <p className="text-gray-600 text-sm mt-1 line-clamp-2">
-                              {notification.content}
-                            </p>
-                            
+                            <p className="text-gray-600 text-sm mt-1 line-clamp-2">{notification.content}</p>
                             {notification.metadata && (
                               <div className="flex items-center gap-2 mt-2 text-xs flex-wrap">
                                 {notification.metadata.className && (
                                   <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <School size={12} />
-                                    {notification.metadata.className}
+                                    <School size={12} />{notification.metadata.className}
                                   </span>
                                 )}
-                                
                                 {notification.type === 'exam' && notification.metadata.examTime && (
                                   <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <Clock size={12} />
-                                    {notification.metadata.examTime}
+                                    <Clock size={12} />{notification.metadata.examTime}
                                   </span>
                                 )}
-                                
                                 {notification.type === 'grade' && notification.metadata.score !== undefined && (
                                   <>
                                     <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
@@ -1293,49 +1290,35 @@ const ClassesStudent = () => {
                                     )}
                                   </>
                                 )}
-                                
                                 {notification.metadata.deadline && (
                                   <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <AlertCircle size={12} />
-                                    Due {notification.metadata.deadline}
+                                    <AlertCircle size={12} />Due {notification.metadata.deadline}
                                   </span>
                                 )}
-                                
                                 {notification.metadata.submissionsStatus === 'not_submitted' && (
-                                  <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                                    Not Submitted
-                                  </span>
+                                  <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Not Submitted</span>
                                 )}
-
                                 {notification.metadata.duration && (
                                   <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <Clock size={12} />
-                                    {notification.metadata.duration}
+                                    <Clock size={12} />{notification.metadata.duration}
                                   </span>
                                 )}
-
                                 {notification.metadata.startsIn && (
                                   <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <Sparkles size={12} />
-                                    Starts in {notification.metadata.startsIn}
+                                    <Sparkles size={12} />Starts in {notification.metadata.startsIn}
                                   </span>
                                 )}
-
                                 {notification.metadata.instructor && (
                                   <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                    <Users size={12} />
-                                    {notification.metadata.instructor}
+                                    <Users size={12} />{notification.metadata.instructor}
                                   </span>
                                 )}
                               </div>
                             )}
                           </div>
-
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            <span className="text-xs text-gray-400 whitespace-nowrap">
-                              {notification.time}
-                            </span>
-                            <button 
+                            <span className="text-xs text-gray-400 whitespace-nowrap">{notification.time}</span>
+                            <button
                               title="Delete notification"
                               type="button"
                               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -1345,68 +1328,39 @@ const ClassesStudent = () => {
                             </button>
                           </div>
                         </div>
-
                         <div className="flex items-center gap-3 mt-2">
                           {!notification.isRead && (
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                markAsRead(notification.id);
-                              }}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); markAsRead(notification.id); }}
                               className="text-xs text-[#1A80F6] hover:text-[#0E6AD0] flex items-center gap-1"
                             >
-                              <Check size={12} />
-                              Mark as read
+                              <Check size={12} />Mark as read
                             </button>
                           )}
-                          
-                          {notification.type === 'exam' && 
-                           notification.metadata?.examId && 
-                           notification.metadata?.startsIn && (
+                          {notification.type === 'exam' && notification.metadata?.examId && notification.metadata?.startsIn && (
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navigate(`/start-exam/${notification.metadata?.examId}`);
-                              }}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/start-exam/${notification.metadata?.examId}`); }}
                               className="text-xs bg-green-100 text-green-700 hover:bg-green-200 px-2 py-1 rounded-lg flex items-center gap-1"
                             >
-                              <Sparkles size={12} />
-                              Start Exam
+                              <Sparkles size={12} />Start Exam
                             </button>
                           )}
-                          
-                          {notification.type === 'grade' && 
-                           notification.metadata?.examId && (
+                          {notification.type === 'grade' && notification.metadata?.examId && (
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navigate(`/exam-results/${notification.metadata?.examId}`);
-                              }}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/exam-results/${notification.metadata?.examId}`); }}
                               className="text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 px-2 py-1 rounded-lg flex items-center gap-1"
                             >
-                              <Award size={12} />
-                              View Feedback
+                              <Award size={12} />View Feedback
                             </button>
                           )}
-
-                          {notification.type === 'system' && 
-                           notification.metadata?.type === 'device_check' && (
+                          {notification.type === 'system' && notification.metadata?.type === 'device_check' && (
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                navigate('/system-check');
-                              }}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate('/system-check'); }}
                               className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded-lg flex items-center gap-1"
                             >
-                              <CheckCircle size={12} />
-                              Check Now
+                              <CheckCircle size={12} />Check Now
                             </button>
                           )}
-
                           {notification.metadata?.classId && (
                             <button
                               onClick={(e) => {
@@ -1414,16 +1368,11 @@ const ClassesStudent = () => {
                                 e.stopPropagation();
                                 setShowNotifications(false);
                                 const classExists = studentClasses.some(cls => cls.id === notification.metadata?.classId);
-                                if (classExists) {
-                                  navigate(`/classes/${notification.metadata?.classId}/overview`);
-                                } else {
-                                  navigate('/classes');
-                                }
+                                navigate(classExists ? `/classes/${notification.metadata?.classId}/overview` : '/classes');
                               }}
                               className="text-xs bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white hover:from-[#0E6AD0] hover:to-[#3A80D2] px-2 py-1 rounded-lg flex items-center gap-1 shadow-sm"
                             >
-                              <School size={12} />
-                              View Class
+                              <School size={12} />View Class
                             </button>
                           )}
                         </div>
@@ -1434,29 +1383,20 @@ const ClassesStudent = () => {
               ) : (
                 <div className="px-5 py-12 text-center">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    {filterType === 'classes' ? (
-                      <School size={24} className="text-gray-400" />
-                    ) : (
-                      <Bell size={24} className="text-gray-400" />
-                    )}
+                    {filterType === 'classes' ? <School size={24} className="text-gray-400" /> : <Bell size={24} className="text-gray-400" />}
                   </div>
                   <p className="text-gray-500 font-medium">
-                    {filterType === 'classes' 
-                      ? 'No class notifications' 
-                      : 'No notifications'}
+                    {filterType === 'classes' ? 'No class notifications' : 'No notifications'}
                   </p>
                   <p className="text-gray-400 text-sm mt-1">
-                    {filterType === 'classes' 
-                      ? 'Updates about your classes will appear here' 
-                      : filterType !== 'all' 
-                        ? `No ${filterType} notifications found` 
-                        : 'You\'re all caught up!'}
+                    {filterType === 'classes'
+                      ? 'Updates about your classes will appear here'
+                      : filterType !== 'all'
+                        ? `No ${filterType} notifications found`
+                        : "You're all caught up!"}
                   </p>
                   {filterType !== 'all' && (
-                    <button
-                      onClick={() => setFilterType('all')}
-                      className="mt-4 text-[#1A80F6] text-sm hover:text-[#0E6AD0]"
-                    >
+                    <button onClick={() => setFilterType('all')} className="mt-4 text-[#1A80F6] text-sm hover:text-[#0E6AD0]">
                       View all notifications
                     </button>
                   )}
@@ -1466,20 +1406,14 @@ const ClassesStudent = () => {
 
             {notifications.length > 0 && (
               <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                <button 
+                <button
                   type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setShowAll(!showAll);
-                  }}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAll(!showAll); }}
                   className="text-[#1A80F6] text-sm font-medium hover:text-[#0E6AD0] transition-colors flex items-center gap-1"
-                  title={showAll ? "Show less" : "View all notifications"}
                 >
                   {showAll ? 'Show less' : 'View all notifications'}
                   <ChevronDown size={14} className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
                 </button>
-                
                 {getFilteredNotifications().length > 0 && (
                   <button
                     onClick={(e) => {
@@ -1498,10 +1432,8 @@ const ClassesStudent = () => {
                       }
                     }}
                     className="text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-                    title={`Clear ${filterType === 'all' ? 'all' : filterType} notifications`}
                   >
-                    <Trash2 size={12} />
-                    Clear {filterType === 'all' ? 'all' : filterType}
+                    <Trash2 size={12} />Clear {filterType === 'all' ? 'all' : filterType}
                   </button>
                 )}
               </div>
@@ -1511,28 +1443,6 @@ const ClassesStudent = () => {
       </AnimatePresence>
     </div>
   );
-
-  const handleJoinClass = async () => {
-    const code = searchQuery.trim();
-    if (!code) return;
-    try {
-      const res = await fetch('http://localhost:8000/api/student/classes/join/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-        body: JSON.stringify({ code }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || data.message || 'Failed to join class');
-      alert(`Successfully joined "${data.class_name || data.name || 'the class'}"!`);
-      setSearchQuery('');
-      fetchMyClasses();
-    } catch (err: any) {
-      alert(err.message || 'Failed to join class. Please try again.');
-    }
-  };
 
   return (
     <div className="w-full pt-20 min-h-screen bg-gradient-to-br from-[#E3F0FE] to-[#F0F7FF]">
@@ -1547,7 +1457,6 @@ const ClassesStudent = () => {
                   <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] flex items-center justify-center text-white text-xl font-bold shadow-lg">
                     S
                   </div>
-
                   <div>
                     <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] bg-clip-text text-transparent">
                       My Classes
@@ -1555,22 +1464,48 @@ const ClassesStudent = () => {
                     <p className="text-sm sm:text-base text-gray-600">Student Dashboard</p>
                   </div>
                 </div>
-
                 <NotificationDropdown />
               </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Enter Class ID to join"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleJoinClass(); }}
-                  className="flex-1 border border-gray-300 px-3 sm:px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent text-sm sm:text-base"
-                />
-                <button onClick={handleJoinClass} className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-4 sm:px-6 py-2.5 rounded-lg hover:from-[#0E6AD0] hover:to-[#3A80D2] transition-all duration-200 text-sm sm:text-base whitespace-nowrap shadow-md hover:shadow-lg">
-                  Join Class
-                </button>
+              {/* ── Join Class Input + Inline Message ── */}
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter Class ID to join"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleJoinClass(); }}
+                    className="flex-1 border border-gray-300 px-3 sm:px-4 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A80F6] focus:border-transparent text-sm sm:text-base"
+                  />
+                  <button
+                    onClick={handleJoinClass}
+                    className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-4 sm:px-6 py-2.5 rounded-lg hover:from-[#0E6AD0] hover:to-[#3A80D2] transition-all duration-200 text-sm sm:text-base whitespace-nowrap shadow-md hover:shadow-lg"
+                  >
+                    Join Class
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {joinMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.2 }}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium ${
+                        joinMessage.type === 'success'
+                          ? 'bg-green-50 text-green-700 border border-green-200'
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                      }`}
+                    >
+                      {joinMessage.type === 'success'
+                        ? <CheckCircle size={16} className="shrink-0" />
+                        : <AlertCircle size={16} className="shrink-0" />}
+                      {joinMessage.text}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
           </div>
@@ -1590,16 +1525,9 @@ const ClassesStudent = () => {
           -webkit-box-orient: vertical;
           overflow: hidden;
         }
-        .scrollbar-thin::-webkit-scrollbar {
-          height: 2px;
-        }
-        .scrollbar-thin::-webkit-scrollbar-track {
-          background: rgba(255,255,255,0.1);
-        }
-        .scrollbar-thin::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.3);
-          border-radius: 10px;
-        }
+        .scrollbar-thin::-webkit-scrollbar { height: 2px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: rgba(255,255,255,0.1); }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 10px; }
       `}</style>
     </div>
   );
