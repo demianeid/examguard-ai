@@ -60,6 +60,7 @@ function App() {
           <Route path=":tab" element={<ClassesStudent />} />
         </Route>
       </Route>
+      <Route path="/exam/:examId" element={<StartExam />} />
       <Route path="/StartExam" element={<StartExam />} />
 
       {/* Instructor Routes */}

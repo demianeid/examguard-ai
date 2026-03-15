@@ -136,3 +136,65 @@ class Choice(models.Model):
 
     def __str__(self):
         return f"{self.choice_text} ({'✓' if self.is_correct else '✗'})"
+    # --- Stores each student's answer for a specific question ---
+class StudentAnswer(models.Model):
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='answers'
+    )
+    exam = models.ForeignKey(
+        Exam,
+        on_delete=models.CASCADE,
+        related_name='student_answers'
+    )
+    question = models.ForeignKey(
+        Question,
+        on_delete=models.CASCADE,
+        related_name='student_answers'
+    )
+    selected_choice = models.ForeignKey(
+        Choice,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='student_answers'
+    )
+    essay_answer = models.TextField(blank=True, null=True)
+    is_correct = models.BooleanField(null=True)
+    marks_obtained = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    answered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # One answer per student per question
+        unique_together = ['student', 'exam', 'question']
+
+    def __str__(self):
+        return f"{self.student} - {self.exam.title} - Q{self.question.order}"
+
+
+# --- Stores the final result for a student in an exam ---
+class ExamResult(models.Model):
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='exam_results'
+    )
+    exam = models.ForeignKey(
+        Exam,
+        on_delete=models.CASCADE,
+        related_name='results'
+    )
+    total_marks_obtained = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    total_marks = models.PositiveIntegerField(default=0)
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    is_terminated = models.BooleanField(default=False)
+    violation_score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    class Meta:
+        # One result per student per exam
+        unique_together = ['student', 'exam']
+
+    def __str__(self):
+        return f"{self.student} - {self.exam.title} - {self.percentage}%"

@@ -51,6 +51,7 @@ class Class(models.Model):
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    subject = models.CharField(max_length=100, blank=True, default='')
     number_of_students = models.PositiveIntegerField(default=0)
     code = models.CharField(max_length=8, unique=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)

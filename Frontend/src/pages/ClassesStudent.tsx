@@ -960,7 +960,7 @@ const ClassesStudent = () => {
                     <>
                       <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span>
                       <Link
-                        to="/StartExam"
+                        to={`/exam/${exam.id}`}
                         className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-4 py-2 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg`}
                       >
                         <Sparkles size={16} />Start Exam
@@ -986,21 +986,110 @@ const ClassesStudent = () => {
     );
   };
 
-  const GradesTab = () => (
-    <div className="space-y-6">
-      <div className={`${getLightColorFromGradient(selectedClass?.color || '')} p-6 rounded-xl border ${getBorderColorFromGradient(selectedClass?.color || '')} shadow-sm`}>
-        <div className="flex items-center gap-4 mb-4">
-          <div className={`w-16 h-16 rounded-full ${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} flex items-center justify-center text-white shadow-lg`}>
-            <Award size={32} />
-          </div>
-          <div>
-            <h3 className="text-2xl font-bold text-gray-800">Overall Grade</h3>
-            <p className="text-gray-500 mt-1">No grades available yet</p>
+  interface GradeResult {
+    exam_title: string;
+    percentage: number;
+    total_marks_obtained: number; 
+    total_marks: number;
+    submitted_at: string;
+  }
+
+  const GradesTab = () => {
+    const [grades, setGrades] = useState<GradeResult[]>([]);
+    const [gradesLoading, setGradesLoading] = useState(true);
+
+    useEffect(() => {
+      if (!selectedClass) return;
+      const fetchGrades = async () => {
+        setGradesLoading(true);
+        try {
+          const res = await fetch(`http://localhost:8000/api/student/classes/${selectedClass.id}/grades/`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+          });
+          if (!res.ok) throw new Error('Failed');
+          const data = await res.json();
+          setGrades(data);
+        } catch {
+          setGrades([]);
+        } finally {
+          setGradesLoading(false);
+        }
+      };
+      fetchGrades();
+    }, [selectedClass?.id]);
+
+    const average = grades.length > 0
+      ? Math.round(grades.reduce((sum, g) => sum + g.percentage, 0) / grades.length)
+      : null;
+
+    if (gradesLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="w-12 h-12 border-4 border-[#1A80F6] border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-gray-600">Loading grades...</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className={`${getLightColorFromGradient(selectedClass?.color || '')} p-6 rounded-xl border ${getBorderColorFromGradient(selectedClass?.color || '')} shadow-sm`}>
+          <div className="flex items-center gap-4 mb-4">
+            <div className={`w-16 h-16 rounded-full ${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} flex items-center justify-center text-white shadow-lg`}>
+              <Award size={32} />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-gray-800">Overall Grade</h3>
+              {average !== null ? (
+                <p className={`text-3xl font-bold mt-1 ${getTextColorFromGradient(selectedClass?.color || '')}`}>
+                  {average}%
+                </p>
+              ) : (
+                <p className="text-gray-500 mt-1">No grades available yet</p>
+              )}
+            </div>
           </div>
         </div>
+
+        {grades.length === 0 ? (
+          <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+            <Award size={48} className="text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Grades Yet</h3>
+            <p className="text-gray-500 text-sm">Your exam results will appear here once graded</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {grades.map((g, idx) => (
+              <div key={idx} className="bg-white border border-gray-200 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h4 className="font-semibold text-gray-800 text-lg">{g.exam_title}</h4>
+                    <p className="text-gray-500 text-sm mt-1">
+                      Submitted: {new Date(g.submitted_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>
+                      {g.percentage}%
+                    </p>
+                    <p className="text-gray-500 text-sm">
+                      {g.total_marks_obtained}/{g.total_marks}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className={`bg-gradient-to-r ${(selectedClass?.color || '').replace('bg-gradient-to-r ', '')} h-2 rounded-full transition-all duration-500`}
+                    style={{ width: `${g.percentage}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderTabContent = () => {
     if (!selectedClass) return null;
