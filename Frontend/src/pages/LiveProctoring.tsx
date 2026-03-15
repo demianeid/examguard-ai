@@ -159,6 +159,7 @@ const LiveProctoring: React.FC = () => {
                   <div className="aspect-video bg-gray-800 flex items-center justify-center relative group">
                     {/* Play Button Overlay */}
                     <button
+                    title="View Stream"
                       onClick={() => handleViewStream(student.id)}
                       className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-200 group"
                     >

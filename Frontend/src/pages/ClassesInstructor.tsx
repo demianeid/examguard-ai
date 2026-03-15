@@ -300,14 +300,9 @@ const ClassesInstructor = () => {
   const [deleteConfirmation, setDeleteConfirmation] = useState<{show: boolean, classId: number | null, className: string}>({ show: false, classId: null, className: '' });
   const [instructorClasses, setInstructorClasses] = useState<ClassType[]>([]);
 
-  // ✅ Instructor profile state
   const [instructorProfile, setInstructorProfile] = useState<InstructorProfile | null>(null);
-
-  // ✅ Students state
   const [classStudents, setClassStudents] = useState<Student[]>([]);
   const [studentsLoading, setStudentsLoading] = useState<boolean>(false);
-
-  // ✅ Exams state
   const [exams, setExams] = useState<Exam[]>([]);
   const [examsLoading, setExamsLoading] = useState<boolean>(false);
 
@@ -316,7 +311,6 @@ const ClassesInstructor = () => {
     fetchProfile();
   }, []);
 
-  // ✅ Fetch instructor profile from API
   const fetchProfile = async () => {
     try {
       const data = await apiRequest(PROFILE_URL);
@@ -345,7 +339,6 @@ const ClassesInstructor = () => {
     }
   };
 
-  // ✅ Fetch students when tab is students
   useEffect(() => {
     if (tab === 'students' && classId) {
       fetchStudents(parseInt(classId));
@@ -364,17 +357,56 @@ const ClassesInstructor = () => {
     }
   };
 
-  // ✅ Fetch exams when tab is exams
+  // ✅ CHANGED: added 'dashboard' to trigger exam fetch
   useEffect(() => {
-  if ((tab === 'exams' || tab === 'overview') && classId) {
-    fetchExams(parseInt(classId));
-  }
-}, [tab, classId]);
+    if ((tab === 'exams' || tab === 'overview' || tab === 'dashboard') && classId) {
+      fetchExams(parseInt(classId));
+    }
+  }, [tab, classId]);
+
   const fetchExams = async (id: number) => {
     setExamsLoading(true);
     try {
       const data = await apiRequest(`http://127.0.0.1:8000/api/exam/class/${id}/`);
-      setExams(data);
+
+      // Compute status from start_datetime + duration if backend doesn't return it
+      const now = new Date();
+      const withStatus = data.map((exam: any) => {
+        const start = new Date(exam.start_datetime);
+        const end = new Date(start.getTime() + exam.duration * 60 * 1000);
+        let status: "upcoming" | "active" | "completed";
+        if (now < start) {
+          status = "upcoming";
+        } else if (now >= start && now <= end) {
+          status = "active";
+        } else {
+          status = "completed";
+        }
+        return { ...exam, status: exam.status ?? status };
+      });
+
+      // ── TEST EXAMS (remove when backend is ready) ──────────────────
+      const now2 = new Date();
+      const testActive: Exam = {
+        id: 9991,
+        title: "Midterm Exam — Software Engineering",
+        start_datetime: new Date(now2.getTime() - 30 * 60 * 1000).toISOString(), // started 30 min ago
+        duration: 90,
+        status: "active",
+        questions_count: 40,
+      };
+      const testUpcoming: Exam = {
+        id: 9992,
+        title: "Quiz 3 — Data Structures",
+        start_datetime: new Date(now2.getTime() + 2 * 60 * 60 * 1000).toISOString(), // starts in 2 hours
+        duration: 45,
+        status: "upcoming",
+        questions_count: 20,
+      };
+      const withTestExams = [testActive, testUpcoming, ...withStatus];
+      // ────────────────────────────────────────────────────────────────
+
+      setExams(withTestExams);
     } catch {
       setExams([]);
     } finally {
@@ -451,24 +483,20 @@ const ClassesInstructor = () => {
   const handleCreateExam = (e: React.MouseEvent, classId?: number) => { e.preventDefault(); e.stopPropagation(); navigate(classId ? `/CreateExam?classId=${classId}` : '/CreateExam'); };
   const handleEditExam = (examId: number) => navigate(`/edit-exam/${examId}`);
   const handleViewResults = (examId: number) => navigate(`/exam-results/${examId}`);
- const handleViewProfile = (studentId: string) => {
-  const student = classStudents.find(s => s.student_custom_id === studentId);
-  navigate(`/instructor/student-profile/${studentId}`, { 
-    state: { studentData: student } 
-  });
-};
+  const handleViewProfile = (studentId: string) => {
+    const student = classStudents.find(s => s.student_custom_id === studentId);
+    navigate(`/instructor/student-profile/${studentId}`, { state: { studentData: student } });
+  };
   const handleCopyCode = (code: string) => { navigator.clipboard.writeText(code); setCopiedCode(code); setTimeout(() => setCopiedCode(null), 2000); };
 
-  // ✅ Helper: get first letter of instructor name for avatar fallback
   const getAvatarLetter = () => {
     if (instructorProfile?.first_name) return instructorProfile.first_name.charAt(0).toUpperCase();
     return 'I';
   };
 
   // --- Tab Components ---
-  
+
   const OverviewTab = ({ cls }: { cls: ClassType }) => (
-    
     <div className="space-y-6">
       <div className={`${getLightColorFromGradient(cls.color)} p-5 rounded-xl border ${getBorderColorFromGradient(cls.color)}`}>
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -635,22 +663,552 @@ const ClassesInstructor = () => {
     );
   };
 
-  const ProctoringTab = () => (
-    <div className="space-y-4">
-      <div className="bg-gradient-to-br from-red-50 to-orange-50 p-5 rounded-xl border border-red-200">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center"><AlertCircle className="text-red-600" size={24} /></div>
-          <div className="flex-1"><h3 className="font-semibold text-gray-800 text-lg mb-1">Flagged Incidents</h3><p className="text-gray-600 mb-3">8 incidents require review</p><button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate('/review-incidents'); }} className="bg-gradient-to-r from-red-600 to-orange-600 text-white px-5 py-2.5 rounded-lg hover:from-red-700 hover:to-orange-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"><Eye size={18} />Review Incidents</button></div>
+  // ✅ DashboardTab — all exams + inline proctoring + suspicious activity
+  const DashboardTab = () => {
+    const activeExams = exams.filter(e => e.status === "active");
+    const upcomingExams = exams.filter(e => e.status === "upcoming");
+    const completedExams = exams.filter(e => e.status === "completed");
+    const [expandedExam, setExpandedExam] = useState<number | null>(null);
+    const [proctoringView, setProctoringView] = useState<"monitor" | "activity" | "settings">("monitor");
+
+    // Mock suspicious activity data — replace with real API data
+    const suspiciousActivity = {
+      high: [
+        { id: 1, student: "Ahmed Hassan", event: "Multiple tab switches detected", time: "10:23 AM", count: 4 },
+        { id: 2, student: "Sara Mohamed", event: "Face not visible in camera", time: "10:31 AM", count: 2 },
+      ],
+      medium: [
+        { id: 3, student: "Omar Khaled", event: "Looking away from screen", time: "10:18 AM", count: 6 },
+        { id: 4, student: "Nour Ali", event: "Unusual mouse movement pattern", time: "10:40 AM", count: 3 },
+        { id: 5, student: "Youssef Tarek", event: "Copy-paste attempt blocked", time: "10:45 AM", count: 1 },
+      ],
+      low: [
+        { id: 6, student: "Mona Samir", event: "Window minimized briefly", time: "10:15 AM", count: 1 },
+        { id: 7, student: "Karim Adel", event: "Keyboard shortcut attempt", time: "10:52 AM", count: 2 },
+      ],
+    };
+
+    const totalIncidents = suspiciousActivity.high.length + suspiciousActivity.medium.length + suspiciousActivity.low.length;
+
+    // Mock live students for active exams
+    const liveStudents = [
+      { id: 1, name: "Ahmed Hassan", status: "flagged", progress: 65, avatar: null },
+      { id: 2, name: "Sara Mohamed", status: "flagged", progress: 40, avatar: null },
+      { id: 3, name: "Omar Khaled", status: "warning", progress: 80, avatar: null },
+      { id: 4, name: "Nour Ali", status: "warning", progress: 55, avatar: null },
+      { id: 5, name: "Youssef Tarek", status: "online", progress: 90, avatar: null },
+      { id: 6, name: "Mona Samir", status: "online", progress: 70, avatar: null },
+      { id: 7, name: "Karim Adel", status: "online", progress: 45, avatar: null },
+      { id: 8, name: "Layla Hassan", status: "online", progress: 85, avatar: null },
+    ];
+
+    const getStudentStatusColor = (status: string) => {
+      switch (status) {
+        case "flagged": return "bg-red-100 text-red-700 border-red-200";
+        case "warning": return "bg-orange-100 text-orange-700 border-orange-200";
+        default: return "bg-green-100 text-green-700 border-green-200";
+      }
+    };
+    const getStudentDot = (status: string) => {
+      switch (status) {
+        case "flagged": return "bg-red-500";
+        case "warning": return "bg-orange-500";
+        default: return "bg-green-500";
+      }
+    };
+
+    const SuspiciousActivitySection = ({ examId }: { examId: number }) => (
+      <div className="space-y-4">
+        {/* High severity */}
+        <div className="bg-white rounded-xl border border-red-200 overflow-hidden shadow-sm">
+          <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-red-600 to-red-700">
+            <AlertCircle size={18} className="text-white" />
+            <span className="font-semibold text-white text-sm">High Severity</span>
+            <span className="ml-auto bg-white text-red-600 text-xs font-bold px-2.5 py-1 rounded-full">{suspiciousActivity.high.length}</span>
+          </div>
+          {suspiciousActivity.high.length === 0 ? (
+            <p className="px-5 py-4 text-sm text-gray-500 italic">No high severity incidents</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {suspiciousActivity.high.map(item => (
+                <div key={item.id} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-red-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
+                      {item.student.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800 text-sm">{item.student}</p>
+                      <p className="text-red-600 text-xs mt-0.5 flex items-center gap-1"><AlertCircle size={11} />{item.event}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <span className="text-xs text-gray-400">{item.time}</span>
+                    <span className="inline-block bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">×{item.count} times</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/footage/${item.id}`); }}
+                      className="flex items-center gap-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                    >
+                      <Eye size={12} /> View Footage
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Medium severity */}
+        <div className="bg-white rounded-xl border border-orange-200 overflow-hidden shadow-sm">
+          <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-orange-500 to-orange-600">
+            <AlertCircle size={18} className="text-white" />
+            <span className="font-semibold text-white text-sm">Medium Severity</span>
+            <span className="ml-auto bg-white text-orange-600 text-xs font-bold px-2.5 py-1 rounded-full">{suspiciousActivity.medium.length}</span>
+          </div>
+          {suspiciousActivity.medium.length === 0 ? (
+            <p className="px-5 py-4 text-sm text-gray-500 italic">No medium severity incidents</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {suspiciousActivity.medium.map(item => (
+                <div key={item.id} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-orange-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
+                      {item.student.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800 text-sm">{item.student}</p>
+                      <p className="text-orange-600 text-xs mt-0.5 flex items-center gap-1"><AlertCircle size={11} />{item.event}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <span className="text-xs text-gray-400">{item.time}</span>
+                    <span className="inline-block bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">×{item.count} times</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/footage/${item.id}`); }}
+                      className="flex items-center gap-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                    >
+                      <Eye size={12} /> View Footage
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Low severity */}
+        <div className="bg-white rounded-xl border border-yellow-200 overflow-hidden shadow-sm">
+          <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600">
+            <Info size={18} className="text-white" />
+            <span className="font-semibold text-white text-sm">Low Severity</span>
+            <span className="ml-auto bg-white text-yellow-600 text-xs font-bold px-2.5 py-1 rounded-full">{suspiciousActivity.low.length}</span>
+          </div>
+          {suspiciousActivity.low.length === 0 ? (
+            <p className="px-5 py-4 text-sm text-gray-500 italic">No low severity incidents</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {suspiciousActivity.low.map(item => (
+                <div key={item.id} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-yellow-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-500 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
+                      {item.student.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800 text-sm">{item.student}</p>
+                      <p className="text-yellow-700 text-xs mt-0.5 flex items-center gap-1"><Info size={11} />{item.event}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <span className="text-xs text-gray-400">{item.time}</span>
+                    <span className="inline-block bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-0.5 rounded-full">×{item.count} times</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/footage/${item.id}`); }}
+                      className="flex items-center gap-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
+                    >
+                      <Eye size={12} /> View Footage
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-5 rounded-xl border border-green-200">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center"><Eye className="text-green-600" size={24} /></div>
-          <div className="flex-1"><h3 className="font-semibold text-gray-800 text-lg mb-1">Live Monitoring</h3><p className="text-gray-600 mb-3">1 active exam with 12 students</p><button onClick={() => navigate('/live-proctoring')} className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-5 py-2.5 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"><Eye size={18} />Monitor Now</button></div>
+    );
+
+    const LiveMonitorSection = ({ exam }: { exam: Exam }) => {
+      const flagged = liveStudents.filter(s => s.status === "flagged").length;
+      const warning = liveStudents.filter(s => s.status === "warning").length;
+      const online = liveStudents.filter(s => s.status === "online").length;
+
+      const getCameraRingColor = (status: string) => {
+        switch (status) {
+          case "flagged": return "ring-2 ring-red-500 border-red-400";
+          case "warning": return "ring-2 ring-orange-400 border-orange-300";
+          default: return "ring-1 ring-green-400 border-green-300";
+        }
+      };
+      const getStatusBadge = (status: string) => {
+        switch (status) {
+          case "flagged": return <span className="absolute top-2 left-2 flex items-center gap-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow"><AlertCircle size={9} />FLAGGED</span>;
+          case "warning": return <span className="absolute top-2 left-2 flex items-center gap-1 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow">⚠ WARN</span>;
+          default: return <span className="absolute top-2 left-2 flex items-center gap-1 bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow"><span className="w-1.5 h-1.5 rounded-full bg-white inline-block" />LIVE</span>;
+        }
+      };
+      const getCameraIcon = (status: string) => {
+        if (status === "flagged") return (
+          <svg viewBox="0 0 24 24" className="w-8 h-8 text-red-400 mb-1" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+            <line x1="1" y1="1" x2="23" y2="23" strokeWidth="2"/>
+          </svg>
+        );
+        return (
+          <svg viewBox="0 0 24 24" className="w-8 h-8 text-gray-400 mb-1" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+          </svg>
+        );
+      };
+
+      return (
+        <div className="space-y-4">
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 text-center shadow-sm">
+              <p className="text-3xl font-bold text-green-700">{online}</p>
+              <p className="text-xs text-green-600 font-medium mt-1 flex items-center justify-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Online
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-4 text-center shadow-sm">
+              <p className="text-3xl font-bold text-orange-600">{warning}</p>
+              <p className="text-xs text-orange-500 font-medium mt-1">⚠ Warning</p>
+            </div>
+            <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-200 rounded-xl p-4 text-center shadow-sm">
+              <p className="text-3xl font-bold text-red-600">{flagged}</p>
+              <p className="text-xs text-red-500 font-medium mt-1 flex items-center justify-center gap-1">
+                <AlertCircle size={11} />Flagged
+              </p>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Clock size={14} className="text-[#1A80F6]" />Exam progress
+              </span>
+              <span className="text-sm font-bold text-[#1A80F6]">~47 min remaining</span>
+            </div>
+            <div className="w-full bg-blue-100 rounded-full h-2.5 overflow-hidden">
+              <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] h-2.5 rounded-full transition-all" style={{ width: '48%' }} />
+            </div>
+            <div className="flex justify-between text-xs text-gray-500 mt-1.5">
+              <span>Started {new Date(exam.start_datetime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+              <span>{exam.duration} min total</span>
+            </div>
+          </div>
+
+          {/* Camera grid */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <Eye size={14} className="text-[#1A80F6]" />
+              Camera feeds — {liveStudents.length} students
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {liveStudents.map(student => (
+                <div key={student.id} className={`relative rounded-xl overflow-hidden border bg-gray-900 ${getCameraRingColor(student.status)}`} style={{ aspectRatio: '4/3' }}>
+                  {/* Camera feed placeholder */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+                    {getCameraIcon(student.status)}
+                    <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold text-base border-2 border-gray-500">
+                      {student.name.charAt(0)}
+                    </div>
+                  </div>
+                  {/* Status badge top-left */}
+                  {getStatusBadge(student.status)}
+                  {/* Progress bottom */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
+                    <p className="text-white text-[11px] font-semibold truncate">{student.name}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex-1 bg-white/20 rounded-full h-1">
+                        <div className="h-1 rounded-full bg-white" style={{ width: `${student.progress}%` }} />
+                      </div>
+                      <span className="text-white text-[10px] font-bold">{student.progress}%</span>
+                    </div>
+                  </div>
+                  {/* Flagged overlay pulse */}
+                  {student.status === "flagged" && (
+                    <div className="absolute inset-0 border-2 border-red-500 rounded-xl animate-pulse pointer-events-none" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const ProctoringSettingsSection = ({ exam }: { exam: Exam }) => (
+      <div className="space-y-3">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Settings size={16} className="text-[#1A80F6]" />Proctoring Configuration</h4>
+          <div className="space-y-2">
+            {[
+              { label: "Face Detection", value: "Enabled", color: "text-green-600" },
+              { label: "Tab Switch Detection", value: "Enabled", color: "text-green-600" },
+              { label: "Screen Recording", value: "Disabled", color: "text-red-500" },
+              { label: "Copy-Paste Blocked", value: "Enabled", color: "text-green-600" },
+              { label: "Max Warnings Before Flag", value: "3 times", color: "text-gray-700" },
+              { label: "Auto-Submit on Disconnect", value: "After 5 min", color: "text-gray-700" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="flex justify-between items-center py-1.5 border-b border-blue-100 last:border-0">
+                <span className="text-sm text-gray-600">{label}</span>
+                <span className={`text-sm font-semibold ${color}`}>{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+          <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><Users size={16} className="text-gray-500" />Exam Details</h4>
+          <div className="space-y-2">
+            {[
+              { label: "Total Questions", value: `${exam.questions_count}` },
+              { label: "Duration", value: `${exam.duration} minutes` },
+              { label: "Scheduled Date", value: new Date(exam.start_datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) },
+              { label: "Start Time", value: new Date(exam.start_datetime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) },
+              { label: "Enrolled Students", value: `${selectedClass?.students ?? 0}` },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex justify-between items-center py-1.5 border-b border-gray-100 last:border-0">
+                <span className="text-sm text-gray-600">{label}</span>
+                <span className="text-sm font-semibold text-gray-800">{value}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+
+    const ExamProctoringCard = ({ exam }: { exam: Exam }) => {
+      const isActive = exam.status === "active";
+      const isUpcoming = exam.status === "upcoming";
+      const isCompleted = exam.status === "completed";
+      const isExpanded = expandedExam === exam.id;
+
+      return (
+        <div
+          className={`bg-white border rounded-xl shadow-sm transition-all duration-200 overflow-hidden ${isActive ? 'border-green-300 ring-2 ring-green-100 cursor-pointer' : isUpcoming ? 'border-blue-200' : 'border-gray-200'} ${isExpanded ? 'shadow-lg' : 'hover:shadow-md'}`}
+          onClick={isActive ? (e) => { e.preventDefault(); navigate(`/proctor/${exam.id}`); } : undefined}
+        >
+          {/* Status bar */}
+          <div className={`h-1.5 w-full ${isActive ? 'bg-gradient-to-r from-green-400 to-emerald-500' : isUpcoming ? (selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]') : 'bg-gradient-to-r from-gray-300 to-gray-400'}`} />
+
+          <div className="p-5">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  {isActive && (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
+                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />LIVE
+                    </span>
+                  )}
+                  {isUpcoming && <span className="px-2.5 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-xs font-semibold">Upcoming</span>}
+                  {isCompleted && <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">Completed</span>}
+                  {isActive && totalIncidents > 0 && (
+                    <span className="px-2.5 py-1 bg-red-100 text-red-600 rounded-full text-xs font-semibold flex items-center gap-1">
+                      <AlertCircle size={11} />{totalIncidents} incidents
+                    </span>
+                  )}
+                </div>
+                <h4 className="font-bold text-gray-800 text-base truncate">{exam.title}</h4>
+              </div>
+            </div>
+
+            {/* Meta pills */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-lg text-sm text-gray-600">
+                <Calendar size={13} className="text-gray-400" />
+                {new Date(exam.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+              <span className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-lg text-sm text-gray-600">
+                <Clock size={13} className="text-gray-400" />
+                {new Date(exam.start_datetime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <span className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-lg text-sm text-gray-600">
+                <Clock size={13} className="text-gray-400" />{exam.duration} min
+              </span>
+              <span className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-lg text-sm text-gray-600">
+                <FileText size={13} className="text-gray-400" />{exam.questions_count} Qs
+              </span>
+            </div>
+
+            {/* Live stats summary (collapsed) */}
+            {isActive && !isExpanded && (
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-green-50 border border-green-100 rounded-lg p-2.5 text-center">
+                  <p className="text-lg font-bold text-green-700">{liveStudents.filter(s => s.status === "online").length}</p>
+                  <p className="text-[10px] text-green-600">Online</p>
+                </div>
+                <div className="bg-red-50 border border-red-100 rounded-lg p-2.5 text-center">
+                  <p className="text-lg font-bold text-red-600">{suspiciousActivity.high.length}</p>
+                  <p className="text-[10px] text-red-500">Flagged</p>
+                </div>
+                <div className="bg-orange-50 border border-orange-100 rounded-lg p-2.5 text-center">
+                  <p className="text-lg font-bold text-orange-600">{suspiciousActivity.medium.length}</p>
+                  <p className="text-[10px] text-orange-500">Warnings</p>
+                </div>
+              </div>
+            )}
+
+            {/* Collapsed completed stats */}
+            {isCompleted && !isExpanded && (
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-center">
+                  <p className="text-lg font-bold text-[#1A80F6]">{totalIncidents}</p>
+                  <p className="text-[10px] text-blue-500">Total Incidents</p>
+                </div>
+                <div className="bg-red-50 border border-red-100 rounded-lg p-2.5 text-center">
+                  <p className="text-lg font-bold text-red-600">{suspiciousActivity.high.length}</p>
+                  <p className="text-[10px] text-red-500">High Severity</p>
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex gap-2">
+              {isActive && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/proctor/${exam.id}`); }}
+                    className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+                  >
+                    <Eye size={16} /> Open Monitoring
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/proctor/${exam.id}?tab=activity`); }}
+                    className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2"
+                  >
+                    <AlertCircle size={16} /> Activity
+                  </button>
+                </>
+              )}
+              {isUpcoming && (
+                <>
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditExam(exam.id); }} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2">
+                    <FileEdit size={16} /> Edit Exam
+                  </button>
+                  <button type="button" onClick={() => { setExpandedExam(isExpanded && proctoringView === "settings" ? null : exam.id); setProctoringView("settings"); }} className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2 ${isExpanded && proctoringView === "settings" ? (selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]') + ' text-white shadow-lg' : (selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]') + ' text-white shadow-md hover:shadow-lg'}`}>
+                    <Settings size={16} /> Proctoring
+                  </button>
+                </>
+              )}
+              {isCompleted && (
+                <>
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewResults(exam.id); }} className="flex-1 bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] hover:from-[#0E6AD0] hover:to-[#3A80D2] text-white py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg">
+                    <BarChart3 size={16} /> View Results
+                  </button>
+                  <button type="button" onClick={() => { setExpandedExam(isExpanded && proctoringView === "activity" ? null : exam.id); setProctoringView("activity"); }} className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2 border ${isExpanded && proctoringView === "activity" ? 'bg-orange-600 text-white border-orange-600' : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-200'}`}>
+                    <Eye size={16} /> Review
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Expanded inline panel — upcoming settings & completed review only */}
+            {isExpanded && !isActive && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }} className="mt-5 pt-5 border-t border-gray-100">
+                {proctoringView === "activity" && <SuspiciousActivitySection examId={exam.id} />}
+                {proctoringView === "settings" && <ProctoringSettingsSection exam={exam} />}
+              </motion.div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-6">
+        {/* Summary strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0"><Eye className="text-green-600" size={20} /></div>
+            <div><p className="text-2xl font-bold text-green-700">{activeExams.length}</p><p className="text-xs text-green-600 font-medium">Live Now</p></div>
+          </div>
+          <div className={`${getLightColorFromGradient(selectedClass?.color || oceanLightGradients[0])} border ${getBorderColorFromGradient(selectedClass?.color || oceanBorderColors[0])} rounded-xl p-4 flex items-center gap-3`}>
+            <div className={`w-10 h-10 rounded-full ${getLightColorFromGradient(selectedClass?.color || oceanLightGradients[0])} flex items-center justify-center flex-shrink-0`}><Calendar className={getTextColorFromGradient(selectedClass?.color || oceanGradients[0])} size={20} /></div>
+            <div><p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || oceanGradients[0])}`}>{upcomingExams.length}</p><p className={`text-xs font-medium ${getTextColorFromGradient(selectedClass?.color || oceanGradients[0])}`}>Upcoming</p></div>
+          </div>
+          <div className="bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-xl p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"><CheckCircle className="text-gray-500" size={20} /></div>
+            <div><p className="text-2xl font-bold text-gray-700">{completedExams.length}</p><p className="text-xs text-gray-500 font-medium">Completed</p></div>
+          </div>
+          <div className="bg-gradient-to-br from-red-50 to-orange-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0"><AlertCircle className="text-red-600" size={20} /></div>
+            <div><p className="text-2xl font-bold text-red-600">{totalIncidents}</p><p className="text-xs text-red-500 font-medium">Incidents</p></div>
+          </div>
+        </div>
+
+        {examsLoading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="w-12 h-12 border-4 border-[#1A80F6] border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-gray-600">Loading exams...</p>
+          </div>
+        ) : exams.length === 0 ? (
+          <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
+            <FileText size={48} className="text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">No Exams Yet</h3>
+            <p className="text-gray-500 text-sm mb-6">Create an exam to start proctoring</p>
+            <button type="button" onClick={(e) => handleCreateExam(e, selectedClass?.id)} className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-6 py-2.5 rounded-lg font-semibold flex items-center gap-2 mx-auto shadow-md hover:shadow-lg transition-all duration-200`}>
+              <Plus size={18} /> Create Exam
+            </button>
+          </div>
+        ) : (
+          <>
+            {activeExams.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <h3 className="font-bold text-gray-800 text-base">Live Exams</h3>
+                  <span className="ml-auto text-xs text-gray-400">{activeExams.length} active</span>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {activeExams.map((exam, i) => <ExamProctoringCard key={`active-${exam.id}-${i}`} exam={exam} />)}
+                </div>
+              </div>
+            )}
+            {upcomingExams.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar size={15} className={getTextColorFromGradient(selectedClass?.color || oceanGradients[0])} />
+                  <h3 className="font-bold text-gray-800 text-base">Upcoming Exams</h3>
+                  <span className="ml-auto text-xs text-gray-400">{upcomingExams.length} scheduled</span>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {upcomingExams.map((exam, i) => <ExamProctoringCard key={`upcoming-${exam.id}-${i}`} exam={exam} />)}
+                </div>
+              </div>
+            )}
+            {completedExams.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle size={15} className="text-gray-500" />
+                  <h3 className="font-bold text-gray-800 text-base">Completed Exams</h3>
+                  <span className="ml-auto text-xs text-gray-400">{completedExams.length} done</span>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  {completedExams.map((exam, i) => <ExamProctoringCard key={`completed-${exam.id}-${i}`} exam={exam} />)}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
 
   const AnalyticsTab = () => (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -666,7 +1224,7 @@ const ClassesInstructor = () => {
       case "overview": return <OverviewTab key={`overview-${selectedClass.id}`} cls={selectedClass} />;
       case "students": return <StudentsTab key={`students-${selectedClass.id}`} />;
       case "exams": return <ExamsTab key={`exams-${selectedClass.id}`} />;
-      case "proctoring": return <ProctoringTab key={`proctoring-${selectedClass.id}`} />;
+      case "dashboard": return <DashboardTab key={`dashboard-${selectedClass.id}`} />;
       case "analytics": return <AnalyticsTab key={`analytics-${selectedClass.id}`} />;
       default: return <OverviewTab key={`overview-${selectedClass.id}`} cls={selectedClass} />;
     }
@@ -690,8 +1248,15 @@ const ClassesInstructor = () => {
             <button type="button" onClick={handleBackToList} className="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2">← Back</button>
           </div>
         </div>
+        {/* ✅ CHANGED: Replaced "proctoring" tab with "dashboard" tab */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {[{ id: "overview", label: "Overview", icon: BookOpen }, { id: "students", label: "Students", icon: Users }, { id: "exams", label: "Exams", icon: FileText }, { id: "proctoring", label: "Proctoring", icon: Eye }, { id: "analytics", label: "Analytics", icon: TrendingUp }].map(({ id, label, icon: Icon }) => (
+          {[
+            { id: "overview", label: "Overview", icon: BookOpen },
+            { id: "students", label: "Students", icon: Users },
+            { id: "exams", label: "Exams", icon: FileText },
+            { id: "dashboard", label: "Dashboard", icon: BarChart3 },
+            { id: "analytics", label: "Analytics", icon: TrendingUp }
+          ].map(({ id, label, icon: Icon }) => (
             <button key={id} type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTabChange(id); }} className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-200 ${activeTab === id ? selectedClass.color + ' text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}><Icon size={18} />{label}</button>
           ))}
         </div>
@@ -766,14 +1331,13 @@ const ClassesInstructor = () => {
           <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg p-4 sm:p-6 mb-6 border border-white/50">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3 sm:gap-4">
-           
-{instructorProfile === null ? (
-  <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-) : (
-  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] flex items-center justify-center text-white text-xl font-bold shadow-lg">
-    {instructorProfile.first_name?.charAt(0).toUpperCase() || 'I'}
-  </div>
-)}
+                {instructorProfile === null ? (
+                  <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] flex items-center justify-center text-white text-xl font-bold shadow-lg">
+                    {instructorProfile.first_name?.charAt(0).toUpperCase() || 'I'}
+                  </div>
+                )}
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] bg-clip-text text-transparent">My Classes</h1>
                   {instructorProfile ? (

@@ -12,7 +12,6 @@ import Features from "./pages/Features";
 import HowItWorks from "./pages/HowItWorks";
 import Contact from "./pages/Contact";
 import AccountStudent from "./pages/AccountStudent";
-
 import ClassesStudent from "./pages/ClassesStudent";
 import ClassesInstructor from "./pages/ClassesInstructor";
 import AccountInstructor from "./pages/AccountInstructor";
@@ -29,6 +28,7 @@ import Roi from "./pages/Roi";
 import MonitoringOffline from "./pages/MonitoringOffline";
 import CreateClass from "./pages/CreateClass";
 import FaceRecognition from './pages/FaceRecognition';
+import ProctoringPage from './pages/ProctoringPage';
 
 
 
@@ -77,6 +77,7 @@ function App() {
       <Route path="/exam-results/:examId" element={<ExamResults />} />
       <Route path="/review-incidents" element={<ReviewIncidents />} />
       <Route path="/live-proctoring" element={<LiveProctoring />} />
+      <Route path="/proctor/:examId" element={<ProctoringPage />} />
 
       {/* Other Tools */}
       <Route path="/settings" element={<Settings />} />
