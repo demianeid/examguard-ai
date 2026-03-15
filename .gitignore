@@ -17,3 +17,13 @@ env/
 __pycache__/
 db.sqlite3
 media/
+
+
+# .gitignore (at root)
+venv/
+.env
+node_modules/
+__pycache__/
+*.pyc
+media/
+db.sqlite3
