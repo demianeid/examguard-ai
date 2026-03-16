@@ -161,13 +161,12 @@
 #     def __str__(self):
 #         return f"Professor — {self.user}"
 
-
 import random
 import string
 import os
-import resend
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.core.mail import EmailMultiAlternatives
 
 # ─── Upload Paths ────────────────────────────────────────────────
 def professor_upload_path(instance, filename):
@@ -230,15 +229,11 @@ class BaseUser(AbstractUser):
 
 
 # ─── Shared email helper ─────────────────────────────────────────
-def _send_email(subject, html_content, to_email):
+def _send_email(subject, text_content, html_content, to_email):
     try:
-        resend.api_key = os.environ.get("RESEND_API_KEY")
-        resend.Emails.send({
-            "from": "ExamGuard <onboarding@resend.dev>",
-            "to": [to_email],
-            "subject": subject,
-            "html": html_content,
-        })
+        msg = EmailMultiAlternatives(subject, text_content, None, [to_email])
+        msg.attach_alternative(html_content, "text/html")
+        msg.send()
         print(f"Email sent successfully to {to_email}")
     except Exception as e:
         print(f"Email Error: {e}")
@@ -271,16 +266,12 @@ class StudentProfile(models.Model):
                 <tr>
                     <td align="center">
                         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-                            
-                            <!-- Header -->
                             <tr>
                                 <td style="background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:40px;text-align:center;">
                                     <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:700;letter-spacing:1px;">🎓 ExamGuard</h1>
                                     <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:14px;">Academic Examination Platform</p>
                                 </td>
                             </tr>
-
-                            <!-- Body -->
                             <tr>
                                 <td style="padding:40px;">
                                     <h2 style="color:#1a73e8;margin:0 0 8px;font-size:22px;">Welcome aboard, {u.first_name}! 👋</h2>
@@ -288,8 +279,6 @@ class StudentProfile(models.Model):
                                         Your student account has been successfully created on <strong>ExamGuard</strong>. 
                                         You now have access to all academic resources, exams, and performance tracking tools.
                                     </p>
-
-                                    <!-- Credentials Box -->
                                     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f7ff;border:1px solid #d0e4ff;border-radius:8px;margin-bottom:24px;">
                                         <tr>
                                             <td style="padding:24px;">
@@ -323,8 +312,6 @@ class StudentProfile(models.Model):
                                             </td>
                                         </tr>
                                     </table>
-
-                                    <!-- Warning -->
                                     <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff8e1;border-left:4px solid #ffc107;border-radius:4px;margin-bottom:24px;">
                                         <tr>
                                             <td style="padding:16px;">
@@ -334,14 +321,11 @@ class StudentProfile(models.Model):
                                             </td>
                                         </tr>
                                     </table>
-
                                     <p style="color:#555;font-size:14px;line-height:1.6;">
                                         If you have any questions or need assistance, please don't hesitate to contact your instructor or our support team.
                                     </p>
                                 </td>
                             </tr>
-
-                            <!-- Footer -->
                             <tr>
                                 <td style="background:#f8f9fa;padding:24px;text-align:center;border-top:1px solid #e9ecef;">
                                     <p style="margin:0;color:#888;font-size:12px;">
@@ -350,7 +334,6 @@ class StudentProfile(models.Model):
                                     </p>
                                 </td>
                             </tr>
-
                         </table>
                     </td>
                 </tr>
@@ -359,7 +342,8 @@ class StudentProfile(models.Model):
         </html>
         """
 
-        _send_email(subject, html_content, u.email)
+        text_content = f"Dear {u.first_name} {u.last_name},\n\nWelcome to ExamGuard!\n\nStudent ID: {u.custom_id}\nPassword: {password_display}\n\nPlease change your password after first login.\n\nBest regards,\nThe ExamGuard Team"
+        _send_email(subject, text_content, html_content, u.email)
         BaseUser.objects.filter(pk=u.pk).update(email_sent=True)
 
     def __str__(self):
@@ -394,16 +378,12 @@ class ProfessorProfile(models.Model):
                 <tr>
                     <td align="center">
                         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-                            
-                            <!-- Header -->
                             <tr>
                                 <td style="background:linear-gradient(135deg,#1a237e,#283593);padding:40px;text-align:center;">
                                     <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:700;letter-spacing:1px;">🎓 ExamGuard</h1>
                                     <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;font-size:14px;">Academic Staff Portal</p>
                                 </td>
                             </tr>
-
-                            <!-- Body -->
                             <tr>
                                 <td style="padding:40px;">
                                     <h2 style="color:#1a237e;margin:0 0 8px;font-size:22px;">Application Received, Dr. {u.last_name}</h2>
@@ -411,8 +391,6 @@ class ProfessorProfile(models.Model):
                                         Thank you for applying to join <strong>ExamGuard</strong> as an academic staff member. 
                                         Your application has been successfully submitted and is currently under review by our verification team.
                                     </p>
-
-                                    <!-- Status Box -->
                                     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f0ff;border:1px solid #d4c5ff;border-radius:8px;margin-bottom:24px;">
                                         <tr>
                                             <td style="padding:24px;">
@@ -446,8 +424,6 @@ class ProfessorProfile(models.Model):
                                             </td>
                                         </tr>
                                     </table>
-
-                                    <!-- Info Box -->
                                     <table width="100%" cellpadding="0" cellspacing="0" style="background:#e8f5e9;border-left:4px solid #4caf50;border-radius:4px;margin-bottom:24px;">
                                         <tr>
                                             <td style="padding:16px;">
@@ -458,14 +434,11 @@ class ProfessorProfile(models.Model):
                                             </td>
                                         </tr>
                                     </table>
-
                                     <p style="color:#555;font-size:14px;line-height:1.6;">
                                         If you have any questions regarding your application, please contact our support team with your Tracking ID.
                                     </p>
                                 </td>
                             </tr>
-
-                            <!-- Footer -->
                             <tr>
                                 <td style="background:#f8f9fa;padding:24px;text-align:center;border-top:1px solid #e9ecef;">
                                     <p style="margin:0;color:#888;font-size:12px;">
@@ -474,7 +447,6 @@ class ProfessorProfile(models.Model):
                                     </p>
                                 </td>
                             </tr>
-
                         </table>
                     </td>
                 </tr>
@@ -483,7 +455,8 @@ class ProfessorProfile(models.Model):
         </html>
         """
 
-        _send_email(subject, html_content, u.email)
+        text_content = f"Dear Dr. {u.first_name} {u.last_name},\n\nTracking ID: {u.custom_id}\nStatus: PENDING VERIFICATION\n\nBest regards,\nThe ExamGuard Team"
+        _send_email(subject, text_content, html_content, u.email)
         BaseUser.objects.filter(pk=u.pk).update(email_sent=True)
 
     def __str__(self):
