@@ -55,7 +55,8 @@ interface Step {
 // ============================================================
 // CONSTANTS
 // ============================================================
-const BASE_URL = "http://localhost:8000/api/exam";
+// const BASE_URL = "http://localhost:8000/api/exam";
+const BASE_URL = "https://examguard-ai-production.up.railway.app/api/exam";
 
 // Map frontend question type → backend question_type
 const typeToBackend: Record<string, string> = {

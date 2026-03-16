@@ -82,8 +82,9 @@ const ProctoringPage = () => {
 
   const fetchExam = async (id: number) => {
     setExamLoading(true);
+    // http://127.0.0.1:8000
     try {
-      const data = await apiRequest(`http://127.0.0.1:8000/api/exam/${id}/`);
+      const data = await apiRequest(`https://examguard-ai-production.up.railway.app/api/exam/${id}/`);
       const now = new Date();
       const start = new Date(data.start_datetime);
       const end = new Date(start.getTime() + data.duration * 60 * 1000);

@@ -320,9 +320,10 @@ const ClassesStudent = () => {
   const selectedClass = classId ? studentClasses.find(cls => cls.id === parseInt(classId)) : null;
   const activeTab = tab || "overview";
 
+  // http://localhost:8000/api/student/classes/
   const fetchMyClasses = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/student/classes/', {
+      const res = await fetch('https://examguard-ai-production.up.railway.app/api/student/classes/', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
       });
       if (!res.ok) throw new Error('Failed to fetch classes');

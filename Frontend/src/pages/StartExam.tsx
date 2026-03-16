@@ -89,10 +89,11 @@ const ExamInterface: React.FC = () => {
   useEffect(() => {
     if (!examId) return;
 
+    // http://localhost:8000
     const fetchExam = async () => {
       setExamLoading(true);
       try {
-        const res = await fetch(`http://localhost:8000/api/student/exams/${examId}/`, {
+        const res = await fetch(`https://examguard-ai-production.up.railway.app/api/student/exams/${examId}/`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (!res.ok) throw new Error('Failed to load exam');
@@ -305,9 +306,9 @@ const ExamInterface: React.FC = () => {
         };
       })
       .filter(Boolean);
-
+// http://localhost:8000
     try {
-      await fetch(`http://localhost:8000/api/student/exams/${examData.id}/submit/`, {
+      await fetch(`https://examguard-ai-production.up.railway.app/api/student/exams/${examData.id}/submit/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -121,8 +121,8 @@
 // ============================================================
 // api.ts — Centralized API Service (Final & Correct)
 // ============================================================
-
-const API_BASE = "http://127.0.0.1:8000/api"; 
+// http://127.0.0.1:8000
+const API_BASE = "https://examguard-ai-production.up.railway.app/api"; 
 
 // --- Types ---
 export interface ClassType {

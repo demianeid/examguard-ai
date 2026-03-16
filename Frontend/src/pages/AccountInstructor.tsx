@@ -53,9 +53,9 @@ const AccountInstructor: React.FC = () => {
       setTimeout(() => navigate('/Login'), 2000);
       return;
     }
-
+// http://127.0.0.1:8000
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/profile/', {
+      const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/profile/', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -193,8 +193,9 @@ const AccountInstructor: React.FC = () => {
                   className="w-32 h-32 rounded-full shadow-xl border-4 border-white overflow-hidden bg-gradient-to-br from-[#3F72B7] to-[#3DA5FA] flex items-center justify-center relative"
                 >
                   {profile?.profile_image ? (
+                    // http://localhost:8000
                     <img
-                      src={`http://127.0.0.1:8000${profile.profile_image}`}
+                      src={`https://examguard-ai-production.up.railway.app${profile.profile_image}`}
                       alt={profile.full_name}
                       className="w-full h-full object-cover"
                     />

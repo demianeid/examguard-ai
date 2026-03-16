@@ -8,9 +8,9 @@ import {
   School, Edit, Copy, Check, FileEdit, GraduationCap, Sparkles,
   Trash2, Filter, MoreVertical, Download, Settings, ChevronDown, Search
 } from "lucide-react";
-
-const BASE_URL = 'http://127.0.0.1:8000/api/instructors';
-const PROFILE_URL = 'http://127.0.0.1:8000/api/auth/profile/';
+// http://127.0.0.1:8000
+const BASE_URL = 'https://examguard-ai-production.up.railway.app/api/instructors';
+const PROFILE_URL = 'https://examguard-ai-production.up.railway.app/api/auth/profile/';
 const getToken = () => localStorage.getItem('access_token');
 
 const apiRequest = async (url: string, options: RequestInit = {}) => {
@@ -366,8 +366,9 @@ const ClassesInstructor = () => {
 
   const fetchExams = async (id: number) => {
     setExamsLoading(true);
+// `http://127.0.0.1:8000
     try {
-      const data = await apiRequest(`http://127.0.0.1:8000/api/exam/class/${id}/`);
+      const data = await apiRequest('https://examguard-ai-production.up.railway.app/api/exam/class/${id}/');
 
       // Compute status from start_datetime + duration if backend doesn't return it
       const now = new Date();

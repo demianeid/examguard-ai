@@ -59,9 +59,9 @@ const SettingsPage: React.FC = () => {
       setLoading(false);
       return;
     }
-
+// http://127.0.0.1:8000
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/profile/', {
+      const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/profile/', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -117,7 +117,8 @@ const SettingsPage: React.FC = () => {
       formData.append('last_name', lastName);
       formData.append('phone_number', phone);
 
-      const response = await fetch('http://127.0.0.1:8000/api/auth/profile/update/', {
+    //  http://127.0.0.1:8000
+      const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/profile/update/', {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData

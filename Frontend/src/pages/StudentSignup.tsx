@@ -96,8 +96,9 @@ export default function StudentSignup() {
       data.append("profile_image", formData.profileImage);
     }
 
+// http://127.0.0.1:8000
     try {
-      await axios.post("http://127.0.0.1:8000/api/auth/register/student/", data, {
+      await axios.post("https://examguard-ai-production.up.railway.app/api/auth/register/student/", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
