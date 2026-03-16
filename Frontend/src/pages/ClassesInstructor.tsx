@@ -385,28 +385,28 @@ const ClassesInstructor = () => {
         return { ...exam, status: exam.status ?? status };
       });
 
-      // ── TEST EXAMS (remove when backend is ready) ──────────────────
-      const now2 = new Date();
-      const testActive: Exam = {
-        id: 9991,
-        title: "Midterm Exam — Software Engineering",
-        start_datetime: new Date(now2.getTime() - 30 * 60 * 1000).toISOString(), // started 30 min ago
-        duration: 90,
-        status: "active",
-        questions_count: 40,
-      };
-      const testUpcoming: Exam = {
-        id: 9992,
-        title: "Quiz 3 — Data Structures",
-        start_datetime: new Date(now2.getTime() + 2 * 60 * 60 * 1000).toISOString(), // starts in 2 hours
-        duration: 45,
-        status: "upcoming",
-        questions_count: 20,
-      };
-      const withTestExams = [testActive, testUpcoming, ...withStatus];
+      // // ── TEST EXAMS (remove when backend is ready) ──────────────────
+      // const now2 = new Date();
+      // const testActive: Exam = {
+      //   id: 9991,
+      //   title: "Midterm Exam — Software Engineering",
+      //   start_datetime: new Date(now2.getTime() - 30 * 60 * 1000).toISOString(), // started 30 min ago
+      //   duration: 90,
+      //   status: "active",
+      //   questions_count: 40,
+      // };
+      // const testUpcoming: Exam = {
+      //   id: 9992,
+      //   title: "Quiz 3 — Data Structures",
+      //   start_datetime: new Date(now2.getTime() + 2 * 60 * 60 * 1000).toISOString(), // starts in 2 hours
+      //   duration: 45,
+      //   status: "upcoming",
+      //   questions_count: 20,
+      // };
+      // const withTestExams = [testActive, testUpcoming, ...withStatus];
       // ────────────────────────────────────────────────────────────────
 
-      setExams(withTestExams);
+   setExams(withStatus);
     } catch {
       setExams([]);
     } finally {

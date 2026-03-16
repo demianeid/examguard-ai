@@ -665,6 +665,21 @@ const ClassesStudent = () => {
   const OverviewTab = ({ class: cls }: { class: ClassType }) => {
     const [nextExam, setNextExam] = useState<Exam | null>(null);
     const [examLoading, setExamLoading] = useState(true);
+    const [overallGrade, setOverallGrade] = useState<number | null>(null);
+
+useEffect(() => {
+  fetch(`http://localhost:8000/api/student/classes/${cls.id}/grades/`, {
+    headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.length > 0) {
+        const avg = data.reduce((s: number, g: any) => s + parseFloat(g.percentage), 0) / data.length;
+        setOverallGrade(Math.round(avg));
+      }
+    })
+    .catch(() => {});
+}, [cls.id]);
 
     useEffect(() => {
       const fetchNextExam = async () => {
@@ -764,7 +779,10 @@ const ClassesStudent = () => {
               </div>
               <h3 className="font-semibold text-gray-800">Overall Grades</h3>
             </div>
-            <p className="text-gray-500 text-sm">No grades available yet</p>
+           {overallGrade !== null
+  ? <p className={`text-2xl font-bold ${getTextColorFromGradient(cls.color)}`}>{overallGrade}%</p>
+  : <p className="text-gray-500 text-sm">No grades available yet</p>
+}
             <button
               type="button"
               className={`mt-4 text-sm font-medium flex items-center gap-1 group ${getTextColorFromGradient(cls.color)}`}

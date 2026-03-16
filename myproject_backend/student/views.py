@@ -28,7 +28,7 @@ class StudentClassesView(APIView):
                 'number_of_students': cls.enrollments.count(),
                 'upcoming_exams': upcoming_count,
                 'progress': 0,
-                'last_activity': cls.created_at,
+                'last_activity': cls.created_at.strftime('%Y-%m-%d'),
                 'created_at': cls.created_at,
             })
 
@@ -109,12 +109,29 @@ class StudentClassExamsView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        exams = Exam.objects.filter(class_id=class_id).values(
-            'id', 'title', 'description', 'duration',
-            'total_marks', 'start_datetime', 'end_datetime', 'status'
-        )
+        exams = Exam.objects.filter(class_id=class_id)
+        data = []
 
-        return Response(list(exams))
+        for exam in exams:
+            # Check if student already submitted this exam
+            result = ExamResult.objects.filter(
+                student=request.user,
+                exam=exam
+            ).first()
+
+            data.append({
+                'id': exam.id,
+                'title': exam.title,
+                'description': exam.description,
+                'duration': exam.duration,
+                'total_marks': exam.total_marks,
+                'start_datetime': exam.start_datetime,
+                'end_datetime': exam.end_datetime,
+                'status': 'completed' if result else exam.status,
+                'score': float(result.percentage) if result else None,
+            })
+
+        return Response(data)
 
 
 # --- Get exam questions for a specific exam (without correct answers) ---
@@ -139,6 +156,13 @@ class StudentExamDetailView(APIView):
             return Response(
                 {'detail': 'Not enrolled in this class.'},
                 status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Block access if already submitted
+        if ExamResult.objects.filter(student=request.user, exam=exam).exists():
+            return Response(
+                {'detail': 'You have already submitted this exam.'},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         questions = []
