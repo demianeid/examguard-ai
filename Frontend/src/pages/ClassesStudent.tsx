@@ -609,7 +609,7 @@ const ClassesStudent = () => {
     const code = searchQuery.trim();
     if (!code) return;
     try {
-      const res = await fetch('http://localhost:8000/api/student/classes/join/', {
+      const res = await fetch('http://examguard-ai-production.up.railway.app/api/student/classes/join/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
