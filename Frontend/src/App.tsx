@@ -29,6 +29,9 @@ import MonitoringOffline from "./pages/MonitoringOffline";
 import CreateClass from "./pages/CreateClass";
 import FaceRecognition from './pages/FaceRecognition';
 import ProctoringPage from './pages/ProctoringPage';
+import HelpCenter from './pages/HelpCenter';
+import TermsConditions from './pages/TermsConditions';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 
 
@@ -82,6 +85,9 @@ function App() {
 
       {/* Other Tools */}
       <Route path="/settings" element={<Settings />} />
+      <Route path="/help-center" element={<HelpCenter />} />
+     <Route path="/terms-conditions" element={<TermsConditions />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/OfflineMode" element={<OfflineMode />} />
       <Route path="/Roi" element={<Roi />} />
       <Route path="/MonitoringOffline" element={<MonitoringOffline />} />
