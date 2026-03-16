@@ -346,6 +346,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'whitenoise.runserver_nostatic',
 
     # My Apps
     'authentication',
@@ -454,7 +455,7 @@ USE_TZ        = True
 # ─── Static & Media ───────────────────────────────────────────────
 STATIC_URL          = '/static/'
 STATIC_ROOT         = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 MEDIA_URL           = '/media/'
 MEDIA_ROOT          = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD  = 'django.db.models.BigAutoField'
