@@ -334,8 +334,11 @@ SECRET_KEY    = config('SECRET_KEY')
 DEBUG         = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost', cast=lambda v: [s.strip() for s in v.split(',')])
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://examguard-ai-production.up.railway.app',
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://examguard-ai-production.up.railway.app",
 ]
 
 # ─── Apps ─────────────────────────────────────────────────────────
