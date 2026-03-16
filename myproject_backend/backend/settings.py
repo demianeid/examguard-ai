@@ -317,7 +317,6 @@
 #     'ROTATE_REFRESH_TOKENS': True,
 #     'BLACKLIST_AFTER_ROTATION': False,
 # }
-
 """
 Django settings for backend project.
 """
@@ -335,6 +334,10 @@ SECRET_KEY    = config('SECRET_KEY')
 DEBUG         = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost', cast=lambda v: [s.strip() for s in v.split(',')])
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://examguard-ai-production.up.railway.app',
+]
+
 # ─── Apps ─────────────────────────────────────────────────────────
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -342,11 +345,11 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-    'whitenoise.runserver_nostatic',
 
     # My Apps
     'authentication',
@@ -467,7 +470,4 @@ EMAIL_PORT          = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS       = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER     = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL', default=f'ExamGuard <{EMAIL_HOST_USER}>')
-
-# ─── CSRF for Production (Railway)
-CSRF_TRUSTED_ORIGINS = ['https://examguard-ai-production.up.railway.app']
+DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL', default='ExamGuard <noreply@examguard.com>')
