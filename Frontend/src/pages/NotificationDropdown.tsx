@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
@@ -50,12 +50,9 @@ interface NotificationItem {
 }
 
 const NotificationDropdown: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
-  const [showNotifications, setShowNotifications] = useState<boolean>(false);
   const [showAll, setShowAll] = useState(false);
-  const [selectedNotification, setSelectedNotification] = useState<number | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
   
   const [notifications, setNotifications] = useState<NotificationItem[]>([
     { 
@@ -89,17 +86,6 @@ const NotificationDropdown: React.FC = () => {
       metadata: { classId: 3, className: "Data Structures", examId: 202 } 
     },
   ]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) && 
-          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const markAsRead = (id: number) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
@@ -146,15 +132,15 @@ const NotificationDropdown: React.FC = () => {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <div className="relative">
+    <div className="relative inline-block">
       <button
-        ref={buttonRef}
-        title="Notifications"
-        type="button"
-        className="relative p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 group"
-        onClick={() => setShowNotifications(!showNotifications)}
+        onClick={() => {
+          console.log('Button clicked');
+          setIsOpen(!isOpen);
+        }}
+        className="relative p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
       >
-        <Bell size={20} className="group-hover:scale-110 transition-transform" />
+        <Bell size={20} />
         {unreadCount > 0 && (
           <>
             <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
@@ -167,15 +153,14 @@ const NotificationDropdown: React.FC = () => {
       </button>
 
       <AnimatePresence>
-        {showNotifications && (
+        {isOpen && (
           <motion.div
-            ref={dropdownRef}
-            key="notification-dropdown"
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="absolute right-0 mt-2 w-[32rem] max-w-[90vw] bg-white rounded-xl shadow-2xl z-[9999] overflow-hidden border border-gray-100"
+            className="absolute right-0 mt-2 w-[32rem] max-w-[90vw] bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100"
+            style={{ zIndex: 99999 }}
           >
             <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-5 py-4">
               <div className="flex justify-between items-center">
@@ -198,8 +183,7 @@ const NotificationDropdown: React.FC = () => {
                     </button>
                   )}
                   <button
-                    title='Close'
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNotifications(false); }}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(false); }}
                     className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
                   >
                     <X size={16} />
@@ -210,7 +194,7 @@ const NotificationDropdown: React.FC = () => {
               <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
                 {['all', 'exam', 'grade', 'system', 'announcement'].map((type) => (
                   <button
-                    key={`filter-${type}`}
+                    key={type}
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFilterType(type); }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-all ${
                       filterType === type ? 'bg-white text-[#1A80F6] shadow-md' : 'bg-white/20 text-white hover:bg-white/30'
@@ -224,16 +208,13 @@ const NotificationDropdown: React.FC = () => {
 
             <div className="max-h-[32rem] overflow-y-auto divide-y divide-gray-100">
               {getFilteredNotifications().length > 0 ? (
-                getFilteredNotifications().map((notification, index) => (
-                  <motion.div
-                    key={`notification-${notification.id}`}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
+                getFilteredNotifications().map((notification) => (
+                  <div
+                    key={notification.id}
                     className={`relative px-5 py-4 hover:bg-gray-50 cursor-pointer transition-all duration-200 ${
                       !notification.isRead ? 'bg-blue-50/50' : ''
                     }`}
-                    onClick={() => { markAsRead(notification.id); setSelectedNotification(notification.id); }}
+                    onClick={() => { markAsRead(notification.id); }}
                   >
                     {notification.priority && ['critical', 'high'].includes(notification.priority) && (
                       <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 ${getPriorityColor(notification.priority)} rounded-r-full`}></div>
@@ -254,10 +235,8 @@ const NotificationDropdown: React.FC = () => {
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <span className="text-xs text-gray-400 whitespace-nowrap">{notification.time}</span>
                             <button
-                              title="Delete notification"
-                              type="button"
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               onClick={(e) => deleteNotification(notification.id, e)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             >
                               <X size={14} />
                             </button>
@@ -265,7 +244,7 @@ const NotificationDropdown: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 ))
               ) : (
                 <div className="px-5 py-12 text-center">
@@ -280,7 +259,6 @@ const NotificationDropdown: React.FC = () => {
             {notifications.length > 0 && (
               <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
                 <button
-                  type="button"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAll(!showAll); }}
                   className="text-[#1A80F6] text-sm font-medium hover:text-[#0E6AD0] transition-colors flex items-center gap-1"
                 >

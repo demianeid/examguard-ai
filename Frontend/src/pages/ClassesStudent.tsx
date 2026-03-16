@@ -32,14 +32,15 @@ interface ClassType {
   id: number;
   name: string;
   instructor: string;
-  upcoming_exams: number;      // ← صح (زي ما جاي من API)
+  upcomingExams: number;
   progress: number;
-  last_activity: string;        // ← صح (زي ما جاي من API)
+  lastActivity: string;
   color: string;
   code?: string;
   subject?: string;
   description?: string;
 }
+
 interface Exam {
   id: number;
   name: string;
@@ -1172,18 +1173,19 @@ useEffect(() => {
   };
 
 const ClassesList = () => (
-    <>
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {studentClasses.map((cls) => (
-          <div
-            key={cls.id}
-            onClick={() => handleClassClick(cls)}
-            className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:scale-[1.02]"
-          >
-            <div className="overflow-hidden rounded-t-xl">
-              <div className={`h-2 ${cls.color}`}></div>
-            </div>
-            <div className="p-6">
+  <>
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 relative" style={{ zIndex: 1 }}>
+      {studentClasses.map((cls) => (
+        <div
+          key={cls.id}
+          onClick={() => handleClassClick(cls)}
+          className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer hover:scale-[1.02] relative"
+          style={{ zIndex: 1 }}
+        >
+          <div className="overflow-hidden rounded-t-xl">
+            <div className={`h-2 ${cls.color}`}></div>
+          </div>
+          <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="text-xl font-bold text-gray-800 mb-2">{cls.name}</h3>
