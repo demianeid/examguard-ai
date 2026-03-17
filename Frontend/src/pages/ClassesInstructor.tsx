@@ -368,7 +368,7 @@ const ClassesInstructor = () => {
     setExamsLoading(true);
 // `http://127.0.0.1:8000
     try {
-      const data = await apiRequest('https://examguard-ai-production.up.railway.app/api/exam/class/${id}/');
+      const data = await apiRequest(`https://examguard-ai-production.up.railway.app/api/exam/class/${id}/`);
 
       // Compute status from start_datetime + duration if backend doesn't return it
       const now = new Date();
