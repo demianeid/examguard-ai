@@ -35,8 +35,8 @@ if not BaseUser.objects.filter(username=my_user).exists():
         username=my_user,
         email=my_email,
         password=my_pass,
-        first_name="Alberto",
-        last_name="George"
+        first_name="sandi",
+        last_name="noshi"
     )
     print(f"✅ Personal Admin '{my_user}' created!")
 else:
