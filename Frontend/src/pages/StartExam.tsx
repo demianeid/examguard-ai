@@ -862,7 +862,8 @@ const ExamInterface: React.FC = () => {
                       {currentQ.marks} marks
                     </span>
                   </div>
-                  <button onClick={toggleFlag} disabled={examTerminated}
+                  <button
+                  title='Flag Question'  onClick={toggleFlag} disabled={examTerminated}
                     className={`p-2 rounded-lg transition-colors ${flagged[currentQuestion] ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-400 hover:text-gray-600'}`}>
                     <Flag className="w-5 h-5" fill={flagged[currentQuestion] ? 'currentColor' : 'none'} />
                   </button>

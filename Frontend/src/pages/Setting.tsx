@@ -35,6 +35,7 @@ const Modal: React.FC<{
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-slate-900">{title}</h3>
           <button
+          title="Close"
             onClick={onClose}
             className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
           >
