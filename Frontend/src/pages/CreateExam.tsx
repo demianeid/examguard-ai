@@ -568,14 +568,13 @@ const validateStep3 = (): boolean => {
         .filter((opt) => opt.trim() !== '')
         .map((opt, idx) => ({ choice_text: opt, is_correct: q.correctAnswer === idx }));
     };
-
-    const body = {
+const body = {
       title: formData.examTitle,
       description: formData.description,
       duration: parseInt(formData.duration),
       total_marks: parseInt(formData.totalMarks),
-      start_datetime: `${formData.startDate}T${formData.startTime}:00`,
-      end_datetime: `${formData.endDate}T${formData.endTime}:00`,
+      start_datetime: new Date(`${formData.startDate}T${formData.startTime}:00`).toISOString(),
+      end_datetime: new Date(`${formData.endDate}T${formData.endTime}:00`).toISOString(),
       instructions: formData.instructions,
       questions: questions.map((q, idx) => ({
         question_text: q.text,

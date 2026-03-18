@@ -45,7 +45,7 @@ interface Exam {
   name: string;
   date: string;
   duration: string;
-  status: "upcoming" | "active" | "completed";
+  status: "upcoming" | "active" | "completed" | "missed";
   score: number | null;
   start_datetime?: string;
   end_datetime?: string;
@@ -702,7 +702,7 @@ useEffect(() => {
             setNextExam({
               id: e.id,
               name: e.title,
-              date: e.start_datetime?.split('T')[0] || '',
+              date: e.start_datetime ? new Date(e.start_datetime).toLocaleDateString('en-CA') : '',
               duration: `${e.duration} min`,
               status: 'upcoming',
               score: null,
@@ -924,16 +924,31 @@ useEffect(() => {
           });
           if (!res.ok) throw new Error('Failed');
           const data = await res.json();
-          setExams(data.map((e: any) => ({
-            id: e.id,
-            name: e.title,
-            date: e.start_datetime?.split('T')[0] || '',
-            duration: `${e.duration} min`,
-            status: e.status,
-            score: e.score ?? null,
-            start_datetime: e.start_datetime,
-            end_datetime: e.end_datetime,
-          })));
+          const nowMs = Date.now();
+          setExams(data.map((e: any) => {
+            let resolvedStatus = e.status;
+if (e.start_datetime && e.end_datetime) {
+  const startMs = Date.parse(e.start_datetime);
+  const endMs = Date.parse(e.end_datetime);
+  if (nowMs >= startMs && nowMs < endMs) {
+    resolvedStatus = 'active';
+  } else if (nowMs < startMs) {
+    resolvedStatus = 'upcoming';
+  } else if (nowMs >= endMs && e.status !== 'completed') {
+    resolvedStatus = e.status === 'missed' ? 'missed' : 'completed';
+  }
+}
+            return {
+              id: e.id,
+              name: e.title,
+              date: e.start_datetime ? new Date(e.start_datetime).toLocaleDateString('en-CA') : '',
+              duration: `${e.duration} min`,
+              status: resolvedStatus,
+              score: e.score ?? null,
+              start_datetime: e.start_datetime,
+              end_datetime: e.end_datetime,
+            };
+          }));
         } catch {
           setExams([]);
         } finally {
@@ -941,7 +956,7 @@ useEffect(() => {
         }
       };
       fetchExams();
-      const interval = setInterval(fetchExams, 60000);
+      const interval = setInterval(fetchExams, 10000);
       return () => clearInterval(interval);
     }, [selectedClass?.id]);
 
@@ -996,19 +1011,21 @@ useEffect(() => {
                       <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span>
                       <span className="text-xs text-gray-500">
                         Starts: {exam.start_datetime ? (() => {
-  const [date, time] = exam.start_datetime.split('T');
-  const [hour, min] = time.slice(0, 5).split(':');
-  const h = parseInt(hour);
+  const d = new Date(exam.start_datetime);
+  const h = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, '0');
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
-  return `${date} at ${h12}:${min} ${ampm}`;
+  return `${d.toLocaleDateString('en-CA')} at ${h12}:${min} ${ampm}`;
 })() : ''}
                       </span>
                     </>
+                  ) : exam.status === "missed" ? (
+                    <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm font-medium">Missed</span>
                   ) : (
                     <>
                       <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span>
-                      {exam.score && (
+                      {exam.score != null && (
                         <div className="text-right">
                           <span className="text-sm text-gray-500">Score</span>
                           <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>{exam.score}%</p>

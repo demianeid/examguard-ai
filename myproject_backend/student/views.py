@@ -5,6 +5,7 @@ from instructors.models import Class, ClassEnrollment
 from exam.models import Exam, StudentAnswer, ExamResult, Choice
 from django.utils import timezone
 
+
 # --- Get all classes the student is enrolled in ---
 class StudentClassesView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -109,21 +110,31 @@ class StudentClassExamsView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-
         now = timezone.now()
-        Exam.objects.filter(class_id=class_id, status='upcoming', start_datetime__lte=now).update(status='active')
-        Exam.objects.filter(class_id=class_id, status__in=['upcoming', 'active'], end_datetime__lte=now).update(status='completed')
+
+        # FIX: Corrected indentation — if/elif are now inside the for loop
+        for exam in Exam.objects.filter(class_id=class_id):
+            if exam.status == 'upcoming' and exam.start_datetime <= now:
+                exam.status = 'active'
+                exam.save()
+            elif exam.status in ['upcoming', 'active'] and exam.end_datetime <= now:
+                exam.status = 'completed'
+                exam.save()
 
         exams = Exam.objects.filter(class_id=class_id)
-        data = []
 
-        for exam in exams:
-            # Check if student already submitted this exam
-            result = ExamResult.objects.filter(
+        # IMPROVEMENT: Prefetch results to avoid N+1 queries
+        results_map = {
+            r.exam_id: r
+            for r in ExamResult.objects.filter(
                 student=request.user,
-                exam=exam
-            ).first()
+                exam__class_id=class_id
+            )
+        }
 
+        data = []
+        for exam in exams:
+            result = results_map.get(exam.id)
             data.append({
                 'id': exam.id,
                 'title': exam.title,
@@ -164,6 +175,7 @@ class StudentExamDetailView(APIView):
             )
 
         now = timezone.now()
+
         # Auto-update status
         if exam.status == 'upcoming' and exam.start_datetime <= now:
             exam.status = 'active'
@@ -191,6 +203,7 @@ class StudentExamDetailView(APIView):
                 {'detail': 'Exam has already ended.'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
         # Block access if already submitted
         if ExamResult.objects.filter(student=request.user, exam=exam).exists():
             return Response(
@@ -248,6 +261,13 @@ class StudentExamSubmitView(APIView):
             return Response(
                 {'detail': 'Not enrolled in this class.'},
                 status=status.HTTP_403_FORBIDDEN
+            )
+
+        # IMPROVEMENT: Block submission if exam is not active
+        if exam.status != 'active':
+            return Response(
+                {'detail': 'Exam is not currently active.'},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         if ExamResult.objects.filter(student=request.user, exam=exam).exists():

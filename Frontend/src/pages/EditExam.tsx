@@ -90,20 +90,22 @@ const defaultSecuritySettings: SecurityFeature[] = [
 // HELPERS
 // ============================================================
 
-// Parse "2024-12-15T09:00:00Z" → { date: "2024-12-15", time: "09:00" }
+// UTC string → local date/time for form inputs (browser converts to user's timezone)
 function parseDatetime(dt: string): { date: string; time: string } {
   if (!dt) return { date: "", time: "" };
-  const clean = dt.replace("Z", "").replace("+00:00", "");
-  const [datePart, timePart] = clean.split("T");
-  return {
-    date: datePart,
-    time: timePart ? timePart.slice(0, 5) : "",
-  };
+  const d = new Date(dt);
+  if (isNaN(d.getTime())) return { date: "", time: "" };
+  const yyyy = d.getFullYear();
+  const MM = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return { date: `${yyyy}-${MM}-${dd}`, time: `${hh}:${mm}` };
 }
 
-// "2024-12-15" + "09:00" → "2024-12-15T09:00:00"
+// Local date/time from form → UTC ISO string for backend
 function combineDatetime(date: string, time: string): string {
-  return `${date}T${time}:00`;
+  return new Date(`${date}T${time}:00`).toISOString();
 }
 
 // Backend question → frontend Question
