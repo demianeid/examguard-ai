@@ -2,8 +2,6 @@ import Header from '../components/Header';
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import React, { useState, useEffect, useRef } from "react";
-import NotificationDropdown from './NotificationDropdown'; 
-import { createPortal } from 'react-dom';
 import {
   BookOpen,
   Clock,
@@ -178,147 +176,14 @@ const ClassesStudent = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<string>("all");
-  const [showNotifications, setShowNotifications] = useState<boolean>(false);
-  const [showAll, setShowAll] = useState(false);
-  const [selectedNotification, setSelectedNotification] = useState<number | null>(null);
-  const notificationRef = useRef<HTMLDivElement>(null);
-
+ 
+ 
   const [studentClasses, setStudentClasses] = useState<ClassType[]>([]);
   const [joinMessage, setJoinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [leaveConfirm, setLeaveConfirm] = useState<ClassType | null>(null);
   const [leaveLoading, setLeaveLoading] = useState(false);
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 1,
-      type: "exam",
-      title: "Upcoming Exam Tomorrow",
-      content: "Data Structures & Algorithms - Midterm Exam tomorrow at 10:00 AM. Duration: 120 minutes.",
-      time: "2 hours ago",
-      isRead: false,
-      priority: "high",
-      metadata: {
-        classId: 1,
-        className: "Data Structures & Algorithms",
-        examId: 101,
-        examTime: "10:00 AM",
-        examDate: "2025-10-15",
-        duration: "120 min"
-      }
-    },
-    {
-      id: 2,
-      type: "grade",
-      title: "New Grade Posted",
-      content: "Your Quiz 2 score: 85/100 (85%). Class average: 78%.",
-      time: "5 hours ago",
-      isRead: false,
-      priority: "medium",
-      metadata: {
-        classId: 1,
-        className: "Data Structures & Algorithms",
-        examId: 102,
-        score: 85,
-        maxScore: 100,
-        percentage: 85,
-        classAverage: 78
-      }
-    },
-    {
-      id: 3,
-      type: "system",
-      title: "Camera Check Required",
-      content: "Please verify your camera and microphone before the next exam. System check takes 2 minutes.",
-      time: "1 day ago",
-      isRead: true,
-      priority: "medium",
-      metadata: {
-        type: "device_check",
-        estimatedTime: "2 min"
-      }
-    },
-    {
-      id: 4,
-      type: "announcement",
-      title: "Office Hours Changed",
-      content: "Dr. Ahmed Hassan's office hours moved to Thursday 2:00 PM - 4:00 PM this week.",
-      time: "2 days ago",
-      isRead: true,
-      priority: "low",
-      metadata: {
-        classId: 1,
-        className: "Data Structures & Algorithms",
-        instructor: "Dr. Ahmed Hassan",
-        originalTime: "Tuesday 2-4 PM",
-        newTime: "Thursday 2-4 PM"
-      }
-    },
-    {
-      id: 5,
-      type: "exam",
-      title: "Quiz 3 Reminder",
-      content: "Database Systems - Quiz 3 closes tomorrow at 11:59 PM. Don't forget to submit!",
-      time: "1 day ago",
-      isRead: false,
-      priority: "high",
-      metadata: {
-        classId: 2,
-        className: "Database Systems",
-        examId: 203,
-        deadline: "11:59 PM",
-        submissionsStatus: "not_submitted"
-      }
-    },
-    {
-      id: 6,
-      type: "grade",
-      title: "Assignment Feedback Available",
-      content: "Your Database Design assignment feedback is now available. Grade: 92/100.",
-      time: "3 days ago",
-      isRead: false,
-      priority: "medium",
-      metadata: {
-        classId: 2,
-        className: "Database Systems",
-        assignmentId: 301,
-        score: 92,
-        maxScore: 100,
-        feedback: "Excellent work on normalization!"
-      }
-    },
-    {
-      id: 7,
-      type: "system",
-      title: "Exam Security Alert",
-      content: "Multiple tab switching detected during Quiz 2. Please ensure you stay in the exam window.",
-      time: "1 week ago",
-      isRead: true,
-      priority: "critical",
-      metadata: {
-        classId: 1,
-        className: "Data Structures & Algorithms",
-        examId: 102,
-        incidentId: 456,
-        severity: "warning"
-      }
-    },
-    {
-      id: 8,
-      type: "announcement",
-      title: "Study Materials Added",
-      content: "New practice problems and solutions added for the upcoming midterm exam.",
-      time: "4 days ago",
-      isRead: false,
-      priority: "medium",
-      metadata: {
-        classId: 1,
-        className: "Data Structures & Algorithms",
-        resources: 5,
-        type: "practice_problems"
-      }
-    }
-  ]);
+
 
   const selectedClass = classId ? studentClasses.find(cls => cls.id === parseInt(classId)) : null;
   const activeTab = tab || "overview";
@@ -367,224 +232,7 @@ const ClassesStudent = () => {
     };
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const newNotification = getMockNotification();
-      if (newNotification) {
-        setNotifications(prev => [newNotification, ...prev]);
-        if (Notification.permission === 'granted') {
-          new Notification('New Notification', {
-            body: newNotification.title,
-            icon: '/notification-icon.png',
-            badge: '/notification-badge.png'
-          });
-        }
-        const audio = new Audio('/notification.mp3');
-        audio.volume = 0.3;
-        audio.play().catch(() => {});
-      }
-    }, 45000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    if (Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (classId && !selectedClass) {
-      navigate("/classes");
-    }
-  }, [classId, selectedClass, navigate]);
-
-  const getMockNotification = (): NotificationItem | null => {
-    const mockNotifications = [
-      {
-        id: Date.now(),
-        type: "exam" as const,
-        title: "Exam Starting Soon",
-        content: "Web Development Quiz starts in 15 minutes. Get ready!",
-        time: "Just now",
-        isRead: false,
-        priority: "high" as const,
-        metadata: { classId: 3, className: "Web Development", examId: 304, startsIn: "15 min" }
-      },
-      {
-        id: Date.now() + 1,
-        type: "grade" as const,
-        title: "Grade Released",
-        content: "Your Operating Systems Quiz 1 grade is now available.",
-        time: "Just now",
-        isRead: false,
-        priority: "medium" as const,
-        metadata: { classId: 4, className: "Operating Systems", examId: 405, score: 88, maxScore: 100 }
-      },
-      {
-        id: Date.now() + 2,
-        type: "system" as const,
-        title: "System Maintenance",
-        content: "Scheduled maintenance tonight at 2 AM. Platform may be unavailable for 30 minutes.",
-        time: "Just now",
-        isRead: false,
-        priority: "low" as const,
-        metadata: { maintenanceStart: "2:00 AM", duration: "30 min" }
-      }
-    ];
-    return Math.random() > 0.8
-      ? mockNotifications[Math.floor(Math.random() * mockNotifications.length)] as NotificationItem
-      : null;
-  };
-
-  const markAsRead = (notificationId: number) => {
-    setNotifications(prev =>
-      prev.map(notif => notif.id === notificationId ? { ...notif, isRead: true } : notif)
-    );
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(notif => ({ ...notif, isRead: true })));
-  };
-
-  const deleteNotification = (notificationId: number, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setNotifications(prev => prev.filter(n => n.id !== notificationId));
-  };
-
-  const clearAllNotifications = () => {
-    if (window.confirm('Clear all notifications?')) {
-      setNotifications([]);
-    }
-  };
-
-  const getFilteredNotifications = () => {
-    let filtered = notifications;
-    if (filterType !== 'all') {
-      if (filterType === 'classes') {
-        filtered = notifications.filter(n => n.metadata?.classId !== undefined);
-      } else {
-        filtered = notifications.filter(n => n.type === filterType);
-      }
-    }
-    return showAll ? filtered : filtered.slice(0, 5);
-  };
-
-  const getUnreadClassesCount = () =>
-    notifications.filter(n => !n.isRead && n.metadata?.classId !== undefined).length;
-
-  const getTotalClassesCount = () =>
-    notifications.filter(n => n.metadata?.classId !== undefined).length;
-
-  const getPriorityColor = (priority: string = 'medium') => {
-    switch (priority) {
-      case 'critical': return 'bg-red-500';
-      case 'high': return 'bg-orange-500';
-      case 'medium': return 'bg-blue-500';
-      case 'low': return 'bg-gray-500';
-      default: return 'bg-blue-500';
-    }
-  };
-
-  const getPriorityBadge = (priority: string = 'medium') => {
-    switch (priority) {
-      case 'critical':
-        return <span className="bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5"><AlertCircle size={10} />Urgent</span>;
-      case 'high':
-        return <span className="bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded-full">Important</span>;
-      case 'medium':
-        return <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">Update</span>;
-      case 'low':
-        return <span className="bg-gray-100 text-gray-700 text-[10px] px-2 py-0.5 rounded-full">Info</span>;
-      default: return null;
-    }
-  };
-
-  const getNotificationIcon = (type: string, priority: string = 'medium') => {
-    const iconClasses = "p-1.5 rounded-lg";
-    switch (type) {
-      case "exam":
-        return <div className={`${iconClasses} bg-blue-100`}><Calendar className="text-blue-600" size={18} /></div>;
-      case "grade":
-        return <div className={`${iconClasses} bg-green-100`}><Award className="text-green-600" size={18} /></div>;
-      case "system":
-        return <div className={`${iconClasses} bg-red-100`}><AlertCircle className="text-red-600" size={18} /></div>;
-      case "announcement":
-        return <div className={`${iconClasses} bg-purple-100`}><Megaphone className="text-purple-600" size={18} /></div>;
-      default:
-        return <div className={`${iconClasses} bg-gray-100`}><Info className="text-gray-600" size={18} /></div>;
-    }
-  };
-
-  const handleNotificationClick = (notification: NotificationItem) => {
-    markAsRead(notification.id);
-    setSelectedNotification(notification.id);
-    setShowNotifications(false);
-
-    if (notification?.metadata?.classId) {
-      const classExists = studentClasses.some(cls => cls.id === notification.metadata?.classId);
-      if (classExists) {
-        switch (notification.type) {
-          case 'exam':
-            navigate(`/classes/${notification.metadata.classId}/exams`);
-            break;
-          case 'grade':
-            navigate(`/classes/${notification.metadata.classId}/grades`);
-            break;
-          default:
-            navigate(`/classes/${notification.metadata.classId}/overview`);
-            break;
-        }
-      } else {
-        navigate('/classes');
-      }
-    } else {
-      switch (notification.type) {
-        case 'system':
-          if (notification.metadata?.type === 'device_check') {
-            navigate('/system-check');
-          } else if (notification.metadata?.incidentId) {
-            navigate(`/exam-security/${notification.metadata.incidentId}`);
-          } else {
-            navigate('/');
-          }
-          break;
-        case 'exam':
-          if (notification.metadata?.examId) {
-            navigate(`/exam/${notification.metadata.examId}`);
-          } else {
-            navigate('/');
-          }
-          break;
-        case 'grade':
-          if (notification.metadata?.examId) {
-            navigate(`/exam-results/${notification.metadata.examId}`);
-          } else {
-            navigate('/');
-          }
-          break;
-        default:
-          navigate('/');
-          break;
-      }
-    }
-  };
-
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
+  
   const handleClassClick = (cls: ClassType) => {
     navigate(`/classes/${cls.id}/overview`);
   };
@@ -1282,7 +930,7 @@ const ClassesList = () => (
 
 
   return (
-    <div className="w-full pt-20 min-h-screen bg-gradient-to-br from-[#E3F0FE] to-[#F0F7FF]">
+    <div className="w-full pt-20 min-h-screen bg-background">
       <div className="min-h-screen p-6">
         <Header fixed={true} showAccount={true} isRegistered={true} />
 
@@ -1301,7 +949,7 @@ const ClassesList = () => (
                     <p className="text-sm sm:text-base text-gray-600">Student Dashboard</p>
                   </div>
                 </div>
-                <NotificationDropdown />
+                
               </div>
 
               {/* ── Join Class Input + Inline Message ── */}

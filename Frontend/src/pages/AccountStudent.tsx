@@ -35,13 +35,20 @@ const AccountStudent: React.FC = () => {
   ];
 
   useEffect(() => {
-    const fromSettings = location.state?.fromSettings;
-    if (fromSettings) {
+    // 🔴 FIX: بنتحقق إن updated: true موجودة (مش بس fromSettings)
+    const wasUpdated = location.state?.updated === true;
+
+    if (wasUpdated) {
       setShowRefreshNotice(true);
       const timer = setTimeout(() => setShowRefreshNotice(false), 3000);
-      setTimeout(() => clearTimeout(timer), 3000);
+
+      // 🔴 FIX: بنمسح الـ state فوراً عشان الرسالة متظهرش تاني لو رجع
+      navigate(location.pathname, { replace: true, state: {} });
+
+      return () => clearTimeout(timer);
     }
-    fetchProfile(); // ← always called
+
+    fetchProfile();
   }, [location.state, refreshKey]);
 
   const fetchProfile = async () => {
@@ -54,7 +61,7 @@ const AccountStudent: React.FC = () => {
       setTimeout(() => navigate('/Login'), 2000);
       return;
     }
-// http://127.0.0.1:8000
+
     try {
       const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/profile/', {
         method: 'GET',
@@ -82,6 +89,11 @@ const AccountStudent: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // 🔴 FIX: fetchProfile منفصلة عن الـ notice effect
+  useEffect(() => {
+    fetchProfile();
+  }, [refreshKey]);
 
   const handleEditProfile = () => navigate("/settings", { state: { from: 'student-account' } });
   const handleRefresh = () => { setLoading(true); setRefreshKey(prev => prev + 1); };
@@ -117,6 +129,7 @@ const AccountStudent: React.FC = () => {
       <div className="w-full py-24 px-4">
         <div className="max-w-[800px] mx-auto space-y-6">
 
+          {/* 🔴 FIX: بنعرض الـ notice بس لما updated: true */}
           {showRefreshNotice && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
@@ -165,9 +178,7 @@ const AccountStudent: React.FC = () => {
                   className="w-32 h-32 rounded-full shadow-xl border-4 border-white overflow-hidden bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center"
                 >
                   {profile?.profile_image ? (
-                    // http://127.0.0.1:8000
                     <img
-                      // src={`https://examguard-ai-production.up.railway.app${profile.profile_image}`}
                       src={profile.profile_image.startsWith('http') ? profile.profile_image : `https://examguard-ai-production.up.railway.app${profile.profile_image}`}
                       alt={profile.full_name}
                       className="w-full h-full object-cover"

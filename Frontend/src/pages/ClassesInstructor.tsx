@@ -8,7 +8,7 @@ import {
   School, Edit, Copy, Check, FileEdit, GraduationCap, Sparkles,
   Trash2, Filter, MoreVertical, Download, Settings, ChevronDown, Search
 } from "lucide-react";
-// http://127.0.0.1:8000
+
 const BASE_URL = 'https://examguard-ai-production.up.railway.app/api/instructors';
 const PROFILE_URL = 'https://examguard-ai-production.up.railway.app/api/auth/profile/';
 const getToken = () => localStorage.getItem('access_token');
@@ -35,27 +35,6 @@ interface InstructorProfile {
   real_email: string;
   phone: string;
   profile_image: string | null;
-}
-
-interface NotificationItem {
-  id: number;
-  type: "exam" | "grade" | "system" | "announcement";
-  title: string;
-  content: string;
-  time: string;
-  isRead: boolean;
-  priority?: "low" | "medium" | "high" | "critical";
-  metadata?: {
-    classId?: number;
-    className?: string;
-    examId?: number;
-    studentId?: string;
-    incidentId?: number;
-    pendingSubmissions?: number;
-    pendingReviews?: number;
-    version?: string;
-    docs?: string;
-  };
 }
 
 interface Exam {
@@ -191,101 +170,6 @@ const EditClassModal: React.FC<EditClassModalProps> = ({ isOpen, onClose, onSubm
   );
 };
 
-// --- NotificationDropdown ---
-const NotificationDropdown = () => {
-  const [filterType, setFilterType] = useState<string>("all");
-  const [showNotifications, setShowNotifications] = useState<boolean>(false);
-  const [showAll, setShowAll] = useState(false);
-  const [selectedNotification, setSelectedNotification] = useState<number | null>(null);
-  const notificationRef = useRef<HTMLDivElement>(null);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    { id: 1, type: "exam", title: "Midterm Exam Scheduled", content: "Software Engineering - Midterm exam scheduled for Oct 15 at 10:00 AM.", time: "1 hour ago", isRead: false, priority: "high", metadata: { classId: 1, className: "Software Engineering", examId: 101 } },
-    { id: 2, type: "system", title: "Flagged Incident Detected", content: "Student suspicious behavior detected during Quiz 3 in Computer Networks.", time: "3 hours ago", isRead: false, priority: "critical", metadata: { classId: 2, className: "Computer Networks", studentId: "2025045", incidentId: 345 } },
-    { id: 3, type: "grade", title: "Bulk Grading Complete", content: "All 45 submissions for Data Structures Quiz 2 have been automatically graded.", time: "1 day ago", isRead: true, priority: "medium", metadata: { classId: 3, className: "Data Structures", examId: 202, pendingReviews: 3 } },
-  ]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) setShowNotifications(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const markAsRead = (id: number) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-  const markAllAsRead = () => setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-  const deleteNotification = (id: number, e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); setNotifications(prev => prev.filter(n => n.id !== id)); };
-  const getFilteredNotifications = () => { const filtered = filterType === 'all' ? notifications : notifications.filter(n => n.type === filterType); return showAll ? filtered : filtered.slice(0, 5); };
-  const getPriorityColor = (priority: string = 'medium') => { switch(priority) { case 'critical': return 'bg-red-500'; case 'high': return 'bg-orange-500'; case 'medium': return 'bg-blue-500'; default: return 'bg-gray-500'; } };
-  const getNotificationIcon = (type: string) => { const iconClasses = "p-1.5 rounded-lg"; switch(type) { case "exam": return <div className={`${iconClasses} bg-blue-100`}><Calendar className="text-blue-600" size={18} /></div>; case "grade": return <div className={`${iconClasses} bg-green-100`}><CheckCircle className="text-green-600" size={18} /></div>; case "system": return <div className={`${iconClasses} bg-red-100`}><AlertCircle className="text-red-600" size={18} /></div>; default: return <div className={`${iconClasses} bg-purple-100`}><Megaphone className="text-purple-600" size={18} /></div>; } };
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
-  return (
-    <div className="relative" ref={notificationRef}>
-      <button title="Notifications" type="button" className="relative p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200 group" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNotifications(!showNotifications); }}>
-        <Bell size={20} className="group-hover:scale-110 transition-transform" />
-        {unreadCount > 0 && (<><span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span><span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span><span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-bold">{unreadCount > 9 ? '9+' : unreadCount}</span></>)}
-      </button>
-      <AnimatePresence>
-        {showNotifications && (
-          <motion.div key="notification-dropdown" initial={{ opacity: 0, y: -10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.95 }} transition={{ duration: 0.2 }} className="absolute right-0 mt-2 w-[32rem] max-w-[90vw] bg-white rounded-xl shadow-2xl z-50 overflow-hidden border border-gray-100">
-            <div className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-5 py-4">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3"><Bell size={20} /><div><h3 className="font-semibold text-lg">Notifications</h3><p className="text-xs text-blue-100 mt-0.5">{unreadCount} unread · {notifications.length} total</p></div></div>
-                <div className="flex items-center gap-2">
-                  {unreadCount > 0 && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); markAllAsRead(); }} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"><Check size={14} />Mark all read</button>}
-                  <button title='Close' onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNotifications(false); }} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"><X size={16} /></button>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
-                {['all', 'exam', 'grade', 'system', 'announcement'].map((type, index) => (
-                  <button key={`filter-${type}-${index}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFilterType(type); }} className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap transition-all ${filterType === type ? 'bg-white text-[#1A80F6] shadow-md' : 'bg-white/20 text-white hover:bg-white/30'}`}>{type}</button>
-                ))}
-              </div>
-            </div>
-            <div className="max-h-[32rem] overflow-y-auto divide-y divide-gray-100">
-              {getFilteredNotifications().length > 0 ? getFilteredNotifications().map((notification, index) => (
-                <motion.div key={`notification-${notification.id}-${index}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className={`relative px-5 py-4 hover:bg-gray-50 cursor-pointer transition-all duration-200 ${!notification.isRead ? 'bg-blue-50/50' : ''}`} onClick={() => { markAsRead(notification.id); setSelectedNotification(notification.id); }}>
-                  {notification.priority && ['critical', 'high'].includes(notification.priority) && <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 ${getPriorityColor(notification.priority)} rounded-r-full`}></div>}
-                  <div className="flex gap-4">
-                    <div className="flex-shrink-0">{getNotificationIcon(notification.type)}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start gap-2">
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-semibold text-gray-900 text-sm">{notification.title}</h4>
-                            {!notification.isRead && <span className="bg-[#1A80F6] text-white text-[10px] px-2 py-0.5 rounded-full">New</span>}
-                          </div>
-                          <p className="text-gray-600 text-sm mt-1 line-clamp-2">{notification.content}</p>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <span className="text-xs text-gray-400 whitespace-nowrap">{notification.time}</span>
-                          <button title="Delete notification" type="button" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" onClick={(e) => deleteNotification(notification.id, e)}><X size={14} /></button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )) : (
-                <div className="px-5 py-12 text-center">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><Bell size={24} className="text-gray-400" /></div>
-                  <p className="text-gray-500 font-medium">No notifications</p>
-                </div>
-              )}
-            </div>
-            {notifications.length > 0 && (
-              <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowAll(!showAll); }} className="text-[#1A80F6] text-sm font-medium hover:text-[#0E6AD0] transition-colors flex items-center gap-1">{showAll ? 'Show less' : 'View all notifications'}<ChevronDown size={14} className={`transition-transform ${showAll ? 'rotate-180' : ''}`} /></button>
-                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (window.confirm('Clear all notifications?')) setNotifications([]); }} className="text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1"><Trash2 size={12} />Clear all</button>
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
-
 // --- Main Component ---
 const ClassesInstructor = () => {
   const { classId, tab } = useParams<{ classId?: string; tab?: string }>();
@@ -357,7 +241,6 @@ const ClassesInstructor = () => {
     }
   };
 
-  // ✅ CHANGED: added 'dashboard' to trigger exam fetch
   useEffect(() => {
     if ((tab === 'exams' || tab === 'overview' || tab === 'dashboard') && classId) {
       fetchExams(parseInt(classId));
@@ -366,11 +249,9 @@ const ClassesInstructor = () => {
 
   const fetchExams = async (id: number) => {
     setExamsLoading(true);
-// `http://127.0.0.1:8000
     try {
       const data = await apiRequest(`https://examguard-ai-production.up.railway.app/api/exam/class/${id}/`);
 
-      // Compute status from start_datetime + duration if backend doesn't return it
       const now = new Date();
       const withStatus = data.map((exam: any) => {
         const start = new Date(exam.start_datetime);
@@ -386,28 +267,7 @@ const ClassesInstructor = () => {
         return { ...exam, status: exam.status ?? status };
       });
 
-      // // ── TEST EXAMS (remove when backend is ready) ──────────────────
-      // const now2 = new Date();
-      // const testActive: Exam = {
-      //   id: 9991,
-      //   title: "Midterm Exam — Software Engineering",
-      //   start_datetime: new Date(now2.getTime() - 30 * 60 * 1000).toISOString(), // started 30 min ago
-      //   duration: 90,
-      //   status: "active",
-      //   questions_count: 40,
-      // };
-      // const testUpcoming: Exam = {
-      //   id: 9992,
-      //   title: "Quiz 3 — Data Structures",
-      //   start_datetime: new Date(now2.getTime() + 2 * 60 * 60 * 1000).toISOString(), // starts in 2 hours
-      //   duration: 45,
-      //   status: "upcoming",
-      //   questions_count: 20,
-      // };
-      // const withTestExams = [testActive, testUpcoming, ...withStatus];
-      // ────────────────────────────────────────────────────────────────
-
-   setExams(withStatus);
+      setExams(withStatus);
     } catch {
       setExams([]);
     } finally {
@@ -518,32 +378,32 @@ const ClassesInstructor = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-5 rounded-xl border border-blue-200 hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-3"><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center"><Calendar className="text-[#1A80F6]" size={20} /></div><h3 className="font-semibold text-gray-800">Next Exam</h3></div>
-   {examsLoading ? (
-  <div className="w-32 h-4 bg-gray-200 animate-pulse rounded" />
-) : (() => {
-  const nextExam = exams
-    .filter(e => e.status === "upcoming")
-    .sort((a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime())[0];
-  return nextExam ? (
-    <>
-      <p className="text-gray-800 font-medium text-lg">{nextExam.title}</p>
-      <p className="text-gray-600 text-sm mt-1">
-        {(() => {
-  const [date, time] = nextExam.start_datetime.split('T');
-  const [y, m, d] = date.split('-');
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const [hour, min] = time.slice(0, 5).split(':');
-  const h = parseInt(hour);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 || 12;
-  return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y} · ${h12}:${min} ${ampm}`;
-})()}
-      </p>
-    </>
-  ) : (
-    <p className="text-gray-500 text-sm">No upcoming exams</p>
-  );
-})()}
+          {examsLoading ? (
+            <div className="w-32 h-4 bg-gray-200 animate-pulse rounded" />
+          ) : (() => {
+            const nextExam = exams
+              .filter(e => e.status === "upcoming")
+              .sort((a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime())[0];
+            return nextExam ? (
+              <>
+                <p className="text-gray-800 font-medium text-lg">{nextExam.title}</p>
+                <p className="text-gray-600 text-sm mt-1">
+                  {(() => {
+                    const [date, time] = nextExam.start_datetime.split('T');
+                    const [y, m, d] = date.split('-');
+                    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                    const [hour, min] = time.slice(0, 5).split(':');
+                    const h = parseInt(hour);
+                    const ampm = h >= 12 ? 'PM' : 'AM';
+                    const h12 = h % 12 || 12;
+                    return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y} · ${h12}:${min} ${ampm}`;
+                  })()}
+                </p>
+              </>
+            ) : (
+              <p className="text-gray-500 text-sm">No upcoming exams</p>
+            );
+          })()}
           <button type="button" className={`mt-4 text-sm font-medium flex items-center gap-1 group ${getTextColorFromGradient(cls.color)}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleTabChange("exams"); }}>View all exams <span className="group-hover:translate-x-1 transition-transform">→</span></button>
         </div>
 
@@ -567,7 +427,6 @@ const ClassesInstructor = () => {
     </div>
   );
 
-  // ✅ StudentsTab
   const StudentsTab = () => {
     if (studentsLoading) {
       return (
@@ -671,7 +530,6 @@ const ClassesInstructor = () => {
     );
   };
 
-  // ✅ DashboardTab — all exams + inline proctoring + suspicious activity
   const DashboardTab = () => {
     const activeExams = exams.filter(e => e.status === "active");
     const upcomingExams = exams.filter(e => e.status === "upcoming");
@@ -679,7 +537,6 @@ const ClassesInstructor = () => {
     const [expandedExam, setExpandedExam] = useState<number | null>(null);
     const [proctoringView, setProctoringView] = useState<"monitor" | "activity" | "settings">("monitor");
 
-    // Mock suspicious activity data — replace with real API data
     const suspiciousActivity = {
       high: [
         { id: 1, student: "Ahmed Hassan", event: "Multiple tab switches detected", time: "10:23 AM", count: 4 },
@@ -698,7 +555,6 @@ const ClassesInstructor = () => {
 
     const totalIncidents = suspiciousActivity.high.length + suspiciousActivity.medium.length + suspiciousActivity.low.length;
 
-    // Mock live students for active exams
     const liveStudents = [
       { id: 1, name: "Ahmed Hassan", status: "flagged", progress: 65, avatar: null },
       { id: 2, name: "Sara Mohamed", status: "flagged", progress: 40, avatar: null },
@@ -727,7 +583,6 @@ const ClassesInstructor = () => {
 
     const SuspiciousActivitySection = ({ examId }: { examId: number }) => (
       <div className="space-y-4">
-        {/* High severity */}
         <div className="bg-white rounded-xl border border-red-200 overflow-hidden shadow-sm">
           <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-red-600 to-red-700">
             <AlertCircle size={18} className="text-white" />
@@ -766,7 +621,6 @@ const ClassesInstructor = () => {
           )}
         </div>
 
-        {/* Medium severity */}
         <div className="bg-white rounded-xl border border-orange-200 overflow-hidden shadow-sm">
           <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-orange-500 to-orange-600">
             <AlertCircle size={18} className="text-white" />
@@ -805,7 +659,6 @@ const ClassesInstructor = () => {
           )}
         </div>
 
-        {/* Low severity */}
         <div className="bg-white rounded-xl border border-yellow-200 overflow-hidden shadow-sm">
           <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600">
             <Info size={18} className="text-white" />
@@ -881,7 +734,6 @@ const ClassesInstructor = () => {
 
       return (
         <div className="space-y-4">
-          {/* Stats row */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 text-center shadow-sm">
               <p className="text-3xl font-bold text-green-700">{online}</p>
@@ -901,7 +753,6 @@ const ClassesInstructor = () => {
             </div>
           </div>
 
-          {/* Progress bar */}
           <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-semibold text-gray-700 flex items-center gap-2">
@@ -918,7 +769,6 @@ const ClassesInstructor = () => {
             </div>
           </div>
 
-          {/* Camera grid */}
           <div>
             <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
               <Eye size={14} className="text-[#1A80F6]" />
@@ -927,16 +777,13 @@ const ClassesInstructor = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {liveStudents.map(student => (
                 <div key={student.id} className={`relative rounded-xl overflow-hidden border bg-gray-900 ${getCameraRingColor(student.status)}`} style={{ aspectRatio: '4/3' }}>
-                  {/* Camera feed placeholder */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
                     {getCameraIcon(student.status)}
                     <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold text-base border-2 border-gray-500">
                       {student.name.charAt(0)}
                     </div>
                   </div>
-                  {/* Status badge top-left */}
                   {getStatusBadge(student.status)}
-                  {/* Progress bottom */}
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
                     <p className="text-white text-[11px] font-semibold truncate">{student.name}</p>
                     <div className="flex items-center gap-1.5 mt-1">
@@ -946,7 +793,6 @@ const ClassesInstructor = () => {
                       <span className="text-white text-[10px] font-bold">{student.progress}%</span>
                     </div>
                   </div>
-                  {/* Flagged overlay pulse */}
                   {student.status === "flagged" && (
                     <div className="absolute inset-0 border-2 border-red-500 rounded-xl animate-pulse pointer-events-none" />
                   )}
@@ -1009,11 +855,9 @@ const ClassesInstructor = () => {
           className={`bg-white border rounded-xl shadow-sm transition-all duration-200 overflow-hidden ${isActive ? 'border-green-300 ring-2 ring-green-100 cursor-pointer' : isUpcoming ? 'border-blue-200' : 'border-gray-200'} ${isExpanded ? 'shadow-lg' : 'hover:shadow-md'}`}
           onClick={isActive ? (e) => { e.preventDefault(); navigate(`/proctor/${exam.id}`); } : undefined}
         >
-          {/* Status bar */}
           <div className={`h-1.5 w-full ${isActive ? 'bg-gradient-to-r from-green-400 to-emerald-500' : isUpcoming ? (selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]') : 'bg-gradient-to-r from-gray-300 to-gray-400'}`} />
 
           <div className="p-5">
-            {/* Header */}
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -1034,7 +878,6 @@ const ClassesInstructor = () => {
               </div>
             </div>
 
-            {/* Meta pills */}
             <div className="flex flex-wrap gap-2 mb-4">
               <span className="flex items-center gap-1.5 bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-lg text-sm text-gray-600">
                 <Calendar size={13} className="text-gray-400" />
@@ -1052,7 +895,6 @@ const ClassesInstructor = () => {
               </span>
             </div>
 
-            {/* Live stats summary (collapsed) */}
             {isActive && !isExpanded && (
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <div className="bg-green-50 border border-green-100 rounded-lg p-2.5 text-center">
@@ -1070,7 +912,6 @@ const ClassesInstructor = () => {
               </div>
             )}
 
-            {/* Collapsed completed stats */}
             {isCompleted && !isExpanded && (
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-center">
@@ -1084,7 +925,6 @@ const ClassesInstructor = () => {
               </div>
             )}
 
-            {/* Action buttons */}
             <div className="flex gap-2">
               {isActive && (
                 <>
@@ -1126,7 +966,6 @@ const ClassesInstructor = () => {
               )}
             </div>
 
-            {/* Expanded inline panel — upcoming settings & completed review only */}
             {isExpanded && !isActive && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }} className="mt-5 pt-5 border-t border-gray-100">
                 {proctoringView === "activity" && <SuspiciousActivitySection examId={exam.id} />}
@@ -1140,7 +979,6 @@ const ClassesInstructor = () => {
 
     return (
       <div className="space-y-6">
-        {/* Summary strip */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0"><Eye className="text-green-600" size={20} /></div>
@@ -1256,7 +1094,6 @@ const ClassesInstructor = () => {
             <button type="button" onClick={handleBackToList} className="bg-white border border-gray-300 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2">← Back</button>
           </div>
         </div>
-        {/* ✅ CHANGED: Replaced "proctoring" tab with "dashboard" tab */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {[
             { id: "overview", label: "Overview", icon: BookOpen },
@@ -1332,7 +1169,7 @@ const ClassesInstructor = () => {
   };
 
   return (
-    <div className="w-full pt-20 min-h-screen bg-gradient-to-br from-[#E3F0FE] to-[#F0F7FF]">
+    <div className="w-full pt-20 min-h-screen bg-background">
       <div className="min-h-screen p-6">
         <Header fixed={true} showAccount={true} isRegistered={true} userType="instructor" />
         <div className="max-w-7xl mx-auto">
@@ -1356,7 +1193,6 @@ const ClassesInstructor = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <NotificationDropdown />
                 {!selectedClass && (<button type="button" onClick={handleCreateClassClick} className="bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] text-white px-4 sm:px-5 py-2.5 rounded-lg hover:from-[#0E6AD0] hover:to-[#3A80D2] transition-all duration-200 flex items-center gap-2 text-sm sm:text-base shadow-lg shadow-blue-500/30"><Plus size={18} /><span className="hidden sm:inline font-semibold">Create Class</span></button>)}
               </div>
             </div>

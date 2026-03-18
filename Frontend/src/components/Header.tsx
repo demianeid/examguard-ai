@@ -1,13 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { HashLink } from "react-router-hash-link";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Link } from "react-router-dom";
-import { LogOut, Settings, User, WifiOff } from "lucide-react"; // Added WifiOff icon
+import { LogOut, Settings, User, WifiOff } from "lucide-react";
 import { useUser } from '../context/UserContext';
+import NotificationDropdown from "../pages/NotificationDropdown";
 
-// Logo URLs
-const LOGO_URL = "/images/logo1.png"; // Default logo
-const SCROLLED_LOGO_URL = "/images/logo2.png"; // Logo for scrolled state
+const LOGO_URL = "/images/logo1.png";
+const SCROLLED_LOGO_URL = "/images/logo2.png";
 
 interface HeaderProps {
   hideSignup?: boolean;
@@ -19,7 +19,6 @@ interface HeaderProps {
   userType?: 'student' | 'instructor';
 }
 
-// Type guard للتحقق من أن الـ path مناسب لـ HashLink
 const isValidHashLinkPath = (path: string): boolean => {
   return path.startsWith('/#') || path === '/';
 };
@@ -36,8 +35,11 @@ const Header: React.FC<HeaderProps> = ({
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  
+  // hide/show on scroll
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
 
-  // Safe hook usage with fallback
   let contextUserType: 'student' | 'instructor' = 'student';
   let setUserType: (type: 'student' | 'instructor') => void = () => {};
 
@@ -49,19 +51,16 @@ const Header: React.FC<HeaderProps> = ({
     console.warn('UserContext not available, using default values');
   }
 
-  // Use prop userType or context userType
   const userType = propUserType || contextUserType;
 
-  // Auto-detect account pages
   const isAccountPageAuto = location.pathname === "/account-instructor" || 
-                           location.pathname === "/account-student";
+                            location.pathname === "/account-student";
 
-  // Auto-detect user type from current page
   useEffect(() => {
     if (location.pathname === "/home-instructor" || 
         location.pathname === "/account-instructor" ||
         location.pathname === "/classes-instructor" ||
-        location.pathname === "/offline-mode" || // Added offline mode detection
+        location.pathname === "/offline-mode" ||
         location.pathname.startsWith("/classes-instructor/")) {
       setUserType('instructor');
     } else if (location.pathname === "/home" || 
@@ -72,25 +71,36 @@ const Header: React.FC<HeaderProps> = ({
     }
   }, [location.pathname, setUserType]);
 
+  // scroll direction logic
   useEffect(() => {
     const handleScroll = () => {
-      const current = window.scrollY;
+      const currentScrollY = window.scrollY;
 
-      if (current > 50) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
+      // تحديد إذا scrolled فوق الـ 50px
+      setIsScrolled(currentScrollY > 50);
+
+      // إخفاء لما بنزل، إظهار لما بنطلع
+      if (currentScrollY <= 0) {
+        // في الأعلى دايماً يظهر
+        setIsVisible(true);
+      } else if (currentScrollY > lastScrollY.current + 5) {
+        // نازل → إخفاء (الـ +5 عشان نتجنب الـ micro-movements)
+        setIsVisible(false);
+        if (isMenuOpen) setIsMenuOpen(false); // اقفل المنيو لو فاتح
+      } else if (currentScrollY < lastScrollY.current - 5) {
+        // طالع → إظهار
+        setIsVisible(true);
       }
+
+      lastScrollY.current = currentScrollY;
     };
 
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [isMenuOpen]);
 
-  // Determine which logo to use based on scroll state
   const currentLogo = isScrolled ? SCROLLED_LOGO_URL : LOGO_URL;
 
-  // Determine paths based on user type
   const getNavPaths = () => {
     if (!isRegistered) {
       return {
@@ -98,11 +108,10 @@ const Header: React.FC<HeaderProps> = ({
         features: "/#features",
         howItWorks: "/#howitworks",
         contact: "/#contact",
-        offlineMode: "/#offline-mode" // For non-registered users
+        offlineMode: "/#offline-mode"
       };
     }
 
-    // الـ routes الفعلية حسب نوع المستخدم
     const baseHomePath = userType === 'instructor' ? "/home-instructor" : "/home";
     const classesPath = userType === 'instructor' ? "/classes-instructor" : "/classes";
     
@@ -112,18 +121,14 @@ const Header: React.FC<HeaderProps> = ({
       howItWorks: "/how-it-works",
       contact: "/contact",
       classes: classesPath,
-      offlineMode: userType === 'instructor' ? "/OfflineMode" : undefined // Only for instructors
+      offlineMode: userType === 'instructor' ? "/OfflineMode" : undefined
     };
   };
 
   const paths = getNavPaths();
 
-  // تأكد أن كل الـ paths موجودة وتعطي قيمة افتراضية إذا كانت undefined
-  const ensurePath = (path: string | undefined): string => {
-    return path || "/";
-  };
+  const ensurePath = (path: string | undefined): string => path || "/";
 
-  // Navigation items based on user status AND user type
   const getNavItems = () => {
     if (isRegistered) {
       const items = [
@@ -134,12 +139,8 @@ const Header: React.FC<HeaderProps> = ({
         { name: "Classes", path: ensurePath(paths.classes) }
       ];
       
-      // Add Offline Mode only for instructors
       if (userType === 'instructor' && paths.offlineMode) {
-        items.push({ 
-          name: "Offline Mode", 
-          path: paths.offlineMode,
-        });
+        items.push({ name: "Offline Mode", path: paths.offlineMode });
       }
       
       return items;
@@ -154,38 +155,31 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const navItems = getNavItems();
-
   const navigate = useNavigate();
 
   const handleLogout = () => {
     const confirmed = window.confirm("Are you sure you want to logout?");
     if (confirmed) {
-      setUserType('student'); // Reset to default
+      setUserType('student');
       navigate("/");
     }
   };
 
-  // Use auto-detected value or prop value
   const finalIsAccountPage = isAccountPage || isAccountPageAuto;
 
-  // Determine home path based on user type
   const getHomePath = (): string => {
     if (!isRegistered) return "/";
     return userType === 'instructor' ? "/home-instructor" : "/home";
   };
 
-  // Determine account path based on user type
   const getAccountPath = (): string => {
     return userType === 'instructor' ? "/account-instructor" : "/account-student";
   };
 
-  // Render navigation link based on type
   const renderNavLink = (item: { name: string; path: string; icon?: React.ReactNode }, isMobile: boolean = false) => {
     const baseClasses = isMobile 
       ? `block text-center px-3.5 py-2 font-semibold transition-colors ${
-          isScrolled
-            ? "text-white hover:text-blue-200"
-            : "text-gray-900 hover:text-blue-600"
+          isScrolled ? "text-white hover:text-blue-200" : "text-gray-900 hover:text-blue-600"
         }`
       : `relative px-3.5 py-2 font-semibold transition-colors group ${
           isScrolled ? "text-white" : "text-gray-900"
@@ -200,56 +194,29 @@ const Header: React.FC<HeaderProps> = ({
 
     if (isRegistered) {
       return (
-        <Link
-          to={item.path}
-          className={baseClasses}
-          onClick={() => isMobile && setIsMenuOpen(false)}
-        >
+        <Link to={item.path} className={baseClasses} onClick={() => isMobile && setIsMenuOpen(false)}>
           {content}
           {!isMobile && (
-            <span
-              className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
-                isScrolled ? "bg-white" : "bg-blue-600"
-              }`}
-            ></span>
+            <span className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${isScrolled ? "bg-white" : "bg-blue-600"}`}></span>
           )}
         </Link>
       );
     } else {
-      // للغير مسجلين، استخدم HashLink فقط للـ paths التي تبدأ بـ /#
       if (isValidHashLinkPath(item.path)) {
         return (
-          <HashLink
-            smooth
-            to={item.path}
-            className={baseClasses}
-            onClick={() => isMobile && setIsMenuOpen(false)}
-          >
+          <HashLink smooth to={item.path} className={baseClasses} onClick={() => isMobile && setIsMenuOpen(false)}>
             {content}
             {!isMobile && (
-              <span
-                className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
-                  isScrolled ? "bg-white" : "bg-blue-600"
-                }`}
-              ></span>
+              <span className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${isScrolled ? "bg-white" : "bg-blue-600"}`}></span>
             )}
           </HashLink>
         );
       } else {
-        // إذا كان path مش مناسب لـ HashLink، استخدم Link عادي
         return (
-          <Link
-            to={item.path}
-            className={baseClasses}
-            onClick={() => isMobile && setIsMenuOpen(false)}
-          >
+          <Link to={item.path} className={baseClasses} onClick={() => isMobile && setIsMenuOpen(false)}>
             {content}
             {!isMobile && (
-              <span
-                className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${
-                  isScrolled ? "bg-primary" : "bg-primary"
-                }`}
-              ></span>
+              <span className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full bg-primary`}></span>
             )}
           </Link>
         );
@@ -260,44 +227,48 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <nav
       className={`fixed top-0 left-0 w-full z-[9999] transition-all duration-300 ease-in-out
-        ${
-          isScrolled
-            ? "bg-p1/80 backdrop-blur-md shadow-lg px-5 sm:px-20 py-3" // Added blur and transparency
-            : "bg-background px-5 sm:px-20 py-3"
+        ${isVisible ? "translate-y-0" : "-translate-y-full"}
+        ${isScrolled
+          ? "bg-p1/80 backdrop-blur-md shadow-lg px-5 sm:px-20 py-3"
+          : "bg-background px-5 sm:px-20 py-3"
         }
       `}
     >
       <div className="flex items-center justify-between">
         {/* Logo */}
-        <Link
-          to={getHomePath()}
-          className="flex items-center"
-        >
+        <Link to={getHomePath()} className="flex items-center">
           <img 
-            src={currentLogo} // Use dynamic logo based on scroll state
+            src={currentLogo}
             alt="ExamGuard Logo" 
             className="h-9 sm:h-9 w-auto object-contain transition-all duration-300"
           />
         </Link>
 
-        {/* Right Section - Buttons & Toggle */}
+        {/* Desktop Nav Links */}
+        <div className="hidden lg:flex lg:order-1 text-sm mx-auto">
+          <ul className="flex items-center gap-1">
+            {navItems.map((item, index) => (
+              <li key={index}>{renderNavLink(item, false)}</li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Right Section */}
         <div className="flex items-center gap-2 lg:order-2">
+          {isRegistered && <NotificationDropdown userType={userType} />}
+          
           {finalIsAccountPage ? (
             <div className="flex items-center gap-4">
-              {/* Settings icon - show on both mobile and desktop */}
               <Link
                 to="/settings"
                 className={`p-2 font-semibold rounded-lg transition-all ${
-                  isScrolled
-                    ? "text-white hover:text-gray-300"
-                    : "text-gray-700 hover:text-gray-900"
+                  isScrolled ? "text-white hover:text-gray-300" : "text-gray-700 hover:text-gray-900"
                 }`}
                 title="Settings"
               >
                 <Settings className="w-5 h-5" />
               </Link>
 
-              {/* Logout button - only show on desktop */}
               <button
                 onClick={handleLogout}
                 className={`hidden lg:flex items-center gap-2 px-3 py-2 font-semibold rounded-lg border-2 transition-all ${
@@ -310,11 +281,8 @@ const Header: React.FC<HeaderProps> = ({
                 <span>Logout</span>
               </button>
 
-              {/* Mobile Toggle - only show on mobile */}
               <button
-                className={`lg:hidden ml-2 text-2xl ${
-                  isScrolled ? "text-white" : "text-gray-900"
-                }`}
+                className={`lg:hidden ml-2 text-2xl ${isScrolled ? "text-white" : "text-gray-900"}`}
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
               >
                 {isMenuOpen ? "✕" : "☰"}
@@ -322,7 +290,6 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           ) : showAccount ? (
             <>
-              {/* Desktop Account Button */}
               <Link
                 to={getAccountPath()}
                 className={`hidden lg:flex px-4 py-2 font-semibold rounded-lg border-2 transition-all ${
@@ -334,24 +301,18 @@ const Header: React.FC<HeaderProps> = ({
                 Account
               </Link>
 
-              {/* Mobile Account Icon - Only icon, no text */}
               <Link
                 to={getAccountPath()}
                 className={`lg:hidden p-2 font-semibold rounded-lg transition-all ${
-                  isScrolled
-                    ? "text-white hover:text-gray-300"
-                    : "text-gray-700 hover:text-gray-900"
+                  isScrolled ? "text-white hover:text-gray-300" : "text-gray-700 hover:text-gray-900"
                 }`}
                 title="Account"
               >
                 <User className="w-5 h-5" />
               </Link>
 
-              {/* Mobile Toggle - only show on mobile */}
               <button
-                className={`lg:hidden ml-2 text-2xl ${
-                  isScrolled ? "text-white" : "text-gray-900"
-                }`}
+                className={`lg:hidden ml-2 text-2xl ${isScrolled ? "text-white" : "text-gray-900"}`}
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
               >
                 {isMenuOpen ? "✕" : "☰"}
@@ -363,9 +324,7 @@ const Header: React.FC<HeaderProps> = ({
                 <Link
                   to="/Login"
                   className={`hidden lg:block px-4 py-2 font-semibold transition-colors ${
-                    isScrolled
-                      ? "text-white hover:text-blue-200"
-                      : "text-gray-900 hover:text-blue-600"
+                    isScrolled ? "text-white hover:text-blue-200" : "text-gray-900 hover:text-blue-600"
                   }`}
                 >
                   Log in
@@ -385,28 +344,14 @@ const Header: React.FC<HeaderProps> = ({
                 </Link>
               )}
 
-              {/* Mobile Toggle - only show on mobile */}
               <button
-                className={`lg:hidden ml-2 text-2xl ${
-                  isScrolled ? "text-white" : "text-gray-900"
-                }`}
+                className={`lg:hidden ml-2 text-2xl ${isScrolled ? "text-white" : "text-gray-900"}`}
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
               >
                 {isMenuOpen ? "✕" : "☰"}
               </button>
             </>
           )}
-        </div>
-
-        {/* Desktop Nav Links */}
-        <div className="hidden lg:flex lg:order-1 text-sm mx-auto">
-          <ul className="flex items-center gap-1">
-            {navItems.map((item, index) => (
-              <li key={index}>
-                {renderNavLink(item, false)}
-              </li>
-            ))}
-          </ul>
         </div>
       </div>
 
@@ -423,9 +368,7 @@ const Header: React.FC<HeaderProps> = ({
             </li>
           ))}
 
-          {/* إظهار الأزرار المناسبة حسب حالة المستخدم */}
           {isRegistered ? (
-            // إذا كان المستخدم مسجل - إظهار زر Logout فقط
             finalIsAccountPage ? (
               <li className="w-full">
                 <button
@@ -440,20 +383,14 @@ const Header: React.FC<HeaderProps> = ({
                   Logout
                 </button>
               </li>
-            ) : (
-              // إذا كان المستخدم مسجل ولكن ليس في صفحة Account - لا نعرض أي أزرار إضافية
-              null
-            )
+            ) : null
           ) : (
-            // إذا كان المستخدم غير مسجل - إظهار زر Log in
             !hideLogin && (
               <li className="w-full">
                 <Link
                   to="/Login"
                   className={`px-4 py-2 font-semibold transition-colors w-full border rounded-lg block text-center ${
-                    isScrolled
-                      ? "text-white border-white"
-                      : "text-gray-900 border-gray-900"
+                    isScrolled ? "text-white border-white" : "text-gray-900 border-gray-900"
                   }`}
                   onClick={() => setIsMenuOpen(false)}
                 >

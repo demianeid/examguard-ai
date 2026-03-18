@@ -335,11 +335,13 @@ const AccountInstructor: React.FC = () => {
   const [showAllMonitoring, setShowAllMonitoring] = useState(false);
 
   // ── fetch profile ──
-  useEffect(() => {
-    const fromSettings = location.state?.fromSettings;
-    if (fromSettings) {
+useEffect(() => {
+    const wasUpdated = location.state?.updated === true;
+    if (wasUpdated) {
       setShowRefreshNotice(true);
       const t = setTimeout(() => setShowRefreshNotice(false), 3000);
+      
+      navigate(location.pathname, { replace: true, state: {} });
       return () => clearTimeout(t);
     }
   }, [location.state]);
