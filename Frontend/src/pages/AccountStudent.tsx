@@ -167,7 +167,8 @@ const AccountStudent: React.FC = () => {
                   {profile?.profile_image ? (
                     // http://127.0.0.1:8000
                     <img
-                      src={`https://examguard-ai-production.up.railway.app${profile.profile_image}`}
+                      // src={`https://examguard-ai-production.up.railway.app${profile.profile_image}`}
+                      src={profile.profile_image.startsWith('http') ? profile.profile_image : `https://examguard-ai-production.up.railway.app${profile.profile_image}`}
                       alt={profile.full_name}
                       className="w-full h-full object-cover"
                     />
