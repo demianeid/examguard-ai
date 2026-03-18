@@ -58,8 +58,9 @@ class ExamSerializer(serializers.ModelSerializer):
             'start_datetime', 'end_datetime', 'instructions',
             'status', 'created_at', 'questions'
         ]
-        read_only_fields = ['id', 'created_at', 'status']
-  def validate(self, data):
+       read_only_fields = ['id', 'created_at', 'status']
+
+    def validate(self, data):
         now = timezone.now()
         start = data.get('start_datetime')
         end = data.get('end_datetime')
