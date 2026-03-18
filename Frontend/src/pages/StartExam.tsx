@@ -938,6 +938,28 @@ const ExamInterface: React.FC = () => {
                     );
                   })}
                 </div>
+
+
+                {/* ✅ Camera Preview - Added here */}
+  <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden bg-black aspect-video relative">
+    <video
+      ref={videoRef}
+      autoPlay
+      muted
+      playsInline
+      className="w-full h-full object-cover"
+    />
+    <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+      <Camera size={12} />
+      <span>Camera Active</span>
+    </div>
+    <div className="absolute top-2 right-2">
+      <div className="flex items-center gap-1 bg-green-500/80 text-white text-xs px-2 py-1 rounded-full">
+        <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+        LIVE
+      </div>
+    </div>
+  </div>
                 <div className="space-y-2 text-sm border-t border-gray-200 pt-4">
                   <div className="flex justify-between"><span className="text-gray-600">Answered:</span><span className="font-semibold text-green-600">{answeredCount}</span></div>
                   <div className="flex justify-between"><span className="text-gray-600">Flagged:</span><span className="font-semibold text-yellow-600">{flaggedCount}</span></div>

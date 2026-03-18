@@ -49,7 +49,13 @@ interface NotificationItem {
   };
 }
 
-const NotificationDropdown: React.FC = () => {
+// 🔴 أضفنا isScrolled prop
+interface NotificationDropdownProps {
+  userType?: 'student' | 'instructor';
+  isScrolled?: boolean;
+}
+
+const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
   const [showAll, setShowAll] = useState(false);
@@ -133,12 +139,14 @@ const NotificationDropdown: React.FC = () => {
 
   return (
     <div className="relative inline-block">
+      {/* 🔴 الزرار بيتغير لونه حسب isScrolled */}
       <button
-        onClick={() => {
-          console.log('Button clicked');
-          setIsOpen(!isOpen);
-        }}
-        className="relative p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`relative p-2.5 rounded-lg transition-all duration-200 ${
+          isScrolled
+            ? "text-white hover:bg-white/20"
+            : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+        }`}
       >
         <Bell size={20} />
         {unreadCount > 0 && (
@@ -214,7 +222,7 @@ const NotificationDropdown: React.FC = () => {
                     className={`relative px-5 py-4 hover:bg-gray-50 cursor-pointer transition-all duration-200 ${
                       !notification.isRead ? 'bg-blue-50/50' : ''
                     }`}
-                    onClick={() => { markAsRead(notification.id); }}
+                    onClick={() => markAsRead(notification.id)}
                   >
                     {notification.priority && ['critical', 'high'].includes(notification.priority) && (
                       <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 ${getPriorityColor(notification.priority)} rounded-r-full`}></div>

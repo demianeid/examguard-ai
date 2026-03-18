@@ -49,42 +49,7 @@ interface Exam {
   end_datetime?: string;
 }
 
-interface NotificationItem {
-  id: number;
-  type: "exam" | "grade" | "system" | "announcement";
-  title: string;
-  content: string;
-  time: string;
-  isRead: boolean;
-  priority?: "low" | "medium" | "high" | "critical";
-  metadata?: {
-    classId?: number;
-    className?: string;
-    examId?: number;
-    assignmentId?: number;
-    studentId?: string;
-    incidentId?: number;
-    score?: number;
-    maxScore?: number;
-    percentage?: number;
-    classAverage?: number;
-    examTime?: string;
-    examDate?: string;
-    duration?: string;
-    deadline?: string;
-    submissionsStatus?: string;
-    feedback?: string;
-    instructor?: string;
-    originalTime?: string;
-    newTime?: string;
-    type?: string;
-    estimatedTime?: string;
-    resources?: number;
-    severity?: string;
-    maintenanceStart?: string;
-    startsIn?: string;
-  };
-}
+
 
 // --- Ocean Blue Color Helper Functions (Same as Instructor) ---
 const oceanGradients = [

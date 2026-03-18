@@ -255,7 +255,11 @@ const Header: React.FC<HeaderProps> = ({
 
         {/* Right Section */}
         <div className="flex items-center gap-2 lg:order-2">
-          {isRegistered && <NotificationDropdown userType={userType} />}
+          {isRegistered && (
+            <div className={isScrolled ? "text-white" : ""}>
+            <NotificationDropdown userType={userType} isScrolled={isScrolled} />
+            </div>
+          )}
           
           {finalIsAccountPage ? (
             <div className="flex items-center gap-4">
