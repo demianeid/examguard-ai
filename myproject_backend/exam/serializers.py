@@ -25,20 +25,16 @@ class QuestionSerializer(serializers.ModelSerializer):
         question_type = data.get('question_type')
         choices = data.get('choices', [])
 
-        # Essay does not require choices
         if question_type == 'essay':
             return data
 
-        # MCQ and T/F require choices
         if not choices:
             raise serializers.ValidationError("Multiple choice and True/False questions require choices.")
 
-        # At least one correct answer is required
         correct_choices = [c for c in choices if c.get('is_correct')]
         if not correct_choices:
             raise serializers.ValidationError("At least one correct answer is required.")
 
-        # True/False must have exactly 2 choices
         if question_type == 'true_false' and len(choices) != 2:
             raise serializers.ValidationError("True/False questions must have exactly 2 choices.")
 
@@ -58,7 +54,7 @@ class ExamSerializer(serializers.ModelSerializer):
             'start_datetime', 'end_datetime', 'instructions',
             'status', 'created_at', 'questions'
         ]
-       read_only_fields = ['id', 'created_at', 'status']
+        read_only_fields = ['id', 'created_at', 'status']
 
     def validate(self, data):
         now = timezone.now()
@@ -71,6 +67,7 @@ class ExamSerializer(serializers.ModelSerializer):
         if start and end and end <= start:
             raise serializers.ValidationError({"end_datetime": "End datetime must be after start datetime."})
         return data
+
     def create(self, validated_data):
         questions_data = validated_data.pop('questions', [])
         exam = Exam.objects.create(**validated_data)
@@ -80,7 +77,6 @@ class ExamSerializer(serializers.ModelSerializer):
             question_data['order'] = i + 1
             question = Question.objects.create(exam=exam, **question_data)
 
-            # Only create choices for MCQ and T/F
             if question.question_type != 'essay':
                 for choice_data in choices_data:
                     Choice.objects.create(question=question, **choice_data)
@@ -90,12 +86,10 @@ class ExamSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         questions_data = validated_data.pop('questions', [])
 
-        # Update exam fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # Delete old questions and recreate them
         instance.questions.all().delete()
         for i, question_data in enumerate(questions_data):
             choices_data = question_data.pop('choices', [])
