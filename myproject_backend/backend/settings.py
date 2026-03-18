@@ -34,25 +34,43 @@ CSRF_TRUSTED_ORIGINS = [
     "https://examguard-ai-production.up.railway.app",
 ]
 # ─── Apps ─────────────────────────────────────────────────────────
+# INSTALLED_APPS = [
+#     'django.contrib.admin',
+#     'django.contrib.auth',
+#     'django.contrib.contenttypes',
+#     'django.contrib.sessions',
+#     'django.contrib.messages',
+#     'whitenoise.runserver_nostatic',
+#     'django.contrib.staticfiles',
+#     'rest_framework',
+#     'rest_framework_simplejwt',
+#     'corsheaders',
+
+#     # My Apps
+#     'authentication',
+#     'instructors',
+#     'exam',
+#     'student',
+# ]
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'cloudinary_storage',
+    'cloudinary',
     'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-
     # My Apps
     'authentication',
     'instructors',
     'exam',
     'student',
 ]
-
 # ─── Middleware ───────────────────────────────────────────────────
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -169,7 +187,7 @@ DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL', default='ExamGuard <noreply@e
 
 
 # ─── Cloudinary Storage ───────────────────────────────────────────
-INSTALLED_APPS += ['cloudinary_storage', 'cloudinary']
+# INSTALLED_APPS += ['cloudinary_storage', 'cloudinary']
 CLOUDINARY_STORAGE = {
     'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
     'API_KEY': config('CLOUDINARY_API_KEY'),
