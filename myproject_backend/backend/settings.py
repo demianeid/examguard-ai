@@ -465,7 +465,8 @@ SIMPLE_JWT = {
 # ─── Internationalization ─────────────────────────────────────────
 LANGUAGE_CODE = 'en-us'
 # TIME_ZONE     = 'UTC'
-TIME_ZONE = 'Etc/GMT-2'
+TIME_ZONE = 'Africa/Cairo'
+USE_TZ = True
 USE_I18N      = True
 USE_TZ        = True
 
