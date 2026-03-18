@@ -93,10 +93,12 @@ const defaultSecuritySettings: SecurityFeature[] = [
 // Parse "2024-12-15T09:00:00Z" → { date: "2024-12-15", time: "09:00" }
 function parseDatetime(dt: string): { date: string; time: string } {
   if (!dt) return { date: "", time: "" };
-  const d = new Date(dt);
-  const date = d.toISOString().split("T")[0];
-  const time = d.toTimeString().slice(0, 5);
-  return { date, time };
+  const clean = dt.replace("Z", "").replace("+00:00", "");
+  const [datePart, timePart] = clean.split("T");
+  return {
+    date: datePart,
+    time: timePart ? timePart.slice(0, 5) : "",
+  };
 }
 
 // "2024-12-15" + "09:00" → "2024-12-15T09:00:00"

@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import permissions, status
 from instructors.models import Class, ClassEnrollment
 from exam.models import Exam, StudentAnswer, ExamResult, Choice
-
+from django.utils import timezone
 
 # --- Get all classes the student is enrolled in ---
 class StudentClassesView(APIView):
@@ -109,6 +109,11 @@ class StudentClassExamsView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+
+        now = timezone.now()
+        Exam.objects.filter(class_id=class_id, status='upcoming', start_datetime__lte=now).update(status='active')
+        Exam.objects.filter(class_id=class_id, status__in=['upcoming', 'active'], end_datetime__lte=now).update(status='completed')
+
         exams = Exam.objects.filter(class_id=class_id)
         data = []
 
@@ -127,7 +132,7 @@ class StudentClassExamsView(APIView):
                 'total_marks': exam.total_marks,
                 'start_datetime': exam.start_datetime,
                 'end_datetime': exam.end_datetime,
-                'status': 'completed' if result else exam.status,
+                'status': 'completed' if result else ('missed' if exam.status == 'completed' else exam.status),
                 'score': float(result.percentage) if result else None,
             })
 
@@ -158,6 +163,34 @@ class StudentExamDetailView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        now = timezone.now()
+        # Auto-update status
+        if exam.status == 'upcoming' and exam.start_datetime <= now:
+            exam.status = 'active'
+            exam.save()
+        elif exam.status in ['upcoming', 'active'] and exam.end_datetime <= now:
+            exam.status = 'completed'
+            exam.save()
+
+        # Block if not active yet
+        if exam.status == 'upcoming':
+            return Response(
+                {'detail': f'Exam has not started yet. Starts at {exam.start_datetime}'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Block if already completed
+        if exam.status == 'completed':
+            has_result = ExamResult.objects.filter(student=request.user, exam=exam).exists()
+            if not has_result:
+                return Response(
+                    {'detail': 'This exam has already ended. You missed it.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            return Response(
+                {'detail': 'Exam has already ended.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
         # Block access if already submitted
         if ExamResult.objects.filter(student=request.user, exam=exam).exists():
             return Response(
@@ -188,6 +221,7 @@ class StudentExamDetailView(APIView):
             'duration': exam.duration,
             'total_marks': exam.total_marks,
             'instructions': exam.instructions,
+            'end_datetime': exam.end_datetime.isoformat(),
             'questions': questions,
         })
 
@@ -223,7 +257,7 @@ class StudentExamSubmitView(APIView):
             )
 
         answers_data = request.data.get('answers', [])
-        is_terminated = request.data.get('is_terminated', False)
+        is_terminated = bool(request.data.get('is_terminated', False))
         violation_score = request.data.get('violation_score', 0)
 
         total_marks_obtained = 0

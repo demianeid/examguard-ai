@@ -28,6 +28,7 @@ interface ExamData {
   duration: number;
   total_marks: number;
   instructions: string;
+  end_datetime?: string;
   questions: Question[];
 }
 
@@ -42,7 +43,7 @@ const ExamInterface: React.FC = () => {
   const [examError, setExamError] = useState<string | null>(null);
 
   // --- Exam State ---
-  const [currentView, setCurrentView] = useState<'rules' | 'face-recognition' | 'system-check' | 'exam' | 'terminated'>('rules');
+  const [currentView, setCurrentView] = useState<'rules' | 'face-recognition' | 'system-check' | 'exam' | 'terminated' | 'time-up'>('rules');
   const [agreedToRules, setAgreedToRules] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
@@ -50,6 +51,7 @@ const ExamInterface: React.FC = () => {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
+  const [timeUp, setTimeUp] = useState(false);
 
   // --- Anti-Cheating State ---
   const [copyAttempts, setCopyAttempts] = useState(0);
@@ -99,7 +101,13 @@ const ExamInterface: React.FC = () => {
         if (!res.ok) throw new Error('Failed to load exam');
         const data: ExamData = await res.json();
         setExamData(data);
-        setTimeRemaining(data.duration * 60);
+        if (data.end_datetime) {
+          const endStr = data.end_datetime;
+          const endMs = Date.parse(/[Z+]|[+-]\d{2}:/.test(endStr) ? endStr : endStr + 'Z');
+          setTimeRemaining(Math.max(0, Math.floor((endMs - Date.now()) / 1000)));
+        } else {
+          setTimeRemaining(data.duration * 60);
+        }
         setAnswers(Array(data.questions.length).fill(null));
         setFlagged(Array(data.questions.length).fill(false));
       } catch (err: any) {
@@ -270,15 +278,31 @@ const ExamInterface: React.FC = () => {
   // Timer
   // ============================================================
   useEffect(() => {
-    if (currentView !== 'exam' || examTerminated) return;
+    if (currentView !== 'exam' || examTerminated || timeUp) return;
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
-        if (prev <= 1) { clearInterval(timer); submitExam(false, violationScore); return 0; }
+        if (prev <= 1) {
+          clearInterval(timer);
+          setTimeUp(true);
+          return 0;
+        }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [currentView, examTerminated]);
+  }, [currentView, examTerminated, timeUp]);
+
+  useEffect(() => {
+    if (!timeUp || !examData) return;
+    setExamTerminated(true);
+    exitFullScreen();
+    const doAutoSubmit = async () => {
+      await submitExam(true, violationScore);
+      setCurrentView('time-up');
+      setTimeout(() => navigate('/classes'), 5000);
+    };
+    doAutoSubmit();
+  }, [timeUp]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -990,6 +1014,32 @@ const ExamInterface: React.FC = () => {
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
             <p className="text-sm text-blue-800">Your responses have been recorded and will be reviewed by the exam administrator.</p>
+          </div>
+          <button onClick={() => navigate('/classes')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-colors">
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'time-up') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-100 p-8 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full text-center">
+          <div className="mb-6 flex justify-center">
+            <div className="bg-orange-100 p-4 rounded-full">
+              <Clock className="w-16 h-16 text-orange-600" />
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Time's Up!</h1>
+          <p className="text-lg text-gray-700 mb-6">
+            Your exam has been submitted automatically.
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <p className="text-sm text-blue-800">
+              Your responses have been recorded. You will be redirected shortly.
+            </p>
           </div>
           <button onClick={() => navigate('/classes')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-colors">
             Return to Dashboard

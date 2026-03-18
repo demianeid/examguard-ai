@@ -528,9 +528,16 @@ const ClassesInstructor = () => {
     <>
       <p className="text-gray-800 font-medium text-lg">{nextExam.title}</p>
       <p className="text-gray-600 text-sm mt-1">
-        {new Date(nextExam.start_datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-        {' · '}
-        {new Date(nextExam.start_datetime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+        {(() => {
+  const [date, time] = nextExam.start_datetime.split('T');
+  const [y, m, d] = date.split('-');
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const [hour, min] = time.slice(0, 5).split(':');
+  const h = parseInt(hour);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${months[parseInt(m)-1]} ${parseInt(d)}, ${y} · ${h12}:${min} ${ampm}`;
+})()}
       </p>
     </>
   ) : (

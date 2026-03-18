@@ -439,7 +439,17 @@ const uniqueClasses = Array.from(
     if (!formData.endTime) {
       newErrors.endTime = "End time is required";
     }
+    const today = new Date().toISOString().split('T')[0];
 
+if (formData.startDate && formData.startDate < today) {
+  newErrors.startDate = "Start date cannot be in the past";
+}
+if (formData.endDate && formData.endDate < today) {
+  newErrors.endDate = "End date cannot be in the past";
+}
+if (formData.startDate && formData.endDate && formData.endDate < formData.startDate) {
+  newErrors.endDate = "End date must be after start date";
+}
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -848,6 +858,7 @@ const validateStep3 = (): boolean => {
                 <input
                   id="startDate"
                   type="date"
+                  min={new Date().toISOString().split('T')[0]}
                   value={formData.startDate}
                   onChange={(e) =>
                     handleInputChange("startDate", e.target.value)
@@ -911,8 +922,9 @@ const validateStep3 = (): boolean => {
                   End Date <span className="text-red-500">*</span>
                 </label>
                 <input
-                  id="endDate"
+               id="endDate"
                   type="date"
+                  min={formData.startDate || new Date().toISOString().split('T')[0]}
                   value={formData.endDate}
                   onChange={(e) => handleInputChange("endDate", e.target.value)}
                   className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${

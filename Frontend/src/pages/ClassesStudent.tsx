@@ -40,14 +40,15 @@ interface ClassType {
   subject?: string;
   description?: string;
 }
-
 interface Exam {
   id: number;
   name: string;
   date: string;
   duration: string;
-  status: "upcoming" | "completed";
+  status: "upcoming" | "active" | "completed";
   score: number | null;
+  start_datetime?: string;
+  end_datetime?: string;
 }
 
 interface NotificationItem {
@@ -917,7 +918,6 @@ useEffect(() => {
     useEffect(() => {
       if (!selectedClass) return;
       const fetchExams = async () => {
-        setLoading(true);
         try {
           const res = await fetch(`https://examguard-ai-production.up.railway.app/api/student/classes/${selectedClass.id}/exams/`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
@@ -931,6 +931,8 @@ useEffect(() => {
             duration: `${e.duration} min`,
             status: e.status,
             score: e.score ?? null,
+            start_datetime: e.start_datetime,
+            end_datetime: e.end_datetime,
           })));
         } catch {
           setExams([]);
@@ -939,6 +941,8 @@ useEffect(() => {
         }
       };
       fetchExams();
+      const interval = setInterval(fetchExams, 60000);
+      return () => clearInterval(interval);
     }, [selectedClass?.id]);
 
     if (loading) {
@@ -977,15 +981,29 @@ useEffect(() => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {exam.status === "upcoming" ? (
+                  {exam.status === "active" ? (
                     <>
-                      <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span>
+                      <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Active</span>
                       <Link
                         to={`/exam/${exam.id}`}
                         className={`${selectedClass?.color || 'bg-gradient-to-r from-[#1A80F6] to-[#4A90E2]'} text-white px-4 py-2 rounded-lg ${getHoverGradientFromColor(selectedClass?.color || '')} transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg`}
                       >
                         <Sparkles size={16} />Start Exam
                       </Link>
+                    </>
+                  ) : exam.status === "upcoming" ? (
+                    <>
+                      <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span>
+                      <span className="text-xs text-gray-500">
+                        Starts: {exam.start_datetime ? (() => {
+  const [date, time] = exam.start_datetime.split('T');
+  const [hour, min] = time.slice(0, 5).split(':');
+  const h = parseInt(hour);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${date} at ${h12}:${min} ${ampm}`;
+})() : ''}
+                      </span>
                     </>
                   ) : (
                     <>
