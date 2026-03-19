@@ -44,7 +44,9 @@ const Toast: React.FC<{
         </p>
         <p className="text-gray-500 text-sm">{message}</p>
       </div>
-      <button onClick={onClose} className="ml-2 p-1 hover:bg-slate-100 rounded-lg">
+      <button
+      title="Close"
+       onClick={onClose} className="ml-2 p-1 hover:bg-slate-100 rounded-lg">
         <X className="w-4 h-4 text-slate-400" />
       </button>
     </motion.div>
@@ -752,12 +754,15 @@ const SettingsPage: React.FC = () => {
                   )}
                 </div>
                 <button
+                title="Change Profile Picture"
                   onClick={() => fileInputRef.current?.click()}
                   className="absolute bottom-0 right-0 bg-[#3F72B7] hover:bg-[#3565A3] text-white p-2 rounded-full shadow-lg transition-colors"
                 >
                   <Camera className="w-4 h-4" />
                 </button>
-                <input type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" className="hidden" />
+                <input 
+                title="Change Profile Picture"
+                type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" className="hidden" />
               </div>
               <p className="text-sm text-slate-500 mt-2">Click the camera icon to change your profile picture</p>
             </div>

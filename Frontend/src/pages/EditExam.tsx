@@ -4,6 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   X, Clock, Trash2, Shield, Eye, Users, Mic, Lock,
   Video, AlertCircle, Wifi, CheckCircle, Edit, Save,
+  UserPlus, UserMinus, Search,
 } from "lucide-react";
 
 // ============================================================
@@ -20,6 +21,7 @@ interface ExamFormData {
   endDate: string;
   endTime: string;
   instructions: string;
+  studentSelectionType: "all" | "specific";
 }
 
 interface Choice {
@@ -30,12 +32,12 @@ interface Choice {
 
 interface Question {
   id: string;
-  type: string;       // frontend type: "multiple-choice" | "true-false" | "short-answer" | "essay"
+  type: string;
   text: string;
   options: string[];
   marks: string;
   correctAnswer?: number;
-  choices?: Choice[]; // backend choices
+  choices?: Choice[];
 }
 
 interface SecurityFeature {
@@ -52,13 +54,19 @@ interface Step {
   label: string;
 }
 
+interface Student {
+  id: string;
+  name: string;
+  email: string;
+  class?: string;
+  rollNumber?: string;
+}
+
 // ============================================================
 // CONSTANTS
 // ============================================================
-// const BASE_URL = "http://localhost:8000/api/exam";
 const BASE_URL = "https://examguard-ai-production.up.railway.app/api/exam";
 
-// Map frontend question type → backend question_type
 const typeToBackend: Record<string, string> = {
   "multiple-choice": "multiple_choice",
   "true-false":      "true_false",
@@ -66,7 +74,6 @@ const typeToBackend: Record<string, string> = {
   "essay":           "essay",
 };
 
-// Map backend question_type → frontend type
 const typeToFrontend: Record<string, string> = {
   "multiple_choice": "multiple-choice",
   "true_false":      "true-false",
@@ -74,79 +81,70 @@ const typeToFrontend: Record<string, string> = {
 };
 
 const defaultSecuritySettings: SecurityFeature[] = [
-  { id: "1", name: "AI Proctoring",         description: "Automated behavior analysis and anomaly detection",  recommended: true,  enabled: true,  icon: <Shield className="w-5 h-5 text-blue-500" /> },
-  { id: "2", name: "Live Proctoring",        description: "Real-time human monitoring during the exam",          recommended: false, enabled: false, icon: <Eye    className="w-5 h-5 text-gray-400" /> },
-  { id: "3", name: "Eye Tracking",           description: "Monitor eye movements and focus patterns",            recommended: true,  enabled: true,  icon: <Eye    className="w-5 h-5 text-blue-500" /> },
-  { id: "4", name: "Multiple Face Detection",description: "Alert if multiple people are detected",               recommended: true,  enabled: true,  icon: <Users  className="w-5 h-5 text-blue-500" /> },
-  { id: "5", name: "Speaker Recognition",    description: "Detect unauthorized voices or conversations",         recommended: false, enabled: false, icon: <Mic    className="w-5 h-5 text-gray-400" /> },
-  { id: "6", name: "Lockdown Browser",       description: "Restrict access to other applications",              recommended: true,  enabled: true,  icon: <Lock   className="w-5 h-5 text-blue-500" /> },
-  { id: "7", name: "Record & Review",        description: "Record entire session for later review",             recommended: false, enabled: false, icon: <Video  className="w-5 h-5 text-gray-400" /> },
-  { id: "8", name: "Object Detection",       description: "Detect phones, notes, or unauthorized materials",    recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
-  { id: "9", name: "Real-Time Alerts",       description: "Instant notifications for suspicious activity",      recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
-  { id: "10",name: "Offline Exam Mode",      description: "Allow exams without internet connection",            recommended: false, enabled: false, icon: <Wifi   className="w-5 h-5 text-gray-400" /> },
+  { id: "1",  name: "AI Proctoring",          description: "Automated behavior analysis and anomaly detection",   recommended: true,  enabled: true,  icon: <Shield      className="w-5 h-5 text-blue-500" /> },
+  { id: "2",  name: "Live Proctoring",         description: "Real-time human monitoring during the exam",           recommended: false, enabled: false, icon: <Eye         className="w-5 h-5 text-gray-400" /> },
+  { id: "3",  name: "Eye Tracking",            description: "Monitor eye movements and focus patterns",             recommended: true,  enabled: true,  icon: <Eye         className="w-5 h-5 text-blue-500" /> },
+  { id: "4",  name: "Multiple Face Detection", description: "Alert if multiple people are detected",                recommended: true,  enabled: true,  icon: <Users       className="w-5 h-5 text-blue-500" /> },
+  { id: "5",  name: "Speaker Recognition",     description: "Detect unauthorized voices or conversations",          recommended: false, enabled: false, icon: <Mic         className="w-5 h-5 text-gray-400" /> },
+  { id: "6",  name: "Lockdown Browser",        description: "Restrict access to other applications",               recommended: true,  enabled: true,  icon: <Lock        className="w-5 h-5 text-blue-500" /> },
+  { id: "7",  name: "Record & Review",         description: "Record entire session for later review",              recommended: false, enabled: false, icon: <Video       className="w-5 h-5 text-gray-400" /> },
+  { id: "8",  name: "Object Detection",        description: "Detect phones, notes, or unauthorized materials",     recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
+  { id: "9",  name: "Real-Time Alerts",        description: "Instant notifications for suspicious activity",       recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
+  { id: "10", name: "Offline Exam Mode",       description: "Allow exams without internet connection",             recommended: false, enabled: false, icon: <Wifi        className="w-5 h-5 text-gray-400" /> },
+];
+
+// Mock students — replace with an API call to fetch class students if needed
+const MOCK_STUDENTS: Student[] = [
+  { id: "STU001", name: "John Doe",       email: "john@example.com",    class: "CS101", rollNumber: "2024001" },
+  { id: "STU002", name: "Jane Smith",     email: "jane@example.com",    class: "CS101", rollNumber: "2024002" },
+  { id: "STU003", name: "Bob Johnson",    email: "bob@example.com",     class: "CS102", rollNumber: "2024003" },
+  { id: "STU004", name: "Alice Brown",    email: "alice@example.com",   class: "CS102", rollNumber: "2024004" },
+  { id: "STU005", name: "Charlie Wilson", email: "charlie@example.com", class: "CS103", rollNumber: "2024005" },
+  { id: "STU006", name: "Diana Miller",   email: "diana@example.com",   class: "CS103", rollNumber: "2024006" },
+  { id: "STU007", name: "Ethan Davis",    email: "ethan@example.com",   class: "CS101", rollNumber: "2024007" },
+  { id: "STU008", name: "Fiona Garcia",   email: "fiona@example.com",   class: "CS102", rollNumber: "2024008" },
 ];
 
 // ============================================================
 // HELPERS
 // ============================================================
-
-// UTC string → local date/time for form inputs (browser converts to user's timezone)
 function parseDatetime(dt: string): { date: string; time: string } {
   if (!dt) return { date: "", time: "" };
   const d = new Date(dt);
   if (isNaN(d.getTime())) return { date: "", time: "" };
   const yyyy = d.getFullYear();
-  const MM = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
+  const MM   = String(d.getMonth() + 1).padStart(2, "0");
+  const dd   = String(d.getDate()).padStart(2, "0");
+  const hh   = String(d.getHours()).padStart(2, "0");
+  const mm   = String(d.getMinutes()).padStart(2, "0");
   return { date: `${yyyy}-${MM}-${dd}`, time: `${hh}:${mm}` };
 }
 
-// Local date/time from form → UTC ISO string for backend
 function combineDatetime(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
-// Backend question → frontend Question
 function mapQuestionFromBackend(q: any): Question {
   const frontendType = typeToFrontend[q.question_type] ?? "essay";
   const choices: Choice[] = q.choices ?? [];
-
   let options: string[] = [];
   let correctAnswer: number | undefined;
 
-  if (frontendType === "multiple-choice") {
-    options = choices.map((c: Choice) => c.choice_text);
-    correctAnswer = choices.findIndex((c: Choice) => c.is_correct);
-    if (correctAnswer === -1) correctAnswer = undefined;
-  } else if (frontendType === "true-false") {
+  if (frontendType === "multiple-choice" || frontendType === "true-false") {
     options = choices.map((c: Choice) => c.choice_text);
     correctAnswer = choices.findIndex((c: Choice) => c.is_correct);
     if (correctAnswer === -1) correctAnswer = undefined;
   }
 
-  return {
-    id: String(q.id),
-    type: frontendType,
-    text: q.question_text,
-    options,
-    marks: String(q.marks),
-    correctAnswer,
-    choices,
-  };
+  return { id: String(q.id), type: frontendType, text: q.question_text, options, marks: String(q.marks), correctAnswer, choices };
 }
 
-// Frontend Question → backend payload
 function mapQuestionToBackend(q: Question) {
   const backendType = typeToBackend[q.type] ?? "essay";
-
   let choices: { choice_text: string; is_correct: boolean }[] = [];
 
   if (q.type === "multiple-choice") {
-    choices = q.options
-      .filter((o) => o.trim())
-      .map((o, idx) => ({ choice_text: o, is_correct: idx === q.correctAnswer }));
+    choices = q.options.filter((o) => o.trim()).map((o, idx) => ({ choice_text: o, is_correct: idx === q.correctAnswer }));
   } else if (q.type === "true-false") {
     choices = [
       { choice_text: "True",  is_correct: q.correctAnswer === 0 },
@@ -154,12 +152,7 @@ function mapQuestionToBackend(q: Question) {
     ];
   }
 
-  return {
-    question_text: q.text,
-    question_type: backendType,
-    marks: parseInt(q.marks) || 1,
-    choices,
-  };
+  return { question_text: q.text, question_type: backendType, marks: parseInt(q.marks) || 1, choices };
 }
 
 // ============================================================
@@ -169,28 +162,35 @@ export default function EditExam() {
   const { examId: examIdParam } = useParams<{ examId: string }>();
   const examId = Number(examIdParam);
   const navigate = useNavigate();
-  const token = localStorage.getItem('access_token') || '';
+  const token = localStorage.getItem("access_token") || "";
+
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<ExamFormData>({
     examTitle: "", selectedClass: "", description: "", duration: "",
-    totalMarks: "", startDate: "", startTime: "", endDate: "", endTime: "", instructions: "",
+    totalMarks: "", startDate: "", startTime: "", endDate: "", endTime: "",
+    instructions: "", studentSelectionType: "all",
   });
-  const [questions, setQuestions]         = useState<Question[]>([]);
+  const [questions, setQuestions]               = useState<Question[]>([]);
   const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>(defaultSecuritySettings);
-  const [errors, setErrors]               = useState<Partial<Record<keyof ExamFormData, string>>>({});
-  const [isLoading, setIsLoading]         = useState(false);
-  const [isFetching, setIsFetching]       = useState(true);
-  const [fetchError, setFetchError]       = useState("");
-  const [hasChanges, setHasChanges]       = useState(false);
+  const [errors, setErrors]                     = useState<Partial<Record<keyof ExamFormData | "students", string>>>({});
+  const [isLoading, setIsLoading]               = useState(false);
+  const [isFetching, setIsFetching]             = useState(true);
+  const [fetchError, setFetchError]             = useState("");
+  const [hasChanges, setHasChanges]             = useState(false);
+  const [originalData, setOriginalData]         = useState({ formData: {} as ExamFormData, questions: [] as Question[] });
 
-  // ── Snapshot للمقارنة ──
-  const [originalData, setOriginalData]   = useState({ formData: {} as ExamFormData, questions: [] as Question[] });
+  // Student selection state
+  const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
+  const [availableStudents, setAvailableStudents] = useState<Student[]>(MOCK_STUDENTS);
+  const [studentSearchTerm, setStudentSearchTerm] = useState("");
+  const [classFilter, setClassFilter]             = useState("all");
 
   const steps: Step[] = [
     { number: 1, label: "Basic Info" },
     { number: 2, label: "Questions" },
-    { number: 3, label: "Security Settings" },
-    { number: 4, label: "Review" },
+    { number: 3, label: "Students" },
+    { number: 4, label: "Security Settings" },
+    { number: 5, label: "Review" },
   ];
 
   const questionTypes = [
@@ -200,7 +200,9 @@ export default function EditExam() {
     { value: "essay",           label: "Essay" },
   ];
 
-  // ── جلب بيانات الامتحان من الـ API ──
+  const uniqueClasses = Array.from(new Set(MOCK_STUDENTS.map((s) => s.class))).filter((c): c is string => c !== undefined);
+
+  // ── Fetch exam data ──
   useEffect(() => {
     const fetchExam = async () => {
       setIsFetching(true);
@@ -216,20 +218,20 @@ export default function EditExam() {
         const end   = parseDatetime(data.end_datetime);
 
         const fd: ExamFormData = {
-          examTitle:     data.title         ?? "",
-          selectedClass: String(data.class_id ?? ""),
-          description:   data.description   ?? "",
-          duration:      String(data.duration),
-          totalMarks:    String(data.total_marks),
-          startDate:     start.date,
-          startTime:     start.time,
-          endDate:       end.date,
-          endTime:       end.time,
-          instructions:  data.instructions  ?? "",
+          examTitle:            data.title         ?? "",
+          selectedClass:        String(data.class_id ?? ""),
+          description:          data.description   ?? "",
+          duration:             String(data.duration),
+          totalMarks:           String(data.total_marks),
+          startDate:            start.date,
+          startTime:            start.time,
+          endDate:              end.date,
+          endTime:              end.time,
+          instructions:         data.instructions  ?? "",
+          studentSelectionType: "all",
         };
 
         const qs: Question[] = (data.questions ?? []).map(mapQuestionFromBackend);
-
         setFormData(fd);
         setQuestions(qs);
         setOriginalData({ formData: fd, questions: qs });
@@ -239,19 +241,18 @@ export default function EditExam() {
         setIsFetching(false);
       }
     };
-
     fetchExam();
   }, [examId, token]);
 
-  // ── تتبع التغييرات ──
+  // ── Track changes ──
   useEffect(() => {
     const changed =
-      JSON.stringify(formData)    !== JSON.stringify(originalData.formData) ||
-      JSON.stringify(questions)   !== JSON.stringify(originalData.questions);
+      JSON.stringify(formData)  !== JSON.stringify(originalData.formData) ||
+      JSON.stringify(questions) !== JSON.stringify(originalData.questions);
     setHasChanges(changed);
   }, [formData, questions]);
 
-  // ── Handlers ──
+  // ── Input handlers ──
   const handleInputChange = (field: keyof ExamFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -270,38 +271,77 @@ export default function EditExam() {
   };
 
   const handleQuestionChange = (id: string, field: "type" | "text" | "marks", value: string) => {
-    setQuestions(questions.map((q) => q.id === id ? { ...q, [field]: value } : q));
+    setQuestions(questions.map((q) => {
+      if (q.id !== id) return q;
+      if (field !== "type") return { ...q, [field]: value };
+      const base = { ...q, type: value, correctAnswer: undefined };
+      if (value === "multiple-choice") return { ...base, options: ["", "", "", ""] };
+      if (value === "true-false")      return { ...base, options: ["True", "False"] };
+      return { ...base, options: [] };
+    }));
   };
 
   const handleOptionChange = (questionId: string, optionIndex: number, value: string) => {
     setQuestions(questions.map((q) =>
-      q.id === questionId
-        ? { ...q, options: q.options.map((opt, idx) => idx === optionIndex ? value : opt) }
-        : q
+      q.id === questionId ? { ...q, options: q.options.map((opt, idx) => idx === optionIndex ? value : opt) } : q
     ));
   };
 
   const handleCorrectAnswerChange = (questionId: string, optionIndex: number) => {
-    setQuestions(questions.map((q) =>
-      q.id === questionId ? { ...q, correctAnswer: optionIndex } : q
-    ));
+    setQuestions(questions.map((q) => q.id === questionId ? { ...q, correctAnswer: optionIndex } : q));
   };
 
   const handleToggleSecurityFeature = (id: string) => {
-    setSecuritySettings((prev) =>
-      prev.map((f) => f.id === id ? { ...f, enabled: !f.enabled } : f)
-    );
+    setSecuritySettings((prev) => prev.map((f) => f.id === id ? { ...f, enabled: !f.enabled } : f));
   };
 
+  // ── Student handlers ──
+  const getFilteredAvailableStudents = () =>
+    availableStudents.filter((student) => {
+      const matchesSearch =
+        student.name.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+        student.id.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+        student.email.toLowerCase().includes(studentSearchTerm.toLowerCase());
+      const matchesClass = classFilter === "all" || student.class === classFilter;
+      return matchesSearch && matchesClass && !selectedStudents.some((s) => s.id === student.id);
+    });
+
+  const handleAddStudent = (student: Student) => {
+    setSelectedStudents([...selectedStudents, student]);
+    setAvailableStudents(availableStudents.filter((s) => s.id !== student.id));
+  };
+
+  const handleRemoveStudent = (student: Student) => {
+    setSelectedStudents(selectedStudents.filter((s) => s.id !== student.id));
+    setAvailableStudents([...availableStudents, student].sort((a, b) => a.name.localeCompare(b.name)));
+  };
+
+  const handleAddAllStudents = () => {
+    setSelectedStudents([...selectedStudents, ...availableStudents]);
+    setAvailableStudents([]);
+  };
+
+  const handleRemoveAllStudents = () => {
+    setAvailableStudents([...availableStudents, ...selectedStudents].sort((a, b) => a.name.localeCompare(b.name)));
+    setSelectedStudents([]);
+  };
+
+  const handleAddByClass = (className: string) => {
+    const studentsInClass = availableStudents.filter((s) => s.class === className);
+    setSelectedStudents([...selectedStudents, ...studentsInClass]);
+    setAvailableStudents(availableStudents.filter((s) => s.class !== className));
+  };
+
+  // ── Helpers ──
   const getActiveFeatures = () => securitySettings.filter((f) => f.enabled).map((f) => f.name);
   const getTotalMarks     = () => questions.reduce((sum, q) => sum + (parseInt(q.marks) || 0), 0);
 
   // ── Validation ──
   const validateStep1 = (): boolean => {
     const newErrors: Partial<Record<keyof ExamFormData, string>> = {};
-    if (!formData.examTitle.trim())                    newErrors.examTitle     = "Exam title is required";
-    if (!formData.duration || +formData.duration <= 0) newErrors.duration      = "Duration must be > 0";
-    if (!formData.totalMarks || +formData.totalMarks <= 0) newErrors.totalMarks = "Total marks must be > 0";
+    if (!formData.examTitle.trim())                         newErrors.examTitle  = "Exam title is required";
+    if (!formData.duration || +formData.duration <= 0)      newErrors.duration   = "Duration must be > 0";
+    if (!formData.totalMarks || +formData.totalMarks <= 0)  newErrors.totalMarks = "Total marks must be > 0";
     if (!formData.startDate) newErrors.startDate = "Start date is required";
     if (!formData.startTime) newErrors.startTime = "Start time is required";
     if (!formData.endDate)   newErrors.endDate   = "End date is required";
@@ -325,7 +365,15 @@ export default function EditExam() {
     return true;
   };
 
-  // ── Save to backend (PUT) ──
+  const validateStep3 = (): boolean => {
+    if (formData.studentSelectionType === "specific" && selectedStudents.length === 0) {
+      setErrors((prev) => ({ ...prev, students: "Please select at least one student" }));
+      return false;
+    }
+    return true;
+  };
+
+  // ── Save (PUT) ──
   const handleSaveChanges = async () => {
     setIsLoading(true);
     try {
@@ -338,15 +386,15 @@ export default function EditExam() {
         end_datetime:   combineDatetime(formData.endDate,   formData.endTime),
         instructions:   formData.instructions,
         questions:      questions.map(mapQuestionToBackend),
+        assigned_students:
+          formData.studentSelectionType === "all" ? null : selectedStudents.map((s) => s.id),
+        student_selection_type: formData.studentSelectionType,
       };
 
       const res = await fetch(`${BASE_URL}/${examId}/`, {
         method:  "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization:  `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -367,12 +415,12 @@ export default function EditExam() {
   const handleNextStep = () => {
     if (currentStep === 1 && !validateStep1()) return;
     if (currentStep === 2 && !validateStep2()) return;
-    if (currentStep === 4) { handleSaveChanges(); return; }
+    if (currentStep === 3 && !validateStep3()) return;
+    if (currentStep === 5) { handleSaveChanges(); return; }
     setCurrentStep(currentStep + 1);
   };
 
-  const handlePrevious = () => { if (currentStep > 1) setCurrentStep(currentStep - 1); };
-
+  const handlePrevious    = () => { if (currentStep > 1) setCurrentStep(currentStep - 1); };
   const handleResetChanges = () => {
     if (window.confirm("Reset all changes?")) {
       setFormData(originalData.formData);
@@ -381,13 +429,12 @@ export default function EditExam() {
       setHasChanges(false);
     }
   };
-
   const handleClose = () => {
     if (hasChanges && !window.confirm("You have unsaved changes. Close anyway?")) return;
     navigate(-1);
   };
 
-  // ── Loading / Error states ──
+  // ── Loading / Error ──
   if (isFetching) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -406,9 +453,7 @@ export default function EditExam() {
           <AlertCircle className="w-12 h-12 mx-auto mb-3" />
           <p className="font-semibold">Failed to load exam</p>
           <p className="text-sm mt-1">{fetchError}</p>
-          <button onClick={handleClose} className="mt-4 px-4 py-2 bg-gray-200 rounded-md text-gray-700 hover:bg-gray-300">
-            Go Back
-          </button>
+          <button onClick={handleClose} className="mt-4 px-4 py-2 bg-gray-200 rounded-md text-gray-700 hover:bg-gray-300">Go Back</button>
         </div>
       </div>
     );
@@ -437,9 +482,9 @@ export default function EditExam() {
         </div>
 
         {/* Steps */}
-        <div className="flex items-center justify-center mb-8 gap-2">
+        <div className="flex items-center justify-center mb-8 gap-2 overflow-x-auto pb-2">
           {steps.map((step, index) => (
-            <div key={step.number} className="flex items-center gap-2">
+            <div key={step.number} className="flex items-center gap-2 flex-shrink-0">
               <div className="flex flex-col items-center">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors ${
                   step.number <= currentStep ? "bg-blue-500 text-white" : "bg-gray-200 text-gray-600"
@@ -449,7 +494,7 @@ export default function EditExam() {
                 <span className="text-xs text-gray-600 mt-2 text-center max-w-20 whitespace-nowrap">{step.label}</span>
               </div>
               {index < steps.length - 1 && (
-                <div className={`w-8 sm:w-20 h-1 transition-colors ${step.number < currentStep ? "bg-blue-500" : "bg-gray-200"}`} />
+                <div className={`w-8 sm:w-14 h-1 transition-colors ${step.number < currentStep ? "bg-blue-500" : "bg-gray-200"}`} />
               )}
             </div>
           ))}
@@ -594,7 +639,7 @@ export default function EditExam() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                 {questions.map((question, index) => (
                   <div key={question.id} className="border border-gray-300 rounded-md p-4">
                     <div className="flex items-start gap-4 mb-4">
@@ -603,6 +648,7 @@ export default function EditExam() {
                       </div>
                       <div className="flex-1 flex gap-3 items-center">
                         <select
+                        title="Select question type"
                           value={question.type}
                           onChange={(e) => handleQuestionChange(question.id, "type", e.target.value)}
                           className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -612,13 +658,16 @@ export default function EditExam() {
                         <div className="flex items-center gap-1">
                           <label className="text-sm text-gray-500">Marks:</label>
                           <input
+                          title="Enter question marks"
                             type="number" min="1" value={question.marks}
                             onChange={(e) => handleQuestionChange(question.id, "marks", e.target.value)}
                             className="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                         </div>
                       </div>
-                      <button onClick={() => handleDeleteQuestion(question.id)} className="text-red-500 hover:text-red-700">
+                      <button
+                      title="Delete question"
+                       onClick={() => handleDeleteQuestion(question.id)} className="text-red-500 hover:text-red-700">
                         <Trash2 size={18} />
                       </button>
                     </div>
@@ -636,6 +685,7 @@ export default function EditExam() {
                         {question.options.map((option, optIdx) => (
                           <div key={optIdx} className="flex items-center gap-3">
                             <input
+                              title=" Select correct answer"    
                               type="radio" name={`question-${question.id}`}
                               checked={question.correctAnswer === optIdx}
                               onChange={() => handleCorrectAnswerChange(question.id, optIdx)}
@@ -680,8 +730,153 @@ export default function EditExam() {
           </div>
         )}
 
-        {/* ── STEP 3: Security ── */}
+        {/* ── STEP 3: Students ── */}
         {currentStep === 3 && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg p-6">
+              <h2 className="text-xl font-bold mb-2">Select Students</h2>
+              <p className="text-sm text-blue-100">Choose who can take this exam</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio" name="studentSelection"
+                    checked={formData.studentSelectionType === "all"}
+                    onChange={() => {
+                      setFormData({ ...formData, studentSelectionType: "all" });
+                      setErrors((prev) => ({ ...prev, students: undefined }));
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-700">All Students ({MOCK_STUDENTS.length})</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio" name="studentSelection"
+                    checked={formData.studentSelectionType === "specific"}
+                    onChange={() => {
+                      setFormData({ ...formData, studentSelectionType: "specific" });
+                      setErrors((prev) => ({ ...prev, students: undefined }));
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-700">Specific Students</span>
+                </label>
+              </div>
+
+              {formData.studentSelectionType === "specific" && (
+                <div className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-semibold text-gray-900">Selected Students: {selectedStudents.length}</h3>
+                    <div className="flex gap-2">
+                      <button onClick={handleAddAllStudents} disabled={availableStudents.length === 0}
+                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+                        Add All
+                      </button>
+                      <button onClick={handleRemoveAllStudents} disabled={selectedStudents.length === 0}
+                        className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">
+                        Remove All
+                      </button>
+                    </div>
+                  </div>
+
+                  {errors.students && <p className="text-sm text-red-600 mb-4">{errors.students}</p>}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Available Students */}
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-medium text-gray-700 mb-3">Available Students</h4>
+                      <div className="space-y-2 mb-3">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-2 w-4 h-4 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Search by name, ID, or email..."
+                            value={studentSearchTerm}
+                            onChange={(e) => setStudentSearchTerm(e.target.value)}
+                            className="w-full pl-8 pr-4 py-2 border rounded-md text-sm"
+                          />
+                        </div>
+                        <select
+                          title="Filter by class"
+                          value={classFilter}
+                          onChange={(e) => setClassFilter(e.target.value)}
+                          className="w-full px-3 py-2 border rounded-md text-sm"
+                        >
+                          <option value="all">All Classes</option>
+                          {uniqueClasses.map((cls) => <option key={cls} value={cls}>{cls}</option>)}
+                        </select>
+                        <div className="flex flex-wrap gap-2">
+                          {uniqueClasses.map((cls) => {
+                            const count = availableStudents.filter((s) => s.class === cls).length;
+                            return count > 0 && (
+                              <button key={cls} onClick={() => handleAddByClass(cls)}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                                Add {cls} ({count})
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {getFilteredAvailableStudents().length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-4">No students available</p>
+                        ) : (
+                          getFilteredAvailableStudents().map((student) => (
+                            <div key={student.id} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100">
+                              <div>
+                                <p className="text-sm font-medium">{student.name}</p>
+                                <p className="text-xs text-gray-500">{student.id} · {student.class} · {student.rollNumber}</p>
+                              </div>
+                              <button onClick={() => handleAddStudent(student)} className="text-blue-600 hover:text-blue-800" title="Add student">
+                                <UserPlus size={18} />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Selected Students */}
+                    <div className="border rounded-lg p-3">
+                      <h4 className="font-medium text-gray-700 mb-3">Selected Students</h4>
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {selectedStudents.length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-4">No students selected</p>
+                        ) : (
+                          selectedStudents.map((student) => (
+                            <div key={student.id} className="flex items-center justify-between p-2 bg-blue-50 rounded hover:bg-blue-100">
+                              <div>
+                                <p className="text-sm font-medium">{student.name}</p>
+                                <p className="text-xs text-gray-500">{student.id} · {student.class} · {student.rollNumber}</p>
+                              </div>
+                              <button onClick={() => handleRemoveStudent(student)} className="text-red-600 hover:text-red-800" title="Remove student">
+                                <UserMinus size={18} />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {formData.studentSelectionType === "all" && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-700">
+                    This exam will be available to all {MOCK_STUDENTS.length} students.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 4: Security ── */}
+        {currentStep === 4 && (
           <div className="space-y-4">
             <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg p-6 flex items-start gap-4">
               <Shield className="w-8 h-8 flex-shrink-0 mt-1" />
@@ -733,8 +928,8 @@ export default function EditExam() {
           </div>
         )}
 
-        {/* ── STEP 4: Review ── */}
-        {currentStep === 4 && (
+        {/* ── STEP 5: Review ── */}
+        {currentStep === 5 && (
           <div className="space-y-4">
             <div className="bg-green-600 text-white rounded-lg p-6">
               <h2 className="text-xl font-bold">Review Your Changes</h2>
@@ -745,12 +940,12 @@ export default function EditExam() {
               <h3 className="font-bold text-gray-900 mb-4">Exam Details</h3>
               <div className="grid grid-cols-2 gap-6">
                 {[
-                  ["Title",            formData.examTitle   || "Not specified"],
-                  ["Duration",         `${formData.duration} minutes`],
-                  ["Total Marks",      `${getTotalMarks()} (from questions)`],
-                  ["Start",            formData.startDate && formData.startTime ? `${formData.startDate} ${formData.startTime}` : "—"],
-                  ["End",              formData.endDate   && formData.endTime   ? `${formData.endDate} ${formData.endTime}`     : "—"],
-                  ["Questions",        String(questions.length)],
+                  ["Title",        formData.examTitle || "Not specified"],
+                  ["Duration",     `${formData.duration} minutes`],
+                  ["Total Marks",  `${getTotalMarks()} (from questions)`],
+                  ["Start",        formData.startDate && formData.startTime ? `${formData.startDate} ${formData.startTime}` : "—"],
+                  ["End",          formData.endDate   && formData.endTime   ? `${formData.endDate} ${formData.endTime}`     : "—"],
+                  ["Questions",    String(questions.length)],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <p className="text-sm text-gray-600 mb-1">{label}</p>
@@ -770,6 +965,24 @@ export default function EditExam() {
                 ))}
                 {questions.length > 3 && <p className="text-sm text-blue-600">+ {questions.length - 3} more questions</p>}
               </div>
+            </div>
+
+            <div className="border border-gray-300 rounded-lg p-6">
+              <h3 className="font-bold text-gray-900 mb-4">Assigned To</h3>
+              <p className="text-sm text-gray-600">
+                {formData.studentSelectionType === "all"
+                  ? `All Students (${MOCK_STUDENTS.length} students)`
+                  : `${selectedStudents.length} Specific Student${selectedStudents.length !== 1 ? "s" : ""}`}
+              </p>
+              {formData.studentSelectionType === "specific" && selectedStudents.length > 0 && (
+                <div className="mt-3 max-h-32 overflow-y-auto">
+                  {selectedStudents.map((student) => (
+                    <div key={student.id} className="text-sm text-gray-600 py-1 border-b last:border-0">
+                      {student.name} ({student.id}) — {student.class}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="border border-gray-300 rounded-lg p-6">
@@ -803,11 +1016,11 @@ export default function EditExam() {
           </div>
           <button
             onClick={handleNextStep} disabled={isLoading}
-            className={`px-6 py-2 rounded-md font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2 ${currentStep === 4 ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"}`}
+            className={`px-6 py-2 rounded-md font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2 ${currentStep === 5 ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"}`}
           >
             {isLoading ? (
               <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Saving...</>
-            ) : currentStep === 4 ? (
+            ) : currentStep === 5 ? (
               <><Save className="w-4 h-4" /> Save Changes</>
             ) : "Next Step"}
           </button>

@@ -182,6 +182,7 @@ const ClassesInstructor = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{show: boolean, classId: number | null, className: string}>({ show: false, classId: null, className: '' });
+  const [deleteExamConfirmation, setDeleteExamConfirmation] = useState<{show: boolean, examId: number | null, examTitle: string}>({ show: false, examId: null, examTitle: '' });
   const [instructorClasses, setInstructorClasses] = useState<ClassType[]>([]);
 
   const [instructorProfile, setInstructorProfile] = useState<InstructorProfile | null>(null);
@@ -340,6 +341,32 @@ const ClassesInstructor = () => {
   };
 
   const handleDeleteCancel = () => setDeleteConfirmation({ show: false, classId: null, className: '' });
+
+  // --- Exam Delete Handlers ---
+  const handleDeleteExam = (examId: number, examTitle: string) =>
+    setDeleteExamConfirmation({ show: true, examId, examTitle });
+
+  const handleConfirmDeleteExam = async () => {
+    if (!deleteExamConfirmation.examId) return;
+    setIsSubmitting(true);
+    try {
+      await fetch(
+        `https://examguard-ai-production.up.railway.app/api/exam/${deleteExamConfirmation.examId}/`,
+        { method: 'DELETE', headers: { 'Authorization': `Bearer ${getToken()}` } }
+      );
+      setExams(prev => prev.filter(e => e.id !== deleteExamConfirmation.examId));
+      setSuccessMessage(`Exam "${deleteExamConfirmation.examTitle}" deleted successfully!`);
+    } catch {
+      setErrorMessage('Failed to delete exam. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+      setDeleteExamConfirmation({ show: false, examId: null, examTitle: '' });
+    }
+  };
+
+  const handleDeleteExamCancel = () =>
+    setDeleteExamConfirmation({ show: false, examId: null, examTitle: '' });
+
   const handleCreateClassClick = (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); navigate('/create-class'); };
   const handleCreateExam = (e: React.MouseEvent, classId?: number) => { e.preventDefault(); e.stopPropagation(); navigate(classId ? `/CreateExam?classId=${classId}` : '/CreateExam'); };
   const handleEditExam = (examId: number) => navigate(`/edit-exam/${examId}`);
@@ -517,10 +544,35 @@ const ClassesInstructor = () => {
                 </div>
                 <div className="flex items-center gap-3">
                   {exam.status === "upcoming" ? (
-                    <><span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span><button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditExam(exam.id); }} className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"><FileEdit size={16} />Edit</button></>
+                    <>
+                      <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditExam(exam.id); }}
+                        className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+                      >
+                        <FileEdit size={16} />Edit
+                      </button>
+                    </>
                   ) : (
-                    <><span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span><button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewResults(exam.id); }} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"><BarChart3 size={16} />View Results</button></>
+                    <>
+                      <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewResults(exam.id); }}
+                        className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                      >
+                        <BarChart3 size={16} />View Results
+                      </button>
+                    </>
                   )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteExam(exam.id, exam.title); }}
+                    className="bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+                  >
+                    <Trash2 size={16} />Delete
+                  </button>
                 </div>
               </div>
             </div>
@@ -1144,6 +1196,7 @@ const ClassesInstructor = () => {
     );
   };
 
+  // --- Delete Class Confirmation Modal ---
   const DeleteConfirmationModal = () => {
     if (!deleteConfirmation.show) return null;
     return (
@@ -1160,6 +1213,61 @@ const ClassesInstructor = () => {
               <div className="flex gap-3 w-full">
                 <button type="button" onClick={handleDeleteCancel} className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors" disabled={isSubmitting}>Cancel</button>
                 <button type="button" onClick={handleConfirmDelete} className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled={isSubmitting}>{isSubmitting ? 'Deleting...' : 'Yes, Delete Class'}</button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
+
+  // --- Delete Exam Confirmation Modal ---
+  const DeleteExamConfirmationModal = () => {
+    if (!deleteExamConfirmation.show) return null;
+    return (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={handleDeleteExamCancel}
+        />
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.95, opacity: 0, y: 20 }}
+          className="relative w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-6 py-5 bg-gradient-to-r from-red-600 to-red-700 text-white">
+            <h2 className="text-xl font-bold flex items-center gap-2"><Trash2 size={24} />Delete Exam</h2>
+          </div>
+          <div className="p-6">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                <AlertCircle size={40} className="text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Are you absolutely sure?</h3>
+              <p className="text-gray-600 mb-2">
+                This will permanently delete{' '}
+                <span className="font-bold text-red-600">"{deleteExamConfirmation.examTitle}"</span>.
+              </p>
+              <p className="text-gray-500 text-sm mb-6">All associated questions and results will be lost.</p>
+              <div className="flex gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={handleDeleteExamCancel}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteExam}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg font-medium hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Deleting...' : 'Yes, Delete Exam'}
+                </button>
               </div>
             </div>
           </div>
@@ -1211,8 +1319,19 @@ const ClassesInstructor = () => {
       </div>
 
       <AnimatePresence mode="wait">
-        {isEditClassModalOpen && selectedClass && (<EditClassModal key={`edit-modal-${selectedClass.id}`} isOpen={isEditClassModalOpen} onClose={() => setIsEditClassModalOpen(false)} onSubmit={handleEditClassSubmit} onDelete={() => handleDeleteClass(selectedClass.id, selectedClass.name)} classData={selectedClass} isLoading={isSubmitting} />)}
-        <DeleteConfirmationModal key="delete-modal" />
+        {isEditClassModalOpen && selectedClass && (
+          <EditClassModal
+            key={`edit-modal-${selectedClass.id}`}
+            isOpen={isEditClassModalOpen}
+            onClose={() => setIsEditClassModalOpen(false)}
+            onSubmit={handleEditClassSubmit}
+            onDelete={() => handleDeleteClass(selectedClass.id, selectedClass.name)}
+            classData={selectedClass}
+            isLoading={isSubmitting}
+          />
+        )}
+        <DeleteConfirmationModal key="delete-class-modal" />
+        <DeleteExamConfirmationModal key="delete-exam-modal" />
       </AnimatePresence>
     </div>
   );

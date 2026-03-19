@@ -84,6 +84,7 @@ const ExamInterface: React.FC = () => {
   const faceVideoRef = useRef<HTMLVideoElement>(null);
   const faceCanvasRef = useRef<HTMLCanvasElement>(null);
   const faceStreamRef = useRef<MediaStream | null>(null);
+  const isTerminatedRef = useRef(false); // sync ref — event listeners always see latest value
 
   // ============================================================
   // Fetch exam data from backend
@@ -91,7 +92,6 @@ const ExamInterface: React.FC = () => {
   useEffect(() => {
     if (!examId) return;
 
-    // http://localhost:8000
     const fetchExam = async () => {
       setExamLoading(true);
       try {
@@ -219,12 +219,15 @@ const ExamInterface: React.FC = () => {
 
   useEffect(() => {
     const handler = () => {
-      if (currentView === 'exam' && !examTerminated) {
+      // Guard with both React state AND the sync ref to handle async state closure issue
+      if (currentView === 'exam' && !examTerminated && !isTerminatedRef.current) {
         const isFS = document.fullscreenElement !== null;
         setFullScreenActive(isFS);
         if (!isFS) {
           addViolation(1, 'Exited full-screen mode');
-          setTimeout(() => { if (!document.fullscreenElement) requestFullScreen(); }, 2000);
+          setTimeout(() => {
+            if (!document.fullscreenElement && !isTerminatedRef.current) requestFullScreen();
+          }, 2000);
         }
       }
     };
@@ -266,10 +269,11 @@ const ExamInterface: React.FC = () => {
   };
 
   const terminateExam = (reason: string, score?: number) => {
+    isTerminatedRef.current = true; // set sync ref FIRST so fullscreenchange handler sees it immediately
     setExamTerminated(true);
     setTerminationReason(reason);
     setCurrentView('terminated');
-    document.exitFullscreen?.().catch(() => {});
+    exitFullScreen();
     // Auto-submit on termination
     submitExam(true, score ?? violationScore);
   };
@@ -294,6 +298,7 @@ const ExamInterface: React.FC = () => {
 
   useEffect(() => {
     if (!timeUp || !examData) return;
+    isTerminatedRef.current = true; // prevent fullscreenchange from re-entering FS on auto-submit
     setExamTerminated(true);
     exitFullScreen();
     const doAutoSubmit = async () => {
@@ -330,7 +335,7 @@ const ExamInterface: React.FC = () => {
         };
       })
       .filter(Boolean);
-// http://localhost:8000
+
     try {
       await fetch(`https://examguard-ai-production.up.railway.app/api/student/exams/${examData.id}/submit/`, {
         method: 'POST',
@@ -353,6 +358,7 @@ const ExamInterface: React.FC = () => {
   };
 
   const handleSubmitConfirm = async () => {
+    isTerminatedRef.current = true; // set sync ref FIRST so fullscreenchange handler sees it immediately
     await submitExam(false, violationScore);
     setShowSubmitModal(false);
     navigate('/classes');
@@ -887,7 +893,7 @@ const ExamInterface: React.FC = () => {
                     </span>
                   </div>
                   <button
-                  title='Flag Question'  onClick={toggleFlag} disabled={examTerminated}
+                    title='Flag Question' onClick={toggleFlag} disabled={examTerminated}
                     className={`p-2 rounded-lg transition-colors ${flagged[currentQuestion] ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-400 hover:text-gray-600'}`}>
                     <Flag className="w-5 h-5" fill={flagged[currentQuestion] ? 'currentColor' : 'none'} />
                   </button>
@@ -939,27 +945,27 @@ const ExamInterface: React.FC = () => {
                   })}
                 </div>
 
+                {/* Camera Preview */}
+                <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden bg-black aspect-video relative">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                    <Camera size={12} />
+                    <span>Camera Active</span>
+                  </div>
+                  <div className="absolute top-2 right-2">
+                    <div className="flex items-center gap-1 bg-green-500/80 text-white text-xs px-2 py-1 rounded-full">
+                      <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                      LIVE
+                    </div>
+                  </div>
+                </div>
 
-                {/* ✅ Camera Preview - Added here */}
-  <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden bg-black aspect-video relative">
-    <video
-      ref={videoRef}
-      autoPlay
-      muted
-      playsInline
-      className="w-full h-full object-cover"
-    />
-    <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-      <Camera size={12} />
-      <span>Camera Active</span>
-    </div>
-    <div className="absolute top-2 right-2">
-      <div className="flex items-center gap-1 bg-green-500/80 text-white text-xs px-2 py-1 rounded-full">
-        <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
-        LIVE
-      </div>
-    </div>
-  </div>
                 <div className="space-y-2 text-sm border-t border-gray-200 pt-4">
                   <div className="flex justify-between"><span className="text-gray-600">Answered:</span><span className="font-semibold text-green-600">{answeredCount}</span></div>
                   <div className="flex justify-between"><span className="text-gray-600">Flagged:</span><span className="font-semibold text-yellow-600">{flaggedCount}</span></div>
@@ -1045,6 +1051,9 @@ const ExamInterface: React.FC = () => {
     );
   }
 
+  // ============================================================
+  // Time Up View
+  // ============================================================
   if (currentView === 'time-up') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-100 p-8 flex items-center justify-center">
