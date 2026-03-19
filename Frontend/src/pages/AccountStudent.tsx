@@ -35,16 +35,12 @@ const AccountStudent: React.FC = () => {
   ];
 
   useEffect(() => {
-    // 🔴 FIX: بنتحقق إن updated: true موجودة (مش بس fromSettings)
     const wasUpdated = location.state?.updated === true;
 
     if (wasUpdated) {
       setShowRefreshNotice(true);
       const timer = setTimeout(() => setShowRefreshNotice(false), 3000);
-
-      // 🔴 FIX: بنمسح الـ state فوراً عشان الرسالة متظهرش تاني لو رجع
       navigate(location.pathname, { replace: true, state: {} });
-
       return () => clearTimeout(timer);
     }
 
@@ -90,13 +86,19 @@ const AccountStudent: React.FC = () => {
     }
   };
 
-  // 🔴 FIX: fetchProfile منفصلة عن الـ notice effect
   useEffect(() => {
     fetchProfile();
   }, [refreshKey]);
 
   const handleEditProfile = () => navigate("/settings", { state: { from: 'student-account' } });
   const handleRefresh = () => { setLoading(true); setRefreshKey(prev => prev + 1); };
+
+  // ─── Resolve image URL (Cloudinary URLs already start with https://) ───
+  const getImageUrl = (url: string | null): string | null => {
+    if (!url) return null;
+    if (url.startsWith('https://') || url.startsWith('http://')) return url;
+    return `https://examguard-ai-production.up.railway.app${url}`;
+  };
 
   if (loading) {
     return (
@@ -129,7 +131,6 @@ const AccountStudent: React.FC = () => {
       <div className="w-full py-24 px-4">
         <div className="max-w-[800px] mx-auto space-y-6">
 
-          {/* 🔴 FIX: بنعرض الـ notice بس لما updated: true */}
           {showRefreshNotice && (
             <motion.div
               initial={{ opacity: 0, y: -20 }}
@@ -177,11 +178,17 @@ const AccountStudent: React.FC = () => {
                   transition={{ duration: 0.3 }}
                   className="w-32 h-32 rounded-full shadow-xl border-4 border-white overflow-hidden bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center"
                 >
-                  {profile?.profile_image ? (
+                  {getImageUrl(profile?.profile_image ?? null) ? (
                     <img
-                      src={profile.profile_image.startsWith('http') ? profile.profile_image : `https://examguard-ai-production.up.railway.app${profile.profile_image}`}
-                      alt={profile.full_name}
+                      src={getImageUrl(profile!.profile_image)!}
+                      alt={profile!.full_name}
+                      crossOrigin="anonymous"      // ✅ Fix CORB issue
+                      referrerPolicy="no-referrer" // ✅ Extra safety
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to icon if image fails to load
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
                     />
                   ) : (
                     <User className="w-16 h-16 text-white" />

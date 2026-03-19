@@ -44,9 +44,7 @@ const Toast: React.FC<{
         </p>
         <p className="text-gray-500 text-sm">{message}</p>
       </div>
-      <button
-      title="Close"
-       onClick={onClose} className="ml-2 p-1 hover:bg-slate-100 rounded-lg">
+      <button title="Close" onClick={onClose} className="ml-2 p-1 hover:bg-slate-100 rounded-lg">
         <X className="w-4 h-4 text-slate-400" />
       </button>
     </motion.div>
@@ -116,31 +114,27 @@ const SettingsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // Global toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
   };
 
-  // Modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [show2FAModal, setShow2FAModal] = useState(false);
   
-  // Password form state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
-  const [isChangingPassword, setIsChangingPassword] = useState(false); // 🔴 NEW
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // Delete account states
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteError, setDeleteError] = useState("");
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false); // 🔴 NEW
-  const [deleteSuccess, setDeleteSuccess] = useState(false); // 🔴 NEW
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [firstName, setFirstName] = useState("");
@@ -306,7 +300,6 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  // ✅ FIXED: Change Password with loading state + toast
   const handleChangePassword = async () => {
     setPasswordError("");
     setPasswordSuccess("");
@@ -327,7 +320,7 @@ const SettingsPage: React.FC = () => {
     const token = localStorage.getItem('access_token');
     if (!token) { setPasswordError("No access token found"); return; }
 
-    setIsChangingPassword(true); // 🔴 Start loading
+    setIsChangingPassword(true);
 
     try {
       const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/change-password/', {
@@ -347,14 +340,12 @@ const SettingsPage: React.FC = () => {
 
       if (response.ok) {
         setPasswordSuccess("Password changed successfully!");
-        // انتظر ثانيتين عشان المستخدم يشوف الرسالة جوه المودال
         setTimeout(() => {
           setShowPasswordModal(false);
           setCurrentPassword("");
           setNewPassword("");
           setConfirmPassword("");
           setPasswordSuccess("");
-          // 🔴 Show global toast after modal closes
           showToast("Password updated successfully!", "success");
         }, 2000);
       } else {
@@ -363,11 +354,10 @@ const SettingsPage: React.FC = () => {
     } catch (err) {
       setPasswordError("Network error. Please try again.");
     } finally {
-      setIsChangingPassword(false); // 🔴 Stop loading
+      setIsChangingPassword(false);
     }
   };
 
-  // ✅ FIXED: Delete Account with loading state + success screen
   const handleDeleteAccount = async () => {
     setDeleteError("");
 
@@ -377,7 +367,7 @@ const SettingsPage: React.FC = () => {
     const token = localStorage.getItem('access_token');
     if (!token) { setDeleteError("No access token found"); return; }
 
-    setIsDeletingAccount(true); // 🔴 Start loading
+    setIsDeletingAccount(true);
 
     try {
       const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/delete-account/', {
@@ -394,10 +384,8 @@ const SettingsPage: React.FC = () => {
       try { data = JSON.parse(text); } catch { data = { error: text }; }
 
       if (response.ok) {
-        // 🔴 Show success state INSIDE the modal first
         setDeleteSuccess(true);
         localStorage.clear();
-        // بعد ثانيتين انتقل للوج إن
         setTimeout(() => {
           navigate('/Login', { replace: true });
         }, 2500);
@@ -475,7 +463,7 @@ const SettingsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#E8F1FA] pt-20 overflow-hidden">
 
-      {/* ✅ Global Toast */}
+      {/* Global Toast */}
       <AnimatePresence>
         {toast && (
           <Toast
@@ -489,39 +477,54 @@ const SettingsPage: React.FC = () => {
       {/* Modals */}
       <AnimatePresence>
 
-        {/* ✅ FIXED: Password Change Modal */}
+        {/* ✅ FIXED: Password Change Modal — added id/name/htmlFor */}
         {showPasswordModal && (
           <Modal isOpen={showPasswordModal} onClose={() => !isChangingPassword && setShowPasswordModal(false)} title="Change Password">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Current Password</label>
+                <label htmlFor="current_password" className="block text-sm font-semibold text-slate-700 mb-2">
+                  Current Password
+                </label>
                 <input
+                  id="current_password"
+                  name="current_password"
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   disabled={isChangingPassword}
+                  autoComplete="current-password"
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] disabled:opacity-60"
                   placeholder="Enter current password"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">New Password</label>
+                <label htmlFor="new_password" className="block text-sm font-semibold text-slate-700 mb-2">
+                  New Password
+                </label>
                 <input
+                  id="new_password"
+                  name="new_password"
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   disabled={isChangingPassword}
+                  autoComplete="new-password"
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] disabled:opacity-60"
                   placeholder="Enter new password"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Confirm New Password</label>
+                <label htmlFor="confirm_password" className="block text-sm font-semibold text-slate-700 mb-2">
+                  Confirm New Password
+                </label>
                 <input
+                  id="confirm_password"
+                  name="confirm_password"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   disabled={isChangingPassword}
+                  autoComplete="new-password"
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] disabled:opacity-60"
                   placeholder="Confirm new password"
                 />
@@ -533,7 +536,6 @@ const SettingsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* ✅ Success state inside modal */}
               {passwordSuccess && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
                   <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
@@ -554,7 +556,6 @@ const SettingsPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* ✅ Button with loading spinner */}
               <button
                 onClick={handleChangePassword}
                 disabled={isChangingPassword || !!passwordSuccess}
@@ -578,14 +579,13 @@ const SettingsPage: React.FC = () => {
           </Modal>
         )}
 
-        {/* ✅ FIXED: Delete Account Modal */}
+        {/* ✅ FIXED: Delete Account Modal — added id/name/htmlFor */}
         {showDeleteModal && (
           <Modal
             isOpen={showDeleteModal}
             onClose={() => !isDeletingAccount && !deleteSuccess && setShowDeleteModal(false)}
             title="Delete Account"
           >
-            {/* ✅ Success state replaces the form */}
             {deleteSuccess ? (
               <div className="py-6 text-center space-y-4">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
@@ -610,28 +610,34 @@ const SettingsPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <label htmlFor="delete_password" className="block text-sm font-semibold text-slate-700 mb-2">
                     Enter your password to confirm
                   </label>
                   <input
+                    id="delete_password"
+                    name="delete_password"
                     type="password"
                     value={deletePassword}
                     onChange={(e) => setDeletePassword(e.target.value)}
                     disabled={isDeletingAccount}
+                    autoComplete="current-password"
                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
                     placeholder="Enter your password"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <label htmlFor="delete_confirmation" className="block text-sm font-semibold text-slate-700 mb-2">
                     Type <span className="font-bold text-red-600">DELETE</span> to confirm
                   </label>
                   <input
+                    id="delete_confirmation"
+                    name="delete_confirmation"
                     type="text"
                     value={deleteConfirmation}
                     onChange={(e) => setDeleteConfirmation(e.target.value)}
                     disabled={isDeletingAccount}
+                    autoComplete="off"
                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
                     placeholder="DELETE"
                   />
@@ -643,7 +649,6 @@ const SettingsPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* ✅ Button with loading spinner */}
                 <button
                   onClick={handleDeleteAccount}
                   disabled={isDeletingAccount}
@@ -754,46 +759,98 @@ const SettingsPage: React.FC = () => {
                   )}
                 </div>
                 <button
-                title="Change Profile Picture"
+                  title="Change Profile Picture"
                   onClick={() => fileInputRef.current?.click()}
                   className="absolute bottom-0 right-0 bg-[#3F72B7] hover:bg-[#3565A3] text-white p-2 rounded-full shadow-lg transition-colors"
                 >
                   <Camera className="w-4 h-4" />
                 </button>
-                <input 
-                title="Change Profile Picture"
-                type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" className="hidden" />
+                {/* ✅ FIXED: added id and name to file input */}
+                <input
+                  id="profile_image"
+                  name="profile_image"
+                  title="Change Profile Picture"
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageSelect}
+                  accept="image/*"
+                  className="hidden"
+                />
               </div>
               <p className="text-sm text-slate-500 mt-2">Click the camera icon to change your profile picture</p>
             </div>
 
+            {/* ✅ FIXED: All inputs now have id, name, and labels have htmlFor */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">First Name</label>
-              <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Enter your first name" disabled={isSaving} className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all" />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Last Name</label>
-              <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Enter your last name" disabled={isSaving} className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all" />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
+              <label htmlFor="first_name" className="block text-sm font-semibold text-slate-700 mb-2">First Name</label>
               <input
-                type="email" value={email}
+                id="first_name"
+                name="first_name"
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Enter your first name"
+                disabled={isSaving}
+                autoComplete="given-name"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
+              />
+            </div>
+            <div>
+              <label htmlFor="last_name" className="block text-sm font-semibold text-slate-700 mb-2">Last Name</label>
+              <input
+                id="last_name"
+                name="last_name"
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Enter your last name"
+                disabled={isSaving}
+                autoComplete="family-name"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
+              />
+            </div>
+            <div>
+              <label htmlFor="email" className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                value={email}
                 onChange={(e) => { setEmail(e.target.value); setEmailError(null); }}
-                placeholder="Enter your email address" disabled={isSaving}
+                placeholder="Enter your email address"
+                disabled={isSaving}
+                autoComplete="email"
                 className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all ${emailError ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}
               />
               {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Phone Number</label>
-              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Enter your phone number" disabled={isSaving} className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all" />
+              <label htmlFor="phone_number" className="block text-sm font-semibold text-slate-700 mb-2">Phone Number</label>
+              <input
+                id="phone_number"
+                name="phone_number"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Enter your phone number"
+                disabled={isSaving}
+                autoComplete="tel"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
+              />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label htmlFor="user_id" className="block text-sm font-semibold text-slate-700 mb-2">
                 {isStudent ? 'Student ID' : 'Professor ID'}
               </label>
-              <input title="ID" type="text" value={userId} disabled className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500" />
+              <input
+                id="user_id"
+                name="user_id"
+                type="text"
+                value={userId}
+                disabled
+                autoComplete="off"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500"
+              />
             </div>
 
             {saveError && (
@@ -862,8 +919,16 @@ const SettingsPage: React.FC = () => {
                   <p className="text-sm text-slate-500">Receive updates via email</p>
                 </div>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input title="Toggle" type="checkbox" checked={emailNotifications} onChange={() => setEmailNotifications(!emailNotifications)} className="sr-only peer" />
+              <label htmlFor="email_notifications" className="relative inline-flex items-center cursor-pointer">
+                <input
+                  id="email_notifications"
+                  name="email_notifications"
+                  title="Toggle email notifications"
+                  type="checkbox"
+                  checked={emailNotifications}
+                  onChange={() => setEmailNotifications(!emailNotifications)}
+                  className="sr-only peer"
+                />
                 <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F72B7]"></div>
               </label>
             </div>
