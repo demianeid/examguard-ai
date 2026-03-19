@@ -93,12 +93,17 @@ const AccountStudent: React.FC = () => {
   const handleEditProfile = () => navigate("/settings", { state: { from: 'student-account' } });
   const handleRefresh = () => { setLoading(true); setRefreshKey(prev => prev + 1); };
 
-  // ─── Resolve image URL (Cloudinary URLs already start with https://) ───
+  // // ─── Resolve image URL (Cloudinary URLs already start with https://) ───
+  // const getImageUrl = (url: string | null): string | null => {
+  //   if (!url) return null;
+  //   if (url.startsWith('https://') || url.startsWith('http://')) return url;
+  //   return `https://examguard-ai-production.up.railway.app${url}`;
+  // };
   const getImageUrl = (url: string | null): string | null => {
-    if (!url) return null;
-    if (url.startsWith('https://') || url.startsWith('http://')) return url;
-    return `https://examguard-ai-production.up.railway.app${url}`;
-  };
+  if (!url) return null;
+  if (url.startsWith('https://res.cloudinary.com')) return url;
+  return null; // Old local path → show icon instead
+};
 
   if (loading) {
     return (
