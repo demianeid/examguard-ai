@@ -79,17 +79,17 @@ interface Student {
   rollNumber?: string;
 }
 
-// Mock students data - In real app, this would come from an API
-const MOCK_STUDENTS: Student[] = [
-  { id: "STU001", name: "John Doe",       email: "john@example.com",    class: "CS101", rollNumber: "2024001" },
-  { id: "STU002", name: "Jane Smith",     email: "jane@example.com",    class: "CS101", rollNumber: "2024002" },
-  { id: "STU003", name: "Bob Johnson",    email: "bob@example.com",     class: "CS102", rollNumber: "2024003" },
-  { id: "STU004", name: "Alice Brown",    email: "alice@example.com",   class: "CS102", rollNumber: "2024004" },
-  { id: "STU005", name: "Charlie Wilson", email: "charlie@example.com", class: "CS103", rollNumber: "2024005" },
-  { id: "STU006", name: "Diana Miller",   email: "diana@example.com",   class: "CS103", rollNumber: "2024006" },
-  { id: "STU007", name: "Ethan Davis",    email: "ethan@example.com",   class: "CS101", rollNumber: "2024007" },
-  { id: "STU008", name: "Fiona Garcia",   email: "fiona@example.com",   class: "CS102", rollNumber: "2024008" },
-];
+// // Mock students data - In real app, this would come from an API
+// const MOCK_STUDENTS: Student[] = [
+//   { id: "STU001", name: "John Doe",       email: "john@example.com",    class: "CS101", rollNumber: "2024001" },
+//   { id: "STU002", name: "Jane Smith",     email: "jane@example.com",    class: "CS101", rollNumber: "2024002" },
+//   { id: "STU003", name: "Bob Johnson",    email: "bob@example.com",     class: "CS102", rollNumber: "2024003" },
+//   { id: "STU004", name: "Alice Brown",    email: "alice@example.com",   class: "CS102", rollNumber: "2024004" },
+//   { id: "STU005", name: "Charlie Wilson", email: "charlie@example.com", class: "CS103", rollNumber: "2024005" },
+//   { id: "STU006", name: "Diana Miller",   email: "diana@example.com",   class: "CS103", rollNumber: "2024006" },
+//   { id: "STU007", name: "Ethan Davis",    email: "ethan@example.com",   class: "CS101", rollNumber: "2024007" },
+//   { id: "STU008", name: "Fiona Garcia",   email: "fiona@example.com",   class: "CS102", rollNumber: "2024008" },
+// ];
 
 export default function CreateExam() {
   const navigate = useNavigate();
@@ -127,11 +127,37 @@ export default function CreateExam() {
   const [questionErrors, setQuestionErrors] = useState<QuestionErrors>({});
 
   // Student selection state
-  const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
-  const [availableStudents, setAvailableStudents] = useState<Student[]>(MOCK_STUDENTS);
-  const [studentSearchTerm, setStudentSearchTerm] = useState<string>("");
-  const [classFilter, setClassFilter]             = useState<string>("all");
+const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
+const [availableStudents, setAvailableStudents] = useState<Student[]>([]);
+const [studentSearchTerm, setStudentSearchTerm] = useState<string>("");
+const [classFilter, setClassFilter]             = useState<string>("all");
+const [studentsLoading, setStudentsLoading]     = useState<boolean>(false);
 
+useEffect(() => {
+  const classId = searchParams.get('classId');
+  if (!classId) return;
+  const fetchStudents = async () => {
+    setStudentsLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/instructors/classes/${classId}/students/`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      setAvailableStudents(data.map((s: any) => ({
+        id: s.student_custom_id || s.student_id || String(s.id),
+        name: s.full_name,
+        email: '',
+        class: '',
+        rollNumber: s.student_custom_id || s.student_id,
+      })));
+    } catch {
+      setAvailableStudents([]);
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+  fetchStudents();
+}, []);
   const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>([
     { id: "1",  name: "AI Proctoring",          description: "Automated behavior analysis and anomaly detection",   recommended: true,  enabled: true,  icon: <Shield      className="w-5 h-5 text-blue-500" /> },
     { id: "2",  name: "Live Proctoring",         description: "Real-time human monitoring during the exam",           recommended: false, enabled: false, icon: <Eye         className="w-5 h-5 text-gray-400" /> },
@@ -160,7 +186,7 @@ export default function CreateExam() {
   ];
 
   const uniqueClasses = Array.from(
-    new Set(MOCK_STUDENTS.map((s) => s.class))
+    new Set(availableStudents.map((s) => s.class))
   ).filter((c): c is string => c !== undefined);
 
   const getFilteredAvailableStudents = () =>
@@ -174,10 +200,24 @@ export default function CreateExam() {
     });
 
   const handleInputChange = (field: keyof ExamFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
-  };
+    setFormData((prev) => {
+      const updated = { ...prev, [field]: value };
 
+      // حساب end date و end time تلقائي
+      const { duration, startDate, startTime } = updated;
+      if (duration && startDate && startTime) {
+        const start = new Date(`${startDate}T${startTime}`);
+        const end = new Date(start.getTime() + parseInt(duration) * 60000);
+        updated.endDate = end.toISOString().split('T')[0];
+        updated.endTime = end.toTimeString().slice(0, 5);
+      }
+
+      return updated;
+    });
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
   const handleAddQuestion = () => {
     const newQuestion: Question = {
       id: Date.now().toString(),
@@ -345,6 +385,14 @@ export default function CreateExam() {
       }
     }
     if (currentStep === 3 && !validateStep3()) return;
+  if (currentStep === 5) {
+  const questionsTotal = getTotalMarks();
+  const totalMarks = parseInt(formData.totalMarks);
+  if (questionsTotal !== totalMarks) {
+    setApiError(`Total marks mismatch! Your questions total is ${questionsTotal} marks but you set ${totalMarks} marks. Please fix your questions marks.`);
+    return;
+  }
+}
     if (currentStep === 5) { handlePublish(); return; }
     setCurrentStep(currentStep + 1);
   };
@@ -764,7 +812,7 @@ export default function CreateExam() {
                     }}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm text-gray-700">All Students ({MOCK_STUDENTS.length})</span>
+                  <span className="text-sm text-gray-700">All Students ({availableStudents.length + selectedStudents.length})</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -880,7 +928,7 @@ export default function CreateExam() {
 
               {formData.studentSelectionType === "all" && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-gray-700">This exam will be available to all {MOCK_STUDENTS.length} students.</p>
+                  <p className="text-sm text-gray-700">This exam will be available to all {availableStudents.length + selectedStudents.length} students.</p>
                 </div>
               )}
             </div>
@@ -971,7 +1019,7 @@ export default function CreateExam() {
               <h3 className="font-bold text-gray-900 mb-4">Assigned To</h3>
               <p className="text-sm text-gray-600">
                 {formData.studentSelectionType === "all"
-                  ? `All Students (${MOCK_STUDENTS.length} students)`
+                  ? `All Students (${availableStudents.length + selectedStudents.length} students)`
                   : `${selectedStudents.length} Specific Student${selectedStudents.length !== 1 ? "s" : ""}`}
               </p>
               {formData.studentSelectionType === "specific" && selectedStudents.length > 0 && (

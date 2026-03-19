@@ -121,7 +121,13 @@ class StudentClassExamsView(APIView):
                 exam.status = 'completed'
                 exam.save()
 
-        exams = Exam.objects.filter(class_id=class_id)
+        from django.db.models import Q, Count
+        exams = Exam.objects.filter(class_id=class_id).annotate(
+            assigned_count=Count('assigned_students')
+        ).filter(
+            Q(assigned_count=0) |
+            Q(assigned_students=request.user)
+        ).distinct()
 
         # IMPROVEMENT: Prefetch results to avoid N+1 queries
         results_map = {

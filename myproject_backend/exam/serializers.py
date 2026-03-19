@@ -66,6 +66,15 @@ class ExamSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"end_datetime": "End datetime cannot be in the past."})
         if start and end and end <= start:
             raise serializers.ValidationError({"end_datetime": "End datetime must be after start datetime."})
+
+        questions = data.get('questions', [])
+        total_marks = data.get('total_marks', 0)
+        questions_total = sum(q.get('marks', 0) for q in questions)
+        if questions and questions_total != total_marks:
+            raise serializers.ValidationError({
+                "total_marks": f"Questions total marks ({questions_total}) must equal total marks ({total_marks})."
+            })
+
         return data
 
     def create(self, validated_data):

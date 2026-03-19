@@ -11,10 +11,10 @@ class QuestionInline(admin.StackedInline):
     model = Question
     extra = 0
 
-
 @admin.register(Exam)
 class ExamAdmin(admin.ModelAdmin):
     list_display = ('title', 'professor', 'status', 'start_datetime', 'end_datetime', 'duration', 'total_marks')
+    filter_horizontal = ('assigned_students',)
     list_filter = ('status', 'created_at')
     search_fields = ('title', 'professor__last_name')
     inlines = [QuestionInline]

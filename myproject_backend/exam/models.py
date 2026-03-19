@@ -26,6 +26,11 @@ class Exam(models.Model):
     end_datetime    = models.DateTimeField()
     instructions    = models.TextField(blank=True, null=True)
     status          = models.CharField(max_length=20, choices=STATUS_CHOICES, default='upcoming')
+    assigned_students = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='assigned_exams'
+    )
     created_at      = models.DateTimeField(auto_now_add=True)
     updated_at      = models.DateTimeField(auto_now=True)
 

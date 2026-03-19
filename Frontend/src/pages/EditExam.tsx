@@ -93,17 +93,7 @@ const defaultSecuritySettings: SecurityFeature[] = [
   { id: "10", name: "Offline Exam Mode",       description: "Allow exams without internet connection",             recommended: false, enabled: false, icon: <Wifi        className="w-5 h-5 text-gray-400" /> },
 ];
 
-// Mock students — replace with an API call to fetch class students if needed
-const MOCK_STUDENTS: Student[] = [
-  { id: "STU001", name: "John Doe",       email: "john@example.com",    class: "CS101", rollNumber: "2024001" },
-  { id: "STU002", name: "Jane Smith",     email: "jane@example.com",    class: "CS101", rollNumber: "2024002" },
-  { id: "STU003", name: "Bob Johnson",    email: "bob@example.com",     class: "CS102", rollNumber: "2024003" },
-  { id: "STU004", name: "Alice Brown",    email: "alice@example.com",   class: "CS102", rollNumber: "2024004" },
-  { id: "STU005", name: "Charlie Wilson", email: "charlie@example.com", class: "CS103", rollNumber: "2024005" },
-  { id: "STU006", name: "Diana Miller",   email: "diana@example.com",   class: "CS103", rollNumber: "2024006" },
-  { id: "STU007", name: "Ethan Davis",    email: "ethan@example.com",   class: "CS101", rollNumber: "2024007" },
-  { id: "STU008", name: "Fiona Garcia",   email: "fiona@example.com",   class: "CS102", rollNumber: "2024008" },
-];
+
 
 // ============================================================
 // HELPERS
@@ -180,11 +170,36 @@ export default function EditExam() {
   const [originalData, setOriginalData]         = useState({ formData: {} as ExamFormData, questions: [] as Question[] });
 
   // Student selection state
-  const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
-  const [availableStudents, setAvailableStudents] = useState<Student[]>(MOCK_STUDENTS);
+ const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
+  const [availableStudents, setAvailableStudents] = useState<Student[]>([]);
   const [studentSearchTerm, setStudentSearchTerm] = useState("");
   const [classFilter, setClassFilter]             = useState("all");
+  const [studentsLoading, setStudentsLoading]     = useState(false);
 
+  useEffect(() => {
+    const fetchStudents = async () => {
+      setStudentsLoading(true);
+      try {
+        const res = await fetch(
+          `https://examguard-ai-production.up.railway.app/api/instructors/classes/${formData.selectedClass}/students/`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json();
+        setAvailableStudents(data.map((s: any) => ({
+          id: s.student_custom_id || s.student_id || String(s.id),
+          name: s.full_name,
+          email: '',
+          class: '',
+          rollNumber: s.student_custom_id || s.student_id,
+        })));
+      } catch {
+        setAvailableStudents([]);
+      } finally {
+        setStudentsLoading(false);
+      }
+    };
+    if (formData.selectedClass) fetchStudents();
+  }, [formData.selectedClass]);
   const steps: Step[] = [
     { number: 1, label: "Basic Info" },
     { number: 2, label: "Questions" },
@@ -200,7 +215,7 @@ export default function EditExam() {
     { value: "essay",           label: "Essay" },
   ];
 
-  const uniqueClasses = Array.from(new Set(MOCK_STUDENTS.map((s) => s.class))).filter((c): c is string => c !== undefined);
+  const uniqueClasses = Array.from(new Set(availableStudents.map((s) => s.class))).filter((c): c is string => c !== undefined);
 
   // ── Fetch exam data ──
   useEffect(() => {
@@ -750,7 +765,7 @@ export default function EditExam() {
                     }}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm text-gray-700">All Students ({MOCK_STUDENTS.length})</span>
+                  <span className="text-sm text-gray-700">All Students ({availableStudents.length + selectedStudents.length})</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -867,7 +882,7 @@ export default function EditExam() {
               {formData.studentSelectionType === "all" && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <p className="text-sm text-gray-700">
-                    This exam will be available to all {MOCK_STUDENTS.length} students.
+                    This exam will be available to all {availableStudents.length + selectedStudents.length} students.
                   </p>
                 </div>
               )}
@@ -971,7 +986,7 @@ export default function EditExam() {
               <h3 className="font-bold text-gray-900 mb-4">Assigned To</h3>
               <p className="text-sm text-gray-600">
                 {formData.studentSelectionType === "all"
-                  ? `All Students (${MOCK_STUDENTS.length} students)`
+                  ? `All Students (${availableStudents.length + selectedStudents.length} students)`
                   : `${selectedStudents.length} Specific Student${selectedStudents.length !== 1 ? "s" : ""}`}
               </p>
               {formData.studentSelectionType === "specific" && selectedStudents.length > 0 && (
