@@ -10,6 +10,25 @@ import os
 from .models import BaseUser
 
 
+# ─── Helper: Get correct image URL ───────────────────────────────
+def get_image_url(image_field):
+    if not image_field:
+        return None
+    try:
+        url = image_field.url
+        # Already a full Cloudinary URL ✅
+        if url.startswith('https://res.cloudinary.com'):
+            return url
+        # Build Cloudinary URL manually from the file name
+        cloud_name = settings.CLOUDINARY_STORAGE.get('CLOUD_NAME', '')
+        name = image_field.name
+        if name:
+            return f"https://res.cloudinary.com/{cloud_name}/image/upload/{name}"
+        return None
+    except Exception:
+        return None
+
+
 # ─── Get Profile ──────────────────────────────────────────────────
 class GetProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -26,14 +45,14 @@ class GetProfileView(APIView):
             "full_name":     f"{'Dr. ' if is_professor else ''}{user.get_full_name()}",
             "email":         user.email,
             "phone":         user.phone_number,
-            "profile_image": user.profile_image.url if user.profile_image else None,
+            "profile_image": get_image_url(user.profile_image),
             "is_active":     user.is_active,
             "last_login":    user.last_login,
         }
 
         if is_professor:
             profile = getattr(user, 'professor_profile', None)
-            data["identity_card"] = profile.identity_card.url if profile and profile.identity_card else None
+            data["identity_card"] = get_image_url(profile.identity_card) if profile and profile.identity_card else None
             data["is_verified"]   = profile.is_verified if profile else False
         else:
             data["username"]    = user.username
@@ -57,12 +76,7 @@ class UpdateProfileView(APIView):
             if 'phone_number' in data: user.phone_number = data['phone_number']
 
             if 'profile_image' in request.FILES:
-                # Try to delete old local file (skip if using Cloudinary)
-                try:
-                    if user.profile_image and hasattr(user.profile_image, 'path') and os.path.isfile(user.profile_image.path):
-                        os.remove(user.profile_image.path)
-                except Exception:
-                    pass  # Cloudinary storage has no local path — skip
+                # Skip local file deletion — using Cloudinary
                 user.profile_image = request.FILES['profile_image']
 
             user.save()
@@ -73,7 +87,7 @@ class UpdateProfileView(APIView):
                     "first_name":    user.first_name,
                     "last_name":     user.last_name,
                     "phone":         user.phone_number,
-                    "profile_image": user.profile_image.url if user.profile_image else None,
+                    "profile_image": get_image_url(user.profile_image),
                 }
             }, status=status.HTTP_200_OK)
 
@@ -133,21 +147,6 @@ class DeleteAccountView(APIView):
 
         if not user.check_password(password):
             return Response({"error": "Incorrect password."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Try to delete local profile image (skip if using Cloudinary)
-        try:
-            if user.profile_image and hasattr(user.profile_image, 'path') and os.path.isfile(user.profile_image.path):
-                os.remove(user.profile_image.path)
-        except Exception:
-            pass
-
-        # Try to delete professor identity card (skip if using Cloudinary)
-        try:
-            profile = getattr(user, 'professor_profile', None)
-            if profile and profile.identity_card and hasattr(profile.identity_card, 'path') and os.path.isfile(profile.identity_card.path):
-                os.remove(profile.identity_card.path)
-        except Exception:
-            pass
 
         user_name  = user.first_name
         user_email = user.email
