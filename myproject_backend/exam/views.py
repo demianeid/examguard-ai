@@ -51,16 +51,19 @@ class ExamListCreateView(APIView):
         serializer = ExamSerializer(data=request.data)
         if serializer.is_valid():
             exam = serializer.save(professor=request.user, class_id=class_obj)
-            
-            # Save assigned students
-            assigned_students = request.data.get('assigned_students', None)
+
             student_selection_type = request.data.get('student_selection_type', 'all')
-            
+            assigned_students = request.data.get('assigned_student_ids', None)
+
             if student_selection_type == 'specific' and assigned_students:
-                from authentication.models import BaseUser
-                students = BaseUser.objects.filter(custom_id__in=assigned_students)
+                students = BaseUser.objects.filter(
+                    custom_id__in=assigned_students,
+                    role=BaseUser.Role.STUDENT
+                )
                 exam.assigned_students.set(students)
-            
+            else:
+                exam.assigned_students.clear()
+
             return Response({
                 "message": "Exam created successfully.",
                 "data": serializer.data
@@ -101,15 +104,18 @@ class ExamDetailView(APIView):
         serializer = ExamSerializer(exam, data=request.data)
         if serializer.is_valid():
             exam = serializer.save()
-            assigned = request.data.get('assigned_students')
+            assigned = request.data.get('assigned_student_ids')
             selection = request.data.get('student_selection_type', 'all')
+
             if selection == 'specific' and assigned:
-                students = BaseUser.objects.filter(custom_id__in=assigned)
-                if not students.exists():
-                    students = BaseUser.objects.filter(id__in=assigned)
+                students = BaseUser.objects.filter(
+                    custom_id__in=assigned,
+                    role=BaseUser.Role.STUDENT
+                )
                 exam.assigned_students.set(students)
             else:
                 exam.assigned_students.clear()
+
             return Response({
                 "message": "Exam updated successfully.",
                 "data": serializer.data

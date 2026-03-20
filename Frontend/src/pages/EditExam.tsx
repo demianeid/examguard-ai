@@ -93,8 +93,6 @@ const defaultSecuritySettings: SecurityFeature[] = [
   { id: "10", name: "Offline Exam Mode",       description: "Allow exams without internet connection",             recommended: false, enabled: false, icon: <Wifi        className="w-5 h-5 text-gray-400" /> },
 ];
 
-
-
 // ============================================================
 // HELPERS
 // ============================================================
@@ -170,36 +168,12 @@ export default function EditExam() {
   const [originalData, setOriginalData]         = useState({ formData: {} as ExamFormData, questions: [] as Question[] });
 
   // Student selection state
- const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
+  const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
   const [availableStudents, setAvailableStudents] = useState<Student[]>([]);
   const [studentSearchTerm, setStudentSearchTerm] = useState("");
   const [classFilter, setClassFilter]             = useState("all");
   const [studentsLoading, setStudentsLoading]     = useState(false);
 
-  useEffect(() => {
-    const fetchStudents = async () => {
-      setStudentsLoading(true);
-      try {
-        const res = await fetch(
-          `https://examguard-ai-production.up.railway.app/api/instructors/classes/${formData.selectedClass}/students/`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const data = await res.json();
-        setAvailableStudents(data.map((s: any) => ({
-          id: s.student_custom_id || s.student_id || String(s.id),
-          name: s.full_name,
-          email: '',
-          class: '',
-          rollNumber: s.student_custom_id || s.student_id,
-        })));
-      } catch {
-        setAvailableStudents([]);
-      } finally {
-        setStudentsLoading(false);
-      }
-    };
-    if (formData.selectedClass) fetchStudents();
-  }, [formData.selectedClass]);
   const steps: Step[] = [
     { number: 1, label: "Basic Info" },
     { number: 2, label: "Questions" },
@@ -217,7 +191,7 @@ export default function EditExam() {
 
   const uniqueClasses = Array.from(new Set(availableStudents.map((s) => s.class))).filter((c): c is string => c !== undefined);
 
-  // ── Fetch exam data ──
+  // ── Fetch exam data + students together ──
   useEffect(() => {
     const fetchExam = async () => {
       setIsFetching(true);
@@ -228,28 +202,73 @@ export default function EditExam() {
         });
         if (!res.ok) throw new Error(`Failed to fetch exam (${res.status})`);
         const data = await res.json();
+        console.log("API Response:", data);
+        console.log("class_id:", data.class_id);
+        console.log("assigned_students:", data.assigned_students);
 
         const start = parseDatetime(data.start_datetime);
         const end   = parseDatetime(data.end_datetime);
+        const qs: Question[] = (data.questions ?? []).map(mapQuestionFromBackend);
+
+        const assignedStudents: Student[] = (data.assigned_students ?? []).map((s: any) => ({
+          id: s.custom_id || String(s.id),
+          name: s.full_name || "",
+          email: s.email || "",
+          class: "",
+          rollNumber: s.custom_id || "",
+        }));
+
+        const selectionType = assignedStudents.length > 0 ? "specific" : "all";
 
         const fd: ExamFormData = {
-          examTitle:            data.title         ?? "",
-          selectedClass:        String(data.class_id ?? ""),
-          description:          data.description   ?? "",
+          examTitle:            data.title        ?? "",
+          selectedClass:        String(data.class_id?.id ?? data.class_id ?? ""),
+          description:          data.description  ?? "",
           duration:             String(data.duration),
           totalMarks:           String(data.total_marks),
           startDate:            start.date,
           startTime:            start.time,
           endDate:              end.date,
           endTime:              end.time,
-          instructions:         data.instructions  ?? "",
-          studentSelectionType: "all",
+          instructions:         data.instructions ?? "",
+          studentSelectionType: selectionType,
         };
 
-        const qs: Question[] = (data.questions ?? []).map(mapQuestionFromBackend);
         setFormData(fd);
         setQuestions(qs);
+        setSelectedStudents(assignedStudents);
         setOriginalData({ formData: fd, questions: qs });
+
+        // ── جيب الطلاب هنا مباشرة بعد ما assignedStudents اتحدد ──
+        const classId = String(data.class_id?.id ?? data.class_id ?? "");
+        if (classId) {
+          setStudentsLoading(true);
+          try {
+            const studRes = await fetch(
+              `https://examguard-ai-production.up.railway.app/api/instructors/classes/${classId}/students/`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            const studData = await studRes.json();
+            const allStudents: Student[] = studData.map((s: any) => ({
+              id: s.student_custom_id || s.student_id || String(s.id),
+              name: s.full_name,
+              email: "",
+              class: "",
+              rollNumber: s.student_custom_id || s.student_id,
+            }));
+            // assignedStudents متاحة هنا مباشرة بدون race condition
+            setAvailableStudents(
+              allStudents.filter(
+                (s) => !assignedStudents.some((sel) => sel.id === s.id)
+              )
+            );
+          } catch {
+            setAvailableStudents([]);
+          } finally {
+            setStudentsLoading(false);
+          }
+        }
+
       } catch (err: any) {
         setFetchError(err.message ?? "Unknown error");
       } finally {
@@ -401,9 +420,8 @@ export default function EditExam() {
         end_datetime:   combineDatetime(formData.endDate,   formData.endTime),
         instructions:   formData.instructions,
         questions:      questions.map(mapQuestionToBackend),
-        assigned_students:
-          formData.studentSelectionType === "all" ? null : selectedStudents.map((s) => s.id),
-        student_selection_type: formData.studentSelectionType,
+       assigned_student_ids:
+     formData.studentSelectionType === "all" ? null : selectedStudents.map((s) => s.id),
       };
 
       const res = await fetch(`${BASE_URL}/${examId}/`, {
@@ -663,7 +681,7 @@ export default function EditExam() {
                       </div>
                       <div className="flex-1 flex gap-3 items-center">
                         <select
-                        title="Select question type"
+                          title="Select question type"
                           value={question.type}
                           onChange={(e) => handleQuestionChange(question.id, "type", e.target.value)}
                           className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -673,7 +691,7 @@ export default function EditExam() {
                         <div className="flex items-center gap-1">
                           <label className="text-sm text-gray-500">Marks:</label>
                           <input
-                          title="Enter question marks"
+                            title="Enter question marks"
                             type="number" min="1" value={question.marks}
                             onChange={(e) => handleQuestionChange(question.id, "marks", e.target.value)}
                             className="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -681,8 +699,8 @@ export default function EditExam() {
                         </div>
                       </div>
                       <button
-                      title="Delete question"
-                       onClick={() => handleDeleteQuestion(question.id)} className="text-red-500 hover:text-red-700">
+                        title="Delete question"
+                        onClick={() => handleDeleteQuestion(question.id)} className="text-red-500 hover:text-red-700">
                         <Trash2 size={18} />
                       </button>
                     </div>
@@ -700,7 +718,7 @@ export default function EditExam() {
                         {question.options.map((option, optIdx) => (
                           <div key={optIdx} className="flex items-center gap-3">
                             <input
-                              title=" Select correct answer"    
+                              title="Select correct answer"
                               type="radio" name={`question-${question.id}`}
                               checked={question.correctAnswer === optIdx}
                               onChange={() => handleCorrectAnswerChange(question.id, optIdx)}
@@ -752,6 +770,13 @@ export default function EditExam() {
               <h2 className="text-xl font-bold mb-2">Select Students</h2>
               <p className="text-sm text-blue-100">Choose who can take this exam</p>
             </div>
+
+            {studentsLoading && (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2" />
+                <span className="text-sm text-gray-600">Loading students...</span>
+              </div>
+            )}
 
             <div className="space-y-4">
               <div className="flex gap-4">
