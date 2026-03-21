@@ -79,18 +79,6 @@ interface Student {
   rollNumber?: string;
 }
 
-// // Mock students data - In real app, this would come from an API
-// const MOCK_STUDENTS: Student[] = [
-//   { id: "STU001", name: "John Doe",       email: "john@example.com",    class: "CS101", rollNumber: "2024001" },
-//   { id: "STU002", name: "Jane Smith",     email: "jane@example.com",    class: "CS101", rollNumber: "2024002" },
-//   { id: "STU003", name: "Bob Johnson",    email: "bob@example.com",     class: "CS102", rollNumber: "2024003" },
-//   { id: "STU004", name: "Alice Brown",    email: "alice@example.com",   class: "CS102", rollNumber: "2024004" },
-//   { id: "STU005", name: "Charlie Wilson", email: "charlie@example.com", class: "CS103", rollNumber: "2024005" },
-//   { id: "STU006", name: "Diana Miller",   email: "diana@example.com",   class: "CS103", rollNumber: "2024006" },
-//   { id: "STU007", name: "Ethan Davis",    email: "ethan@example.com",   class: "CS101", rollNumber: "2024007" },
-//   { id: "STU008", name: "Fiona Garcia",   email: "fiona@example.com",   class: "CS102", rollNumber: "2024008" },
-// ];
-
 export default function CreateExam() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -127,37 +115,38 @@ export default function CreateExam() {
   const [questionErrors, setQuestionErrors] = useState<QuestionErrors>({});
 
   // Student selection state
-const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
-const [availableStudents, setAvailableStudents] = useState<Student[]>([]);
-const [studentSearchTerm, setStudentSearchTerm] = useState<string>("");
-const [classFilter, setClassFilter]             = useState<string>("all");
-const [studentsLoading, setStudentsLoading]     = useState<boolean>(false);
+  const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
+  const [availableStudents, setAvailableStudents] = useState<Student[]>([]);
+  const [studentSearchTerm, setStudentSearchTerm] = useState<string>("");
+  const [classFilter, setClassFilter]             = useState<string>("all");
+  const [studentsLoading, setStudentsLoading]     = useState<boolean>(false);
 
-useEffect(() => {
-  const classId = searchParams.get('classId');
-  if (!classId) return;
-  const fetchStudents = async () => {
-    setStudentsLoading(true);
-    try {
-      const res = await fetch(`${BASE_URL}/api/instructors/classes/${classId}/students/`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      const data = await res.json();
-      setAvailableStudents(data.map((s: any) => ({
-        id: s.student_custom_id || s.student_id || String(s.id),
-        name: s.full_name,
-        email: '',
-        class: '',
-        rollNumber: s.student_custom_id || s.student_id,
-      })));
-    } catch {
-      setAvailableStudents([]);
-    } finally {
-      setStudentsLoading(false);
-    }
-  };
-  fetchStudents();
-}, []);
+  useEffect(() => {
+    const classId = searchParams.get('classId');
+    if (!classId) return;
+    const fetchStudents = async () => {
+      setStudentsLoading(true);
+      try {
+        const res = await fetch(`${BASE_URL}/api/instructors/classes/${classId}/students/`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        const data = await res.json();
+        setAvailableStudents(data.map((s: any) => ({
+          id: s.student_custom_id || s.student_id || String(s.id),
+          name: s.full_name,
+          email: '',
+          class: '',
+          rollNumber: s.student_custom_id || s.student_id,
+        })));
+      } catch {
+        setAvailableStudents([]);
+      } finally {
+        setStudentsLoading(false);
+      }
+    };
+    fetchStudents();
+  }, []);
+
   const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>([
     { id: "1",  name: "AI Proctoring",          description: "Automated behavior analysis and anomaly detection",   recommended: true,  enabled: true,  icon: <Shield      className="w-5 h-5 text-blue-500" /> },
     { id: "2",  name: "Live Proctoring",         description: "Real-time human monitoring during the exam",           recommended: false, enabled: false, icon: <Eye         className="w-5 h-5 text-gray-400" /> },
@@ -203,13 +192,12 @@ useEffect(() => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
 
-      // حساب end date و end time تلقائي
       const { duration, startDate, startTime } = updated;
       if (duration && startDate && startTime) {
         const start = new Date(`${startDate}T${startTime}`);
         const end = new Date(start.getTime() + parseInt(duration) * 60000);
-        updated.endDate = end.toISOString().split('T')[0];
-        updated.endTime = end.toTimeString().slice(0, 5);
+        updated.endDate = getLocalDateString(end);
+        updated.endTime = getLocalTimeString(end);
       }
 
       return updated;
@@ -218,6 +206,7 @@ useEffect(() => {
       setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   };
+
   const handleAddQuestion = () => {
     const newQuestion: Question = {
       id: Date.now().toString(),
@@ -314,6 +303,28 @@ useEffect(() => {
   const getActiveFeatures = () => securitySettings.filter((f) => f.enabled).map((f) => f.name);
   const getTotalMarks     = () => questions.reduce((sum, q) => sum + parseInt(q.marks || "0"), 0);
 
+  // ── Local-time helpers (browser-timezone-safe) ──
+  const getLocalDateString = (date = new Date()): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const getLocalTimeString = (date = new Date()): string => {
+    const h = String(date.getHours()).padStart(2, "0");
+    const min = String(date.getMinutes()).padStart(2, "0");
+    return `${h}:${min}`;
+  };
+
+  const getMinTime = (): string => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 5);
+    return getLocalTimeString(now);
+  };
+
+  const getTodayString = (): string => getLocalDateString();
+
   // ── Validation ──
   const validateStep1 = (): boolean => {
     const newErrors: Partial<Record<keyof ExamFormData, string>> = {};
@@ -326,11 +337,13 @@ useEffect(() => {
     if (!formData.endDate)   newErrors.endDate   = "End date is required";
     if (!formData.endTime)   newErrors.endTime   = "End time is required";
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = getTodayString();
     if (formData.startDate && formData.startDate < today) newErrors.startDate = "Start date cannot be in the past";
     if (formData.endDate   && formData.endDate   < today) newErrors.endDate   = "End date cannot be in the past";
     if (formData.startDate && formData.endDate && formData.endDate < formData.startDate)
       newErrors.endDate = "End date must be after start date";
+    if (formData.startDate === today && formData.startTime && formData.startTime < getMinTime())
+      newErrors.startTime = "Start time must be at least 5 minutes from now";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -359,6 +372,16 @@ useEffect(() => {
       if (Object.keys(errs).length > 0) newQuestionErrors[question.id] = errs;
     });
 
+    // Check marks mismatch
+    const questionsTotal = getTotalMarks();
+    const totalMarks = parseInt(formData.totalMarks);
+    if (questionsTotal !== totalMarks) {
+      newQuestionErrors.marksError = {
+        text: `Marks mismatch! Questions total is ${questionsTotal} but Exam Total Marks is set to ${totalMarks}. Please fix them to match.`,
+      };
+      isValid = false;
+    }
+
     setQuestionErrors(newQuestionErrors);
     return isValid;
   };
@@ -385,14 +408,6 @@ useEffect(() => {
       }
     }
     if (currentStep === 3 && !validateStep3()) return;
-  if (currentStep === 5) {
-  const questionsTotal = getTotalMarks();
-  const totalMarks = parseInt(formData.totalMarks);
-  if (questionsTotal !== totalMarks) {
-    setApiError(`Total marks mismatch! Your questions total is ${questionsTotal} marks but you set ${totalMarks} marks. Please fix your questions marks.`);
-    return;
-  }
-}
     if (currentStep === 5) { handlePublish(); return; }
     setCurrentStep(currentStep + 1);
   };
@@ -441,7 +456,6 @@ useEffect(() => {
     };
 
     try {
-      // Class ID always comes from the URL param
       const classId = searchParams.get("classId");
       const res = await fetch(`${BASE_URL}/api/exam/class/${classId}/`, {
         method:  "POST",
@@ -577,7 +591,7 @@ useEffect(() => {
                 </label>
                 <input
                   id="startDate" type="date"
-                  min={new Date().toISOString().split("T")[0]}
+                  min={getTodayString()}
                   value={formData.startDate}
                   onChange={(e) => handleInputChange("startDate", e.target.value)}
                   className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${errors.startDate ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
@@ -591,6 +605,7 @@ useEffect(() => {
                 </label>
                 <input
                   id="startTime" type="time"
+                  min={formData.startDate === getTodayString() ? getMinTime() : undefined}
                   value={formData.startTime}
                   onChange={(e) => handleInputChange("startTime", e.target.value)}
                   className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${errors.startTime ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
@@ -607,7 +622,7 @@ useEffect(() => {
                 </label>
                 <input
                   id="endDate" type="date"
-                  min={formData.startDate || new Date().toISOString().split("T")[0]}
+                  min={formData.startDate || getTodayString()}
                   value={formData.endDate}
                   onChange={(e) => handleInputChange("endDate", e.target.value)}
                   className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${errors.endDate ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
@@ -654,13 +669,57 @@ useEffect(() => {
               </button>
             </div>
 
+            {/* Questions summary + Total Marks editor */}
             {questions.length > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="w-5 h-5 text-blue-600" />
                   <span className="font-medium text-gray-900">Total Questions: {questions.length}</span>
                 </div>
-                <span className="font-medium text-gray-900">Total Marks: {getTotalMarks()}</span>
+                <span className="font-medium text-gray-900">Questions Marks: {getTotalMarks()}</span>
+              </div>
+            )}
+
+            {/* Marks mismatch indicator */}
+            <div className={`border rounded-lg p-4 flex items-center justify-between gap-4 ${
+              getTotalMarks() !== parseInt(formData.totalMarks)
+                ? "bg-red-50 border-red-300"
+                : "bg-green-50 border-green-300"
+            }`}>
+              <div className="flex items-center gap-2">
+                {getTotalMarks() !== parseInt(formData.totalMarks) ? (
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                ) : (
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                )}
+                <span className={`text-sm font-medium ${
+                  getTotalMarks() !== parseInt(formData.totalMarks) ? "text-red-700" : "text-green-700"
+                }`}>
+                  {getTotalMarks() !== parseInt(formData.totalMarks)
+                    ? `Mismatch! Questions total: ${getTotalMarks()} ≠ Exam total: ${formData.totalMarks}`
+                    : "Marks are matching ✓"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <label htmlFor="totalMarksStep2" className="text-sm text-gray-600 whitespace-nowrap">
+                  Exam Total Marks:
+                </label>
+                <input
+                  id="totalMarksStep2"
+                  type="number"
+                  min="1"
+                  value={formData.totalMarks}
+                  onChange={(e) => handleInputChange("totalMarks", e.target.value)}
+                  className="w-20 px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Marks mismatch error (shown on Next click) */}
+            {questionErrors.marksError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <p className="text-sm text-red-600">{questionErrors.marksError.text}</p>
               </div>
             )}
 

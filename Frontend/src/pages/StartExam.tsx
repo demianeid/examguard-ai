@@ -563,24 +563,32 @@ const ExamInterface: React.FC = () => {
     );
   }
 
-  if (examError || !examData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center bg-white p-8 rounded-xl shadow-md max-w-md">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-800 mb-2">
-  {examError?.includes('already') || examError?.includes('ended')
-    ? '✅ Exam Already Submitted'
-    : 'Failed to Load Exam'}
-</h2>
-<p className="text-gray-500 mb-4">{examError}</p>
-          <button onClick={() => navigate('/classes')} className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
-            Back to Classes
-          </button>
-        </div>
-      </div>
-    );
+// بعد — مش بيظهر أي صفحة، بيرجع فوراً
+if (examError || !examData) {
+  const isAlreadySubmitted =
+    examError?.toLowerCase().includes('already') ||
+    examError?.toLowerCase().includes('submitted') ||
+    examError?.toLowerCase().includes('ended');
+
+  if (isAlreadySubmitted) {
+    navigate('/classes');
+    return null;
   }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center bg-white p-8 rounded-xl shadow-md max-w-md">
+        <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-gray-800 mb-2">Failed to Load Exam</h2>
+        <p className="text-gray-500 mb-4">{examError}</p>
+        <button onClick={() => navigate('/classes')}
+          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+          Back to Classes
+        </button>
+      </div>
+    </div>
+  );
+}
 
   const examRules = [
     "You must remain in camera view at all times during the exam",
