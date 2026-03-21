@@ -98,7 +98,10 @@ const ExamInterface: React.FC = () => {
         const res = await fetch(`https://examguard-ai-production.up.railway.app/api/student/exams/${examId}/`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
-        if (!res.ok) throw new Error('Failed to load exam');
+        if (!res.ok) {
+  const errData = await res.json();
+  throw new Error(errData.detail || 'Failed to load exam');
+}
         const data: ExamData = await res.json();
         setExamData(data);
         if (data.end_datetime) {
@@ -399,8 +402,16 @@ const ExamInterface: React.FC = () => {
   // Start Exam
   // ============================================================
   const startExam = async () => {
+    try {
+      await fetch(`https://examguard-ai-production.up.railway.app/api/student/exams/${examId}/start/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+    } catch { console.error('Failed to register exam session'); }
+
     await requestFullScreen();
     setCurrentView('exam');
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
       if (videoRef.current) videoRef.current.srcObject = stream;
@@ -503,11 +514,18 @@ const ExamInterface: React.FC = () => {
       setSystemCheckStatus(p => ({ ...p, fullscreen: 'requestFullscreen' in document.documentElement ? 'success' : 'failed' }));
     }, 3000);
 
-    setTimeout(async () => {
-      try { const s = await (navigator.mediaDevices as any).getDisplayMedia({ video: true }); s.getTracks().forEach((t: MediaStreamTrack) => t.stop()); setSystemCheckStatus(p => ({ ...p, screen: 'success' })); }
-      catch { setSystemCheckStatus(p => ({ ...p, screen: 'failed' })); }
-      finally { setCheckingComplete(true); }
-    }, 3500);
+  setTimeout(async () => {
+  try {
+    const s = await (navigator.mediaDevices as any).getDisplayMedia({ video: { displaySurface: 'monitor' } });
+    const surface = s.getVideoTracks()[0].getSettings().displaySurface;
+    s.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+    setSystemCheckStatus(p => ({ ...p, screen: (surface === 'monitor' || surface === undefined) ? 'success' : 'failed' }));
+  } catch {
+    setSystemCheckStatus(p => ({ ...p, screen: 'failed' }));
+  } finally {
+    setCheckingComplete(true);
+  }
+}, 3500);
   };
 
   const retrySpecificCheck = async (key: string) => {
@@ -518,7 +536,16 @@ const ExamInterface: React.FC = () => {
       case 'internet': setSystemCheckStatus(p => ({ ...p, internet: navigator.onLine ? 'success' : 'failed' })); break;
       case 'browser': setSystemCheckStatus(p => ({ ...p, browser: /Chrome|Firefox|Edg/.test(navigator.userAgent) ? 'success' : 'failed' })); break;
       case 'fullscreen': setSystemCheckStatus(p => ({ ...p, fullscreen: 'requestFullscreen' in document.documentElement ? 'success' : 'failed' })); break;
-      case 'screen': try { const s = await (navigator.mediaDevices as any).getDisplayMedia({ video: true }); s.getTracks().forEach((t: MediaStreamTrack) => t.stop()); setSystemCheckStatus(p => ({ ...p, screen: 'success' })); } catch { setSystemCheckStatus(p => ({ ...p, screen: 'failed' })); } break;
+     case 'screen':
+  try {
+    const s = await (navigator.mediaDevices as any).getDisplayMedia({ video: { displaySurface: 'monitor' } });
+    const surface = s.getVideoTracks()[0].getSettings().displaySurface;
+    s.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+    setSystemCheckStatus(p => ({ ...p, screen: (surface === 'monitor' || surface === undefined || surface === null) ? 'success' : 'failed' }));
+  } catch {
+    setSystemCheckStatus(p => ({ ...p, screen: 'failed' }));
+  }
+  break;
     }
   };
 
@@ -541,8 +568,12 @@ const ExamInterface: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center bg-white p-8 rounded-xl shadow-md max-w-md">
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Failed to Load Exam</h2>
-          <p className="text-gray-500 mb-4">{examError}</p>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">
+  {examError?.includes('already') || examError?.includes('ended')
+    ? '✅ Exam Already Submitted'
+    : 'Failed to Load Exam'}
+</h2>
+<p className="text-gray-500 mb-4">{examError}</p>
           <button onClick={() => navigate('/classes')} className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
             Back to Classes
           </button>
@@ -745,7 +776,7 @@ const ExamInterface: React.FC = () => {
       { key: 'internet', icon: Wifi, title: 'Internet Connection', checkingDesc: 'Testing connection...', successDesc: 'Strong internet connection', failedDesc: 'Weak or unstable connection', troubleshooting: 'Check your internet connection' },
       { key: 'browser', icon: Monitor, title: 'Browser Compatibility', checkingDesc: 'Verifying browser...', successDesc: 'Browser is compatible', failedDesc: 'Browser not supported', troubleshooting: 'Use Chrome, Firefox, or Edge' },
       { key: 'fullscreen', icon: Maximize2, title: 'Fullscreen Support', checkingDesc: 'Checking fullscreen...', successDesc: 'Fullscreen mode supported', failedDesc: 'Fullscreen not supported', troubleshooting: 'Update your browser' },
-      { key: 'screen', icon: Monitor, title: 'Screen Sharing', checkingDesc: 'Requesting screen sharing...', successDesc: 'Screen sharing granted', failedDesc: 'Screen sharing denied', troubleshooting: 'Allow screen sharing when prompted' },
+      { key: 'screen', icon: Monitor, title: 'Screen Sharing', checkingDesc: '⚠️ Please select "Entire Screen" from the list then click Allow', successDesc: 'Screen sharing granted', failedDesc: 'Screen sharing denied',troubleshooting: 'You must share your Entire Screen — window or tab sharing is not allowed' },
     ];
     const allSuccess = Object.values(systemCheckStatus).every(s => s === 'success');
 

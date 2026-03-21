@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Exam, Question, Choice, StudentAnswer, ExamResult
+from .models import Exam, Question, Choice, StudentAnswer, ExamResult, ExamSession
 
 
 class ChoiceInline(admin.TabularInline):
@@ -10,6 +10,7 @@ class ChoiceInline(admin.TabularInline):
 class QuestionInline(admin.StackedInline):
     model = Question
     extra = 0
+
 
 @admin.register(Exam)
 class ExamAdmin(admin.ModelAdmin):
@@ -46,3 +47,12 @@ class ExamResultAdmin(admin.ModelAdmin):
     list_display = ('student', 'exam', 'total_marks_obtained', 'total_marks', 'percentage', 'submitted_at', 'is_terminated')
     list_filter = ('is_terminated', 'submitted_at')
     search_fields = ('student__email', 'exam__title')
+
+
+# NEW
+@admin.register(ExamSession)
+class ExamSessionAdmin(admin.ModelAdmin):
+    list_display  = ('student', 'exam', 'started_at', 'ip_address', 'system_check_passed', 'is_active')
+    list_filter   = ('system_check_passed', 'is_active', 'started_at')
+    search_fields = ('student__email', 'exam__title', 'ip_address')
+    readonly_fields = ('started_at', 'ip_address', 'user_agent')

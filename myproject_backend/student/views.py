@@ -2,9 +2,18 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions, status
 from instructors.models import Class, ClassEnrollment
-from exam.models import Exam, StudentAnswer, ExamResult, Choice
+from exam.models import Exam, StudentAnswer, ExamResult, Choice, ExamSession
 from django.utils import timezone
 from django.db.models import Q
+
+
+# ─── Helper ───────────────────────────────────────────────────────
+def get_client_ip(request):
+    """استخرج الـ IP الحقيقي للطالب حتى لو في proxy."""
+    x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded:
+        return x_forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
 
 
 # --- Get all classes the student is enrolled in ---
@@ -121,7 +130,7 @@ class StudentClassExamsView(APIView):
                 exam.status = 'completed'
                 exam.save()
 
-        # ✅ الفلتر الصح - لو assigned_students فاضي = للكل، لو فيه طلاب = بس هم
+        # لو assigned_students فاضي = للكل، لو فيه طلاب = بس هم
         exams = Exam.objects.filter(class_id=class_id).filter(
             Q(assigned_students__isnull=True) |
             Q(assigned_students=request.user)
@@ -166,6 +175,7 @@ class StudentExamDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # تحقق إن الطالب enrolled في الكلاس
         enrolled = ClassEnrollment.objects.filter(
             student=request.user,
             class_enrolled=exam.class_id
@@ -174,6 +184,14 @@ class StudentExamDetailView(APIView):
         if not enrolled:
             return Response(
                 {'detail': 'Not enrolled in this class.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # تحقق إن الطالب من الـ assigned students لو الامتحان مش للكل
+        assigned = exam.assigned_students.all()
+        if assigned.exists() and not assigned.filter(id=request.user.id).exists():
+            return Response(
+                {'detail': 'You are not assigned to this exam.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -238,6 +256,75 @@ class StudentExamDetailView(APIView):
         })
 
 
+# --- NEW: Start exam session after system check ---
+class StudentExamStartView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, exam_id):
+        try:
+            exam = Exam.objects.get(id=exam_id)
+        except Exam.DoesNotExist:
+            return Response(
+                {'detail': 'Exam not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # تحقق إن الطالب enrolled
+        enrolled = ClassEnrollment.objects.filter(
+            student=request.user,
+            class_enrolled=exam.class_id
+        ).exists()
+
+        if not enrolled:
+            return Response(
+                {'detail': 'Not enrolled in this class.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # تحقق إن الامتحان active
+        if exam.status != 'active':
+            return Response(
+                {'detail': 'Exam is not currently active.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # تحقق إن الطالب مش سبق وخلّص الامتحان
+        if ExamResult.objects.filter(student=request.user, exam=exam).exists():
+            return Response(
+                {'detail': 'You have already submitted this exam.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # لو في session موجودة بالفعل → رجّع بيانتها (في حالة refresh)
+        existing_session = ExamSession.objects.filter(
+            student=request.user,
+            exam=exam
+        ).first()
+
+        if existing_session:
+            return Response({
+                'detail': 'Session already active. Resuming exam.',
+                'session_id': existing_session.id,
+                'started_at': existing_session.started_at,
+            }, status=status.HTTP_200_OK)
+
+        # إنشاء session جديدة
+        session = ExamSession.objects.create(
+            student=request.user,
+            exam=exam,
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+            system_check_passed=True,
+            is_active=True,
+        )
+
+        return Response({
+            'detail': 'Exam session started successfully.',
+            'session_id': session.id,
+            'started_at': session.started_at,
+        }, status=status.HTTP_201_CREATED)
+
+
 # --- Submit exam answers and calculate grade ---
 class StudentExamSubmitView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -251,6 +338,7 @@ class StudentExamSubmitView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # تحقق إن الطالب enrolled
         enrolled = ClassEnrollment.objects.filter(
             student=request.user,
             class_enrolled=exam.class_id
@@ -262,12 +350,27 @@ class StudentExamSubmitView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        if exam.status != 'active':
+        # تحقق إن الامتحان مش upcoming
+        if exam.status == 'upcoming':
             return Response(
-                {'detail': 'Exam is not currently active.'},
+                {'detail': 'Exam has not started yet.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # تحقق إن الطالب عمل start (مر على الـ system check)
+        session = ExamSession.objects.filter(
+            student=request.user,
+            exam=exam,
+            system_check_passed=True,
+        ).first()
+
+        if not session:
+            return Response(
+                {'detail': 'No valid exam session found. Please start the exam properly.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # تحقق إن الامتحان مش متقدمش قبل كده
         if ExamResult.objects.filter(student=request.user, exam=exam).exists():
             return Response(
                 {'detail': 'Exam already submitted.'},
@@ -276,22 +379,27 @@ class StudentExamSubmitView(APIView):
 
         answers_data = request.data.get('answers', [])
         is_terminated = bool(request.data.get('is_terminated', False))
-        violation_score = request.data.get('violation_score', 0)
+
+        # casting صح للـ violation_score
+        try:
+            violation_score = float(request.data.get('violation_score', 0))
+        except (TypeError, ValueError):
+            violation_score = 0.0
 
         total_marks_obtained = 0
 
         for answer in answers_data:
             question_id = answer.get('question_id')
-            choice_id = answer.get('choice_id')
-            essay_text = answer.get('essay_answer', '')
+            choice_id   = answer.get('choice_id')
+            essay_text  = answer.get('essay_answer', '')
 
             try:
                 question = exam.questions.get(id=question_id)
             except Exception:
                 continue
 
-            is_correct = None
-            marks_obtained = 0
+            is_correct      = None
+            marks_obtained  = 0
             selected_choice = None
 
             if question.question_type in ['multiple_choice', 'true_false'] and choice_id:
@@ -325,6 +433,10 @@ class StudentExamSubmitView(APIView):
             is_terminated=is_terminated,
             violation_score=violation_score,
         )
+
+        # أغلق الـ session بعد الـ submit
+        session.is_active = False
+        session.save()
 
         return Response({
             'detail': 'Exam submitted successfully.',
