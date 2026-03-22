@@ -543,29 +543,42 @@ const ClassesInstructor = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {exam.status === "upcoming" ? (
-                    <>
-                      <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditExam(exam.id); }}
-                        className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
-                      >
-                        <FileEdit size={16} />Edit
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewResults(exam.id); }}
-                        className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
-                      >
-                        <BarChart3 size={16} />View Results
-                      </button>
-                    </>
-                  )}
+                {exam.status === "upcoming" ? (
+  <>
+    <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span>
+    <button
+      type="button"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditExam(exam.id); }}
+      className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
+    >
+      <FileEdit size={16} />Edit
+    </button>
+  </>
+) : exam.status === "active" ? (
+  <>
+    <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium flex items-center gap-1">
+      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />Live
+    </span>
+    <button
+      type="button"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/proctor/${exam.id}`); }}
+      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+    >
+      <Eye size={16} />Monitor
+    </button>
+  </>
+) : (
+  <>
+    <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium">Completed</span>
+    <button
+      type="button"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewResults(exam.id); }}
+      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg"
+    >
+      <BarChart3 size={16} />View Results
+    </button>
+  </>
+)}
                   <button
                     type="button"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteExam(exam.id, exam.title); }}

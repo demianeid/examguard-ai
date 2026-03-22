@@ -620,16 +620,8 @@ useEffect(() => {
                     </>
                  ) : exam.status === "missed" ? (
     <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm font-medium">Missed</span>
-  ) : exam.status === "submitted" ? (
-    <>
-      <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">Submitted</span>
-      {exam.score != null && (
-        <div className="text-right">
-          <span className="text-sm text-gray-500">Score</span>
-          <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>{exam.score}%</p>
-        </div>
-      )}
-    </>
+ ) : exam.status === "submitted" ? (
+    <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">Submitted</span>
   ) : (
     <>
       <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span>
