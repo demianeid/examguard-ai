@@ -13,15 +13,13 @@ from instructors.models import Class
 def is_professor(user):
     return user.role == BaseUser.Role.PROFESSOR
 
-
 def auto_update_exam_status(exam):
-    """Update exam status based on current time (UTC-aware)."""
     now = timezone.now()
-    if exam.status in ['upcoming', 'active'] and exam.end_datetime <= now:
-        exam.status = 'completed'
-        exam.save()
-    elif exam.status == 'upcoming' and exam.start_datetime <= now:
+    if exam.status == 'upcoming' and exam.start_datetime <= now:
         exam.status = 'active'
+        exam.save()
+    elif exam.status in ['upcoming', 'active'] and exam.end_datetime <= now:
+        exam.status = 'completed'
         exam.save()
     return exam
 

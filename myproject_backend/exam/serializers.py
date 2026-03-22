@@ -44,17 +44,34 @@ class QuestionSerializer(serializers.ModelSerializer):
 # ============================================================
 # EXAM - CREATE / UPDATE
 # ============================================================
+class AssignedStudentSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='pk')
+    custom_id = serializers.CharField()
+    full_name = serializers.SerializerMethodField()
+    email = serializers.EmailField()
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()
+
+
 class ExamSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, required=False)
+    assigned_students = AssignedStudentSerializer(many=True, read_only=True)
+    class_id = serializers.SerializerMethodField()
+
+    def get_class_id(self, obj):
+        if obj.class_id:
+            return {'id': obj.class_id.id, 'name': obj.class_id.name}
+        return None
 
     class Meta:
         model = Exam
         fields = [
             'id', 'title', 'description', 'duration', 'total_marks',
             'start_datetime', 'end_datetime', 'instructions',
-            'status', 'created_at', 'questions'
+            'status', 'created_at', 'questions', 'class_id', 'assigned_students'
         ]
-        read_only_fields = ['id', 'created_at', 'status']
+        read_only_fields = ['id', 'created_at', 'status', 'assigned_students', 'class_id']
 
     def validate(self, data):
         now = timezone.now()

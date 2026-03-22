@@ -250,7 +250,7 @@ export default function EditExam() {
             );
             const studData = await studRes.json();
             const allStudents: Student[] = studData.map((s: any) => ({
-              id: s.student_custom_id || s.student_id || String(s.id),
+              id: s.custom_id || s.student_custom_id || s.student_id || String(s.id),
               name: s.full_name,
               email: "",
               class: "",

@@ -126,9 +126,6 @@ class StudentClassExamsView(APIView):
             if exam.status == 'upcoming' and exam.start_datetime <= now:
                 exam.status = 'active'
                 exam.save()
-            elif exam.status in ['upcoming', 'active'] and exam.end_datetime <= now:
-                exam.status = 'completed'
-                exam.save()
 
         # لو assigned_students فاضي = للكل، لو فيه طلاب = بس هم
         exams = Exam.objects.filter(class_id=class_id).filter(
@@ -147,6 +144,14 @@ class StudentClassExamsView(APIView):
         data = []
         for exam in exams:
             result = results_map.get(exam.id)
+
+            if now < exam.start_datetime:
+                student_status = 'upcoming'
+            elif now < exam.end_datetime:
+                student_status = 'submitted' if result else 'active'
+            else:
+                student_status = 'completed' if result else 'missed'
+
             data.append({
                 'id': exam.id,
                 'title': exam.title,
@@ -155,7 +160,7 @@ class StudentClassExamsView(APIView):
                 'total_marks': exam.total_marks,
                 'start_datetime': exam.start_datetime,
                 'end_datetime': exam.end_datetime,
-                'status': 'completed' if result else ('missed' if exam.status == 'completed' else exam.status),
+                'status': student_status,
                 'score': float(result.percentage) if result else None,
             })
 
@@ -200,17 +205,14 @@ class StudentExamDetailView(APIView):
         if exam.status == 'upcoming' and exam.start_datetime <= now:
             exam.status = 'active'
             exam.save()
-        elif exam.status in ['upcoming', 'active'] and exam.end_datetime <= now:
-            exam.status = 'completed'
-            exam.save()
 
-        if exam.status == 'upcoming':
+        if now < exam.start_datetime:
             return Response(
                 {'detail': f'Exam has not started yet. Starts at {exam.start_datetime}'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        if exam.status == 'completed':
+        if now >= exam.end_datetime:
             has_result = ExamResult.objects.filter(student=request.user, exam=exam).exists()
             if not has_result:
                 return Response(
@@ -281,10 +283,21 @@ class StudentExamStartView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # تحقق إن الامتحان active
-        if exam.status != 'active':
+        now = timezone.now()
+
+        if exam.status == 'upcoming' and exam.start_datetime <= now:
+            exam.status = 'active'
+            exam.save()
+
+        if now < exam.start_datetime:
             return Response(
-                {'detail': 'Exam is not currently active.'},
+                {'detail': 'Exam has not started yet.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if now >= exam.end_datetime:
+            return Response(
+                {'detail': 'Exam has already ended.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -357,18 +370,16 @@ class StudentExamSubmitView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # تحقق إن الطالب عمل start (مر على الـ system check)
-        session = ExamSession.objects.filter(
+        session, _ = ExamSession.objects.get_or_create(
             student=request.user,
             exam=exam,
-            system_check_passed=True,
-        ).first()
-
-        if not session:
-            return Response(
-                {'detail': 'No valid exam session found. Please start the exam properly.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            defaults={
+                'ip_address': get_client_ip(request),
+                'user_agent': request.META.get('HTTP_USER_AGENT', ''),
+                'system_check_passed': True,
+                'is_active': True,
+            },
+        )
 
         # تحقق إن الامتحان مش متقدمش قبل كده
         if ExamResult.objects.filter(student=request.user, exam=exam).exists():

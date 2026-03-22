@@ -43,7 +43,7 @@ interface Exam {
   name: string;
   date: string;
   duration: string;
-  status: "upcoming" | "active" | "completed" | "missed";
+  status: "upcoming" | "active" | "completed" | "missed" | "submitted";
   score: number | null;
   start_datetime?: string;
   end_datetime?: string;
@@ -537,31 +537,16 @@ useEffect(() => {
           });
           if (!res.ok) throw new Error('Failed');
           const data = await res.json();
-          const nowMs = Date.now();
-          setExams(data.map((e: any) => {
-            let resolvedStatus = e.status;
-if (e.start_datetime && e.end_datetime) {
-  const startMs = Date.parse(e.start_datetime);
-  const endMs = Date.parse(e.end_datetime);
-  if (nowMs >= startMs && nowMs < endMs) {
-    resolvedStatus = 'active';
-  } else if (nowMs < startMs) {
-    resolvedStatus = 'upcoming';
-  } else if (nowMs >= endMs && e.status !== 'completed') {
-    resolvedStatus = e.status === 'missed' ? 'missed' : 'completed';
-  }
-}
-            return {
+          setExams(data.map((e: any) => ({
               id: e.id,
               name: e.title,
               date: e.start_datetime ? new Date(e.start_datetime).toLocaleDateString('en-CA') : '',
               duration: `${e.duration} min`,
-              status: resolvedStatus,
+              status: e.status,
               score: e.score ?? null,
               start_datetime: e.start_datetime,
               end_datetime: e.end_datetime,
-            };
-          }));
+          })));
         } catch {
           setExams([]);
         } finally {
@@ -633,19 +618,29 @@ if (e.start_datetime && e.end_datetime) {
 })() : ''}
                       </span>
                     </>
-                  ) : exam.status === "missed" ? (
-                    <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm font-medium">Missed</span>
-                  ) : (
-                    <>
-                      <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span>
-                      {exam.score != null && (
-                        <div className="text-right">
-                          <span className="text-sm text-gray-500">Score</span>
-                          <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>{exam.score}%</p>
-                        </div>
-                      )}
-                    </>
-                  )}
+                 ) : exam.status === "missed" ? (
+    <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm font-medium">Missed</span>
+  ) : exam.status === "submitted" ? (
+    <>
+      <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">Submitted</span>
+      {exam.score != null && (
+        <div className="text-right">
+          <span className="text-sm text-gray-500">Score</span>
+          <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>{exam.score}%</p>
+        </div>
+      )}
+    </>
+  ) : (
+    <>
+      <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span>
+      {exam.score != null && (
+        <div className="text-right">
+          <span className="text-sm text-gray-500">Score</span>
+          <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>{exam.score}%</p>
+        </div>
+      )}
+    </>
+  )}
                 </div>
               </div>
             </div>
