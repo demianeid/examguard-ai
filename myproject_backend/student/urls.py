@@ -10,6 +10,7 @@ from .views import (
     StudentExamResultView,
     StudentClassGradesView,
 )
+from .face_views import face_register, face_verify, get_students  # ← هنا فوق
 
 urlpatterns = [
     path('classes/',                              StudentClassesView.as_view(),    name='student-classes'),
@@ -18,15 +19,12 @@ urlpatterns = [
     path('classes/<int:class_id>/exams/',         StudentClassExamsView.as_view(), name='student-class-exams'),
     path('classes/<int:class_id>/grades/',        StudentClassGradesView.as_view(),name='student-class-grades'),
     path('exams/<int:exam_id>/',                  StudentExamDetailView.as_view(), name='student-exam-detail'),
-    path('exams/<int:exam_id>/start/',            StudentExamStartView.as_view(),  name='student-exam-start'),   # NEW
+    path('exams/<int:exam_id>/start/',            StudentExamStartView.as_view(),  name='student-exam-start'),
     path('exams/<int:exam_id>/submit/',           StudentExamSubmitView.as_view(), name='student-exam-submit'),
     path('exams/<int:exam_id>/result/',           StudentExamResultView.as_view(), name='student-exam-result'),
-]
 
-
-from .face_views import face_register, face_verify, get_students urlpatterns = [
-
-path('face/register/',  face_register, name='face-register'),
-path('face/verify/',    face_verify,   name='face-verify'),
-path('face/students/',  get_students,  name='face-students'),
+    # Face Verification
+    path('face/register/', face_register, name='face-register'),
+    path('face/verify/',   face_verify,   name='face-verify'),
+    path('face/students/', get_students,  name='face-students'),
 ]

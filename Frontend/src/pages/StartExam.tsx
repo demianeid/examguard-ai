@@ -449,10 +449,31 @@ const ExamInterface: React.FC = () => {
   }, []);
 
   // TODO: Replace with real API call when face model is ready
-  const verifyFaceWithModel = async (_imageBase64: string): Promise<{ verified: boolean; message: string }> => {
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return { verified: true, message: 'Bypassed: model not connected yet.' };
+  const verifyFaceWithModel = async (imageBase64: string): Promise<{ verified: boolean; message: string }> => {
+  const token = localStorage.getItem('access_token');
+  
+  // بنجيب student_id من الـ token
+  const payload = JSON.parse(atob(token!.split('.')[1]));
+  const studentId = payload.custom_id;
+
+  const response = await fetch('https://examguard-ai-production.up.railway.app/api/student/face/verify/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      student_id: studentId,
+      image: imageBase64,
+    }),
+  });
+
+  const data = await response.json();
+  return {
+    verified: data.verified,
+    message: data.message,
   };
+};
 
   const handleFaceVerify = useCallback(async () => {
     if (faceStatus !== 'scanning') return;
