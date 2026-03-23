@@ -5,7 +5,6 @@ from django.views.decorators.csrf import csrf_exempt
 from deepface import DeepFace
 import os
 import base64
-import uuid
 import json
 import tempfile
 import urllib.request
@@ -46,11 +45,21 @@ def face_register(request):
         input_tmp.write(img_data)
         input_tmp.close()
 
-        # ✅ بنتأكد إن صورة البروفايل فيها وجه
-        DeepFace.extract_faces(img_path=profile_tmp.name, enforce_detection=True)
+        # بنتأكد إن صورة البروفايل فيها وجه
+        try:
+            DeepFace.extract_faces(img_path=profile_tmp.name, enforce_detection=True)
+        except Exception:
+            os.unlink(profile_tmp.name)
+            os.unlink(input_tmp.name)
+            return JsonResponse({"success": False, "message": "No face detected in your profile image. Please update your profile photo."}, status=400)
 
-        # ✅ بنتأكد إن الصورة الجديدة فيها وجه
-        DeepFace.extract_faces(img_path=input_tmp.name, enforce_detection=True)
+        # بنتأكد إن الصورة الجديدة فيها وجه
+        try:
+            DeepFace.extract_faces(img_path=input_tmp.name, enforce_detection=True)
+        except Exception:
+            os.unlink(profile_tmp.name)
+            os.unlink(input_tmp.name)
+            return JsonResponse({"success": False, "message": "No face detected in your photo. Please take a clear photo of your face."}, status=400)
 
         os.unlink(profile_tmp.name)
         os.unlink(input_tmp.name)
@@ -102,13 +111,14 @@ def face_verify(request):
         input_tmp.write(img_data)
         input_tmp.close()
 
-        # ✅ بنقارن الوجهين
+        # بنقارن الوجهين
         result = DeepFace.verify(
             img1_path=profile_tmp.name,
             img2_path=input_tmp.name,
-            model_name="VGG-Face",
+            model_name="Facenet",
             distance_metric="cosine",
-            enforce_detection=True
+            enforce_detection=True,
+            threshold=0.50
         )
 
         os.unlink(profile_tmp.name)
