@@ -162,7 +162,6 @@ const ExamInterface: React.FC = () => {
     const handler = (e: MouseEvent) => {
       if (currentView === 'exam' && !examTerminated) {
         e.preventDefault();
-        addViolation(1, 'Right-click attempt detected');
       }
     };
     document.addEventListener('contextmenu', handler);
@@ -571,6 +570,19 @@ const ExamInterface: React.FC = () => {
   };
 
   // ============================================================
+  // Auto-redirect if exam already submitted / ended
+  // ============================================================
+  const isAlreadySubmitted =
+    !!examError &&
+    (examError.toLowerCase().includes('already') ||
+      examError.toLowerCase().includes('submitted') ||
+      examError.toLowerCase().includes('ended'));
+
+  useEffect(() => {
+    if (isAlreadySubmitted) navigate('/classes');
+  }, [isAlreadySubmitted]);
+
+  // ============================================================
   // Loading / Error States
   // ============================================================
   if (examLoading) {
@@ -584,32 +596,23 @@ const ExamInterface: React.FC = () => {
     );
   }
 
-// بعد — مش بيظهر أي صفحة، بيرجع فوراً
-if (examError || !examData) {
-  const isAlreadySubmitted =
-    examError?.toLowerCase().includes('already') ||
-    examError?.toLowerCase().includes('submitted') ||
-    examError?.toLowerCase().includes('ended');
+  if (isAlreadySubmitted) return null;
 
-  if (isAlreadySubmitted) {
-    navigate('/classes');
-    return null;
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center bg-white p-8 rounded-xl shadow-md max-w-md">
-        <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-gray-800 mb-2">Failed to Load Exam</h2>
-        <p className="text-gray-500 mb-4">{examError}</p>
-        <button onClick={() => navigate('/classes')}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
-          Back to Classes
-        </button>
+  if (examError || !examData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center bg-white p-8 rounded-xl shadow-md max-w-md">
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Failed to Load Exam</h2>
+          <p className="text-gray-500 mb-4">{examError}</p>
+          <button onClick={() => navigate('/classes')}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+            Back to Classes
+          </button>
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   const examRules = [
     "You must remain in camera view at all times during the exam",
