@@ -257,19 +257,13 @@ export const authApi = {
 //machine 
 export const faceApi = {
   register: (payload: { student_id: string; name: string; image: string }) =>
-    request<{ success: boolean; message: string }>("/face/register/", {
+    request<{ success: boolean; message: string }>("/student/face/register/", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
   verify: (payload: { student_id: string; image: string }) =>
-    request<{ success: boolean; verified: boolean; message: string; student_name: string; confidence: number }>("/face/verify/", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-
-  monitor: (payload: { student_id: string; image: string }) =>
-    request<{ success: boolean; warning: boolean; type: string; message: string }>("/face/monitor/analyze/", {
+    request<{ success: boolean; verified: boolean; message: string; student_name: string; confidence: number }>("/student/face/verify/", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
