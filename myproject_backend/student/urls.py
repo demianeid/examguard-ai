@@ -12,7 +12,7 @@ from .views import (
     StudentExamResultView,
     StudentClassGradesView,
 )
-# from .face_views import face_register, face_verify, get_students  # ← comment مؤقت
+from .face_views import face_register, face_verify, get_students
 
 urlpatterns = [
     path('classes/',                              StudentClassesView.as_view(),    name='student-classes'),
