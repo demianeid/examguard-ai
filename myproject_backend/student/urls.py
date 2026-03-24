@@ -10,7 +10,7 @@ from .views import (
     StudentExamResultView,
     StudentClassGradesView,
 )
-from .face_views import face_register, face_verify, get_students  # ← هنا فوق
+# from .face_views import face_register, face_verify, get_students  # ← comment مؤقت
 
 urlpatterns = [
     path('classes/',                              StudentClassesView.as_view(),    name='student-classes'),
@@ -23,8 +23,8 @@ urlpatterns = [
     path('exams/<int:exam_id>/submit/',           StudentExamSubmitView.as_view(), name='student-exam-submit'),
     path('exams/<int:exam_id>/result/',           StudentExamResultView.as_view(), name='student-exam-result'),
 
-    # Face Verification
-    path('face/register/', face_register, name='face-register'),
-    path('face/verify/',   face_verify,   name='face-verify'),
-    path('face/students/', get_students,  name='face-students'),
+    # Face Verification - commented temporarily
+    # path('face/register/', face_register, name='face-register'),
+    # path('face/verify/',   face_verify,   name='face-verify'),
+    # path('face/students/', get_students,  name='face-students'),
 ]
