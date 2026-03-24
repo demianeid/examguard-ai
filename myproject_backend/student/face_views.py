@@ -2,7 +2,6 @@
 
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from deepface import DeepFace
 import os
 import base64
 import json
@@ -16,9 +15,13 @@ def face_register(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
 
+    from deepface import DeepFace  # ← lazy import هنا
+
     data = json.loads(request.body)
     student_id = data.get("student_id")
     image_base64 = data.get("image")
+
+    # ... باقي الكود زي ما هو
 
     if not student_id or not image_base64:
         return JsonResponse({"success": False, "message": "Missing required fields."}, status=400)
@@ -81,7 +84,7 @@ def face_register(request):
 def face_verify(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
-
+    from deepface import DeepFace
     data = json.loads(request.body)
     student_id = data.get("student_id")
     image_base64 = data.get("image")
