@@ -34,4 +34,12 @@ whitenoise==6.12.0
 deepface
 tf-keras
 opencv-python-headless==4.10.0.84
-MPLBACKEND=Agg
+```
+
+---
+
+**وبالنسبة لـ `MPLBACKEND=Agg`** — حطّه في متغيرات البيئة على Railway:
+
+في لوحة Railway ← مشروعك ← **Variables** ← أضف:
+```
+MPLBACKEND = Agg
