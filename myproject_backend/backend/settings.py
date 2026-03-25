@@ -9,6 +9,11 @@ from decouple import config
 import dj_database_url
 import cloudinary
 
+# ─── Fix for headless server (no display) ─────────────────────────
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("MPLBACKEND", "Agg")
+os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "0")
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ─── Security ─────────────────────────────────────────────────────
