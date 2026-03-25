@@ -2,160 +2,185 @@
 
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
 import os
 import base64
 import json
 import tempfile
 import urllib.request
+import traceback
 from authentication.models import BaseUser
 
 
-@csrf_exempt
-def face_register(request):
-    if request.method != "POST":
-        return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
+def _save_temp_image(image_base64):
+    if "," in image_base64:
+        image_base64 = image_base64.split(",")[1]
+    img_data = base64.b64decode(image_base64)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+    tmp.write(img_data)
+    tmp.close()
+    return tmp.name
 
-    from deepface import DeepFace  # ← lazy import هنا
 
-    data = json.loads(request.body)
-    student_id = data.get("student_id")
-    image_base64 = data.get("image")
+def _download_profile_image(url):
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+    tmp.close()
+    urllib.request.urlretrieve(url, tmp.name)
+    return tmp.name
 
-    # ... باقي الكود زي ما هو
 
-    if not student_id or not image_base64:
-        return JsonResponse({"success": False, "message": "Missing required fields."}, status=400)
-
-    try:
-        student = BaseUser.objects.get(custom_id=student_id, role='student')
-    except BaseUser.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Student not found."}, status=404)
-
-    if not student.profile_image:
-        return JsonResponse({"success": False, "message": "Student has no profile image."}, status=400)
-
-    try:
-        # بنجيب صورة البروفايل من Cloudinary
-        profile_url = student.profile_image.url
-        profile_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        urllib.request.urlretrieve(profile_url, profile_tmp.name)
-
-        # بنحول الصورة الجديدة من base64
-        if "," in image_base64:
-            image_base64 = image_base64.split(",")[1]
-        img_data = base64.b64decode(image_base64)
-        input_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        input_tmp.write(img_data)
-        input_tmp.close()
-
-        # بنتأكد إن صورة البروفايل فيها وجه
+def _cleanup(*paths):
+    for path in paths:
         try:
-            DeepFace.extract_faces(img_path=profile_tmp.name, enforce_detection=True)
+            if path and os.path.exists(path):
+                os.unlink(path)
         except Exception:
-            os.unlink(profile_tmp.name)
-            os.unlink(input_tmp.name)
-            return JsonResponse({"success": False, "message": "No face detected in your profile image. Please update your profile photo."}, status=400)
-
-        # بنتأكد إن الصورة الجديدة فيها وجه
-        try:
-            DeepFace.extract_faces(img_path=input_tmp.name, enforce_detection=True)
-        except Exception:
-            os.unlink(profile_tmp.name)
-            os.unlink(input_tmp.name)
-            return JsonResponse({"success": False, "message": "No face detected in your photo. Please take a clear photo of your face."}, status=400)
-
-        os.unlink(profile_tmp.name)
-        os.unlink(input_tmp.name)
-
-        return JsonResponse({
-            "success": True,
-            "message": f"Student {student.get_full_name()} registered successfully."
-        })
-
-    except Exception as e:
-        if 'profile_tmp' in locals() and os.path.exists(profile_tmp.name):
-            os.unlink(profile_tmp.name)
-        if 'input_tmp' in locals() and os.path.exists(input_tmp.name):
-            os.unlink(input_tmp.name)
-        return JsonResponse({"success": False, "message": f"Error: {str(e)}"}, status=400)
+            pass
 
 
 @csrf_exempt
 def face_verify(request):
     if request.method != "POST":
         return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
-    from deepface import DeepFace
-    data = json.loads(request.body)
-    student_id = data.get("student_id")
-    image_base64 = data.get("image")
 
-    if not student_id or not image_base64:
-        return JsonResponse({"success": False, "message": "Missing required fields."}, status=400)
+    profile_path = None
+    input_path = None
 
     try:
-        student = BaseUser.objects.get(custom_id=student_id, role='student')
-    except BaseUser.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Student not found."}, status=404)
+        # Step 1: Parse request
+        try:
+            data = json.loads(request.body)
+        except Exception:
+            return JsonResponse({"success": False, "step": "parse", "message": "Invalid JSON body."}, status=400)
 
-    if not student.profile_image:
-        return JsonResponse({"success": False, "message": "Student has no profile image."}, status=400)
+        student_id = data.get("student_id")
+        image_base64 = data.get("image")
 
-    try:
-        # بنجيب صورة البروفايل من Cloudinary
-        profile_url = student.profile_image.url
-        profile_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        urllib.request.urlretrieve(profile_url, profile_tmp.name)
+        if not student_id or not image_base64:
+            return JsonResponse({"success": False, "step": "validation", "message": "Missing student_id or image."}, status=400)
 
-        # بنحول الصورة الجديدة من base64
-        if "," in image_base64:
-            image_base64 = image_base64.split(",")[1]
-        img_data = base64.b64decode(image_base64)
-        input_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-        input_tmp.write(img_data)
-        input_tmp.close()
+        # Step 2: Get student
+        try:
+            student = BaseUser.objects.get(custom_id=student_id, role='student')
+        except BaseUser.DoesNotExist:
+            return JsonResponse({"success": False, "step": "student_lookup", "message": f"Student '{student_id}' not found."}, status=404)
 
-        # بنقارن الوجهين
-        result = DeepFace.verify(
-            img1_path=profile_tmp.name,
-            img2_path=input_tmp.name,
-            model_name="Facenet",
-            distance_metric="cosine",
-            enforce_detection=True,
-            threshold=0.50
-        )
+        if not student.profile_image:
+            return JsonResponse({"success": False, "step": "profile_image", "message": "Student has no profile image."}, status=400)
 
-        os.unlink(profile_tmp.name)
-        os.unlink(input_tmp.name)
+        # Step 3: Import DeepFace
+        try:
+            from deepface import DeepFace
+        except Exception as e:
+            return JsonResponse({
+                "success": False,
+                "step": "deepface_import",
+                "message": f"DeepFace import failed: {str(e)}",
+                "traceback": traceback.format_exc()
+            }, status=500)
+
+        # Step 4: Download profile image
+        try:
+            profile_path = _download_profile_image(student.profile_image.url)
+        except Exception as e:
+            return JsonResponse({
+                "success": False,
+                "step": "download_profile",
+                "message": f"Failed to download profile image: {str(e)}",
+                "traceback": traceback.format_exc()
+            }, status=500)
+
+        # Step 5: Save input image
+        try:
+            input_path = _save_temp_image(image_base64)
+        except Exception as e:
+            _cleanup(profile_path)
+            return JsonResponse({
+                "success": False,
+                "step": "save_input",
+                "message": f"Failed to decode input image: {str(e)}",
+                "traceback": traceback.format_exc()
+            }, status=500)
+
+        # Step 6: Detect face in profile image
+        try:
+            DeepFace.extract_faces(img_path=profile_path, enforce_detection=True)
+        except Exception as e:
+            _cleanup(profile_path, input_path)
+            return JsonResponse({
+                "success": False,
+                "verified": False,
+                "step": "detect_profile_face",
+                "message": "No face detected in your profile image. Please update your profile photo.",
+                "detail": str(e)
+            }, status=400)
+
+        # Step 7: Detect face in live image
+        try:
+            DeepFace.extract_faces(img_path=input_path, enforce_detection=True)
+        except Exception as e:
+            _cleanup(profile_path, input_path)
+            return JsonResponse({
+                "success": False,
+                "verified": False,
+                "step": "detect_input_face",
+                "message": "No face detected in your photo. Please take a clear photo of your face.",
+                "detail": str(e)
+            }, status=400)
+
+        # Step 8: Verify faces
+        try:
+            result = DeepFace.verify(
+                img1_path=profile_path,
+                img2_path=input_path,
+                model_name="Facenet",
+                distance_metric="cosine",
+                enforce_detection=True,
+                threshold=0.50
+            )
+        except Exception as e:
+            _cleanup(profile_path, input_path)
+            return JsonResponse({
+                "success": False,
+                "step": "deepface_verify",
+                "message": f"DeepFace.verify failed: {str(e)}",
+                "traceback": traceback.format_exc()
+            }, status=500)
+
+        _cleanup(profile_path, input_path)
 
         is_verified = result["verified"]
-        distance = round(result["distance"], 4)
-        threshold = round(result["threshold"], 4)
+        distance    = round(result["distance"], 4)
+        threshold   = round(result["threshold"], 4)
 
         if is_verified:
+            confidence = max(0.0, round((1 - distance / threshold) * 100, 1))
             return JsonResponse({
                 "success": True,
                 "verified": True,
                 "message": f"Welcome, {student.get_full_name()}!",
                 "student_name": student.get_full_name(),
-                "confidence": round((1 - distance / threshold) * 100, 1)
+                "confidence": confidence,
             })
         else:
             return JsonResponse({
                 "success": True,
                 "verified": False,
                 "message": "Face does not match the student on record.",
-                "confidence": 0
+                "confidence": 0,
             })
 
     except Exception as e:
-        if 'profile_tmp' in locals() and os.path.exists(profile_tmp.name):
-            os.unlink(profile_tmp.name)
-        if 'input_tmp' in locals() and os.path.exists(input_tmp.name):
-            os.unlink(input_tmp.name)
-        return JsonResponse({"success": False, "message": f"Comparison error: {str(e)}"}, status=500)
+        _cleanup(profile_path, input_path)
+        return JsonResponse({
+            "success": False,
+            "step": "unexpected",
+            "message": f"Unexpected error: {str(e)}",
+            "traceback": traceback.format_exc()
+        }, status=500)
 
 
-@csrf_exempt
+@login_required
 def get_students(request):
     if request.method != "GET":
         return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
@@ -165,10 +190,7 @@ def get_students(request):
     )
 
     result = [
-        {
-            "student_id": s["custom_id"],
-            "name": f"{s['first_name']} {s['last_name']}"
-        }
+        {"student_id": s["custom_id"], "name": f"{s['first_name']} {s['last_name']}"}
         for s in students
     ]
 
