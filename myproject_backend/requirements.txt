@@ -34,4 +34,3 @@ whitenoise==6.12.0
 deepface
 tf-keras
 opencv-python-headless==4.10.0.84
-MPLBACKEND = Agg
