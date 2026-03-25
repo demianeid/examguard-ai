@@ -174,8 +174,6 @@
 
 #     return JsonResponse({"success": True, "students": result, "total": len(result)})
 
-# student/face_views.py
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
@@ -184,42 +182,55 @@ import base64
 import json
 import tempfile
 import urllib.request
+import numpy as np
 from authentication.models import BaseUser
 
 
+# =========================
+# Utils
+# =========================
+
 def _save_temp_image(image_base64):
-    """حول base64 لملف مؤقت وارجع اسمه"""
     if "," in image_base64:
         image_base64 = image_base64.split(",")[1]
+
     img_data = base64.b64decode(image_base64)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
     tmp.write(img_data)
-    tmp.close()  # ✅ بنقفل الملف دايماً قبل ما نستخدمه
+    tmp.close()
     return tmp.name
 
 
 def _download_profile_image(url):
-    """حمّل صورة البروفايل من Cloudinary لملف مؤقت"""
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-    tmp.close()  # ✅ بنقفل قبل urlretrieve عشان يكتب فيه
+    tmp.close()
     urllib.request.urlretrieve(url, tmp.name)
     return tmp.name
 
 
 def _cleanup(*paths):
-    """امسح الملفات المؤقتة بأمان"""
     for path in paths:
         try:
             if path and os.path.exists(path):
                 os.unlink(path)
-        except Exception:
+        except:
             pass
 
+
+def cosine_similarity(a, b):
+    a = np.array(a)
+    b = np.array(b)
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+
+# =========================
+# Register
+# =========================
 
 @csrf_exempt
 def face_register(request):
     if request.method != "POST":
-        return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
+        return JsonResponse({"success": False}, status=405)
 
     from deepface import DeepFace
 
@@ -228,73 +239,50 @@ def face_register(request):
     image_base64 = data.get("image")
 
     if not student_id or not image_base64:
-        return JsonResponse({"success": False, "message": "Missing required fields."}, status=400)
+        return JsonResponse({"success": False, "message": "Missing data"}, status=400)
 
     try:
         student = BaseUser.objects.get(custom_id=student_id, role='student')
     except BaseUser.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Student not found."}, status=404)
+        return JsonResponse({"success": False, "message": "Student not found"}, status=404)
 
-    if not student.profile_image:
-        return JsonResponse({"success": False, "message": "Student has no profile image."}, status=400)
-
-    profile_path = None
     input_path = None
 
     try:
-        profile_path = _download_profile_image(student.profile_image.url)
         input_path = _save_temp_image(image_base64)
 
-        # تأكد إن صورة البروفايل فيها وجه
-        try:
-            DeepFace.extract_faces(img_path=profile_path, enforce_detection=True)
-        except Exception:
-            _cleanup(profile_path, input_path)
-            return JsonResponse({
-                "success": False,
-                "message": "No face detected in your profile image. Please update your profile photo."
-            }, status=400)
-
-        # تأكد إن الصورة الجديدة فيها وجه
-        try:
-            DeepFace.extract_faces(img_path=input_path, enforce_detection=True)
-        except Exception:
-            _cleanup(profile_path, input_path)
-            return JsonResponse({
-                "success": False,
-                "message": "No face detected in your photo. Please take a clear photo of your face."
-            }, status=400)
-
-        # ✅ جيب الـ embedding واحفظه في قاعدة البيانات
-        embedding_objs = DeepFace.represent(
+        embedding_obj = DeepFace.represent(
             img_path=input_path,
             model_name="Facenet",
             enforce_detection=True
         )
-        embedding = embedding_objs[0]["embedding"]
 
-        # ✅ احفظ الـ embedding وعلّم الطالب كمسجّل
-        # ⚠️ تأكد إن الـ model فيه حقلين: face_embedding (JSONField) و face_registered (BooleanField)
+        embedding = embedding_obj[0]["embedding"]
+
         student.face_embedding = json.dumps(embedding)
         student.face_registered = True
         student.save(update_fields=["face_embedding", "face_registered"])
 
-        _cleanup(profile_path, input_path)
-
         return JsonResponse({
             "success": True,
-            "message": f"Student {student.get_full_name()} registered successfully."
+            "message": "Face registered successfully"
         })
 
     except Exception as e:
-        _cleanup(profile_path, input_path)
-        return JsonResponse({"success": False, "message": f"Error: {str(e)}"}, status=400)
+        return JsonResponse({"success": False, "message": str(e)}, status=400)
 
+    finally:
+        _cleanup(input_path)
+
+
+# =========================
+# Verify (FAST 🔥)
+# =========================
 
 @csrf_exempt
 def face_verify(request):
     if request.method != "POST":
-        return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
+        return JsonResponse({"success": False}, status=405)
 
     from deepface import DeepFace
 
@@ -303,79 +291,79 @@ def face_verify(request):
     image_base64 = data.get("image")
 
     if not student_id or not image_base64:
-        return JsonResponse({"success": False, "message": "Missing required fields."}, status=400)
+        return JsonResponse({"success": False, "message": "Missing data"}, status=400)
 
     try:
         student = BaseUser.objects.get(custom_id=student_id, role='student')
     except BaseUser.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Student not found."}, status=404)
+        return JsonResponse({"success": False, "message": "Student not found"}, status=404)
 
-    if not student.profile_image:
-        return JsonResponse({"success": False, "message": "Student has no profile image."}, status=400)
+    if not student.face_embedding:
+        return JsonResponse({"success": False, "message": "Face not registered"}, status=400)
 
-    profile_path = None
     input_path = None
 
     try:
-        profile_path = _download_profile_image(student.profile_image.url)
         input_path = _save_temp_image(image_base64)
 
-        result = DeepFace.verify(
-            img1_path=profile_path,
-            img2_path=input_path,
+        embedding_obj = DeepFace.represent(
+            img_path=input_path,
             model_name="Facenet",
-            distance_metric="cosine",
-            enforce_detection=True,
-            threshold=0.50
+            enforce_detection=True
         )
 
-        _cleanup(profile_path, input_path)
+        new_embedding = embedding_obj[0]["embedding"]
+        saved_embedding = json.loads(student.face_embedding)
 
-        is_verified = result["verified"]
-        distance = round(result["distance"], 4)
-        threshold = round(result["threshold"], 4)
+        similarity = cosine_similarity(new_embedding, saved_embedding)
 
-        if is_verified:
-            # ✅ confidence مش ممكن تبقى سالبة
-            confidence = max(0.0, round((1 - distance / threshold) * 100, 1))
+        # 🔥 Threshold مهم
+        threshold = 0.7
+
+        if similarity >= threshold:
+            confidence = round(similarity * 100, 2)
+
             return JsonResponse({
                 "success": True,
                 "verified": True,
-                "message": f"Welcome, {student.get_full_name()}!",
                 "student_name": student.get_full_name(),
                 "confidence": confidence
             })
+
         else:
             return JsonResponse({
                 "success": True,
                 "verified": False,
-                "message": "Face does not match the student on record.",
-                "confidence": 0
+                "confidence": round(similarity * 100, 2)
             })
 
     except Exception as e:
-        _cleanup(profile_path, input_path)
-        return JsonResponse({"success": False, "message": f"Comparison error: {str(e)}"}, status=500)
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
+
+    finally:
+        _cleanup(input_path)
 
 
-@login_required  # ✅ حماية: محتاج تكون logged in
+# =========================
+# Get Students
+# =========================
+
+@login_required
 def get_students(request):
     if request.method != "GET":
-        return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
-
-    # ✅ لو عايز تقيّده أكتر، تحقق إن المستخدم الحالي عنده صلاحية
-    # مثلاً: if not request.user.role in ['admin', 'teacher']: return 403
+        return JsonResponse({"success": False}, status=405)
 
     students = BaseUser.objects.filter(role='student').values(
         'custom_id', 'first_name', 'last_name'
     )
 
-    result = [
-        {
-            "student_id": s["custom_id"],
-            "name": f"{s['first_name']} {s['last_name']}"
-        }
-        for s in students
-    ]
-
-    return JsonResponse({"success": True, "students": result, "total": len(result)})
+    return JsonResponse({
+        "success": True,
+        "students": [
+            {
+                "student_id": s["custom_id"],
+                "name": f"{s['first_name']} {s['last_name']}"
+            }
+            for s in students
+        ]
+    })
