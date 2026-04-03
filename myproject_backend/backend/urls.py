@@ -26,7 +26,18 @@ urlpatterns = [
     path('api/exam/', include('exam.urls')),
     path('api/student/', include('student.urls')),
 ]
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/auth/', include('authentication.urls')),
+    path('api/instructors/', include('instructors.urls')), 
+    path('api/exam/', include('exam.urls')),
+    path('api/student/', include('student.urls')),
 
+    # Hardware
+    path('api/hardware/monitoring/', include('hardware.offline_monitoring.urls')),
+    path('api/hardware/detection/',  include('hardware.ai_detection.urls')),
+    path('api/hardware/stream/',     include('hardware.camera_stream.urls')),
+]
 # Serve media files in development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

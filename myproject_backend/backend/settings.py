@@ -65,6 +65,10 @@ INSTALLED_APPS = [
     'instructors',
     'exam',
     'student',
+    #Hardware
+    'hardware.offline_monitoring',
+    'hardware.ai_detection',
+    'hardware.camera_stream',
 ]
 
 # ─── Middleware ───────────────────────────────────────────────────

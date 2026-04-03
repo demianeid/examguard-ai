@@ -1,205 +1,3 @@
-# # student/face_views.py
-
-# import os
-# os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-# os.environ.setdefault("MPLBACKEND", "Agg")
-
-# from django.http import JsonResponse
-# from django.views.decorators.csrf import csrf_exempt
-# from django.contrib.auth.decorators import login_required
-# import base64
-# import json
-# import tempfile
-# import urllib.request
-# import traceback
-# from authentication.models import BaseUser
-
-
-# def _save_temp_image(image_base64):
-#     if "," in image_base64:
-#         image_base64 = image_base64.split(",")[1]
-#     img_data = base64.b64decode(image_base64)
-#     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-#     tmp.write(img_data)
-#     tmp.close()
-#     return tmp.name
-
-
-# def _download_profile_image(url):
-#     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
-#     tmp.close()
-#     urllib.request.urlretrieve(url, tmp.name)
-#     return tmp.name
-
-
-# def _cleanup(*paths):
-#     for path in paths:
-#         try:
-#             if path and os.path.exists(path):
-#                 os.unlink(path)
-#         except Exception:
-#             pass
-
-
-# @csrf_exempt
-# def face_verify(request):
-#     if request.method != "POST":
-#         return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
-
-#     profile_path = None
-#     input_path = None
-
-#     try:
-#         # Step 1: Parse request
-#         try:
-#             data = json.loads(request.body)
-#         except Exception:
-#             return JsonResponse({"success": False, "step": "parse", "message": "Invalid JSON body."}, status=400)
-
-#         student_id = data.get("student_id")
-#         image_base64 = data.get("image")
-
-#         if not student_id or not image_base64:
-#             return JsonResponse({"success": False, "step": "validation", "message": "Missing student_id or image."}, status=400)
-
-#         # Step 2: Get student
-#         try:
-#             student = BaseUser.objects.get(custom_id=student_id, role='student')
-#         except BaseUser.DoesNotExist:
-#             return JsonResponse({"success": False, "step": "student_lookup", "message": f"Student '{student_id}' not found."}, status=404)
-
-#         if not student.profile_image:
-#             return JsonResponse({"success": False, "step": "profile_image", "message": "Student has no profile image."}, status=400)
-
-#         # Step 3: Import DeepFace
-#         try:
-#             from deepface import DeepFace
-#         except Exception as e:
-#             return JsonResponse({
-#                 "success": False,
-#                 "step": "deepface_import",
-#                 "message": f"DeepFace import failed: {str(e)}",
-#                 "traceback": traceback.format_exc()
-#             }, status=500)
-
-#         # Step 4: Download profile image
-#         try:
-#             profile_path = _download_profile_image(student.profile_image.url)
-#         except Exception as e:
-#             return JsonResponse({
-#                 "success": False,
-#                 "step": "download_profile",
-#                 "message": f"Failed to download profile image: {str(e)}",
-#                 "traceback": traceback.format_exc()
-#             }, status=500)
-
-#         # Step 5: Save input image
-#         try:
-#             input_path = _save_temp_image(image_base64)
-#         except Exception as e:
-#             _cleanup(profile_path)
-#             return JsonResponse({
-#                 "success": False,
-#                 "step": "save_input",
-#                 "message": f"Failed to decode input image: {str(e)}",
-#                 "traceback": traceback.format_exc()
-#             }, status=500)
-
-#         # Step 6: Detect face in profile image
-#         try:
-#             DeepFace.extract_faces(img_path=profile_path, enforce_detection=True)
-#         except Exception as e:
-#             _cleanup(profile_path, input_path)
-#             return JsonResponse({
-#                 "success": False,
-#                 "verified": False,
-#                 "step": "detect_profile_face",
-#                 "message": "No face detected in your profile image. Please update your profile photo.",
-#                 "detail": str(e)
-#             }, status=400)
-
-#         # Step 7: Detect face in live image
-#         try:
-#             DeepFace.extract_faces(img_path=input_path, enforce_detection=True)
-#         except Exception as e:
-#             _cleanup(profile_path, input_path)
-#             return JsonResponse({
-#                 "success": False,
-#                 "verified": False,
-#                 "step": "detect_input_face",
-#                 "message": "No face detected in your photo. Please take a clear photo of your face.",
-#                 "detail": str(e)
-#             }, status=400)
-
-#         # Step 8: Verify faces
-#         try:
-#             result = DeepFace.verify(
-#                 img1_path=profile_path,
-#                 img2_path=input_path,
-#                 model_name="Facenet",
-#                 distance_metric="cosine",
-#                 enforce_detection=True,
-#                 threshold=0.50
-#             )
-#         except Exception as e:
-#             _cleanup(profile_path, input_path)
-#             return JsonResponse({
-#                 "success": False,
-#                 "step": "deepface_verify",
-#                 "message": f"DeepFace.verify failed: {str(e)}",
-#                 "traceback": traceback.format_exc()
-#             }, status=500)
-
-#         _cleanup(profile_path, input_path)
-
-#         is_verified = result["verified"]
-#         distance    = round(result["distance"], 4)
-#         threshold   = round(result["threshold"], 4)
-
-#         if is_verified:
-#             confidence = max(0.0, round((1 - distance / threshold) * 100, 1))
-#             return JsonResponse({
-#                 "success": True,
-#                 "verified": True,
-#                 "message": f"Welcome, {student.get_full_name()}!",
-#                 "student_name": student.get_full_name(),
-#                 "confidence": confidence,
-#             })
-#         else:
-#             return JsonResponse({
-#                 "success": True,
-#                 "verified": False,
-#                 "message": "Face does not match the student on record.",
-#                 "confidence": 0,
-#             })
-
-#     except Exception as e:
-#         _cleanup(profile_path, input_path)
-#         return JsonResponse({
-#             "success": False,
-#             "step": "unexpected",
-#             "message": f"Unexpected error: {str(e)}",
-#             "traceback": traceback.format_exc()
-#         }, status=500)
-
-
-# @login_required
-# def get_students(request):
-#     if request.method != "GET":
-#         return JsonResponse({"success": False, "message": "Method not allowed."}, status=405)
-
-#     students = BaseUser.objects.filter(role='student').values(
-#         'custom_id', 'first_name', 'last_name'
-#     )
-
-#     result = [
-#         {"student_id": s["custom_id"], "name": f"{s['first_name']} {s['last_name']}"}
-#         for s in students
-#     ]
-
-<<<<<<< HEAD
-#     return JsonResponse({"success": True, "students": result, "total": len(result)})
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
@@ -212,14 +10,9 @@ import numpy as np
 from authentication.models import BaseUser
 
 
-# =========================
-# Utils
-# =========================
-
 def _save_temp_image(image_base64):
     if "," in image_base64:
         image_base64 = image_base64.split(",")[1]
-
     img_data = base64.b64decode(image_base64)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
     tmp.write(img_data)
@@ -249,10 +42,6 @@ def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 
-# =========================
-# Register
-# =========================
-
 @csrf_exempt
 def face_register(request):
     if request.method != "POST":
@@ -273,37 +62,23 @@ def face_register(request):
         return JsonResponse({"success": False, "message": "Student not found"}, status=404)
 
     input_path = None
-
     try:
         input_path = _save_temp_image(image_base64)
-
         embedding_obj = DeepFace.represent(
             img_path=input_path,
             model_name="Facenet",
             enforce_detection=True
         )
-
         embedding = embedding_obj[0]["embedding"]
-
         student.face_embedding = json.dumps(embedding)
         student.face_registered = True
         student.save(update_fields=["face_embedding", "face_registered"])
-
-        return JsonResponse({
-            "success": True,
-            "message": "Face registered successfully"
-        })
-
+        return JsonResponse({"success": True, "message": "Face registered successfully"})
     except Exception as e:
         return JsonResponse({"success": False, "message": str(e)}, status=400)
-
     finally:
         _cleanup(input_path)
 
-
-# =========================
-# Verify (FAST 🔥)
-# =========================
 
 @csrf_exempt
 def face_verify(request):
@@ -328,51 +103,36 @@ def face_verify(request):
         return JsonResponse({"success": False, "message": "Face not registered"}, status=400)
 
     input_path = None
-
     try:
         input_path = _save_temp_image(image_base64)
-
         embedding_obj = DeepFace.represent(
             img_path=input_path,
             model_name="Facenet",
             enforce_detection=True
         )
-
         new_embedding = embedding_obj[0]["embedding"]
         saved_embedding = json.loads(student.face_embedding)
-
         similarity = cosine_similarity(new_embedding, saved_embedding)
-
-        # 🔥 Threshold مهم
         threshold = 0.7
 
         if similarity >= threshold:
-            confidence = round(similarity * 100, 2)
-
             return JsonResponse({
                 "success": True,
                 "verified": True,
                 "student_name": student.get_full_name(),
-                "confidence": confidence
+                "confidence": round(similarity * 100, 2)
             })
-
         else:
             return JsonResponse({
                 "success": True,
                 "verified": False,
                 "confidence": round(similarity * 100, 2)
             })
-
     except Exception as e:
         return JsonResponse({"success": False, "message": str(e)}, status=500)
-
     finally:
         _cleanup(input_path)
 
-
-# =========================
-# Get Students
-# =========================
 
 @login_required
 def get_students(request):
@@ -382,17 +142,10 @@ def get_students(request):
     students = BaseUser.objects.filter(role='student').values(
         'custom_id', 'first_name', 'last_name'
     )
-
     return JsonResponse({
         "success": True,
         "students": [
-            {
-                "student_id": s["custom_id"],
-                "name": f"{s['first_name']} {s['last_name']}"
-            }
+            {"student_id": s["custom_id"], "name": f"{s['first_name']} {s['last_name']}"}
             for s in students
         ]
     })
-=======
-#     return JsonResponse({"success": True, "students": result, "total": len(result)})
->>>>>>> 39aa14a
