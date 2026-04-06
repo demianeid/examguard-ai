@@ -1,54 +1,47 @@
 "use client"
 
 import type React from "react"
- 
+
 import Header from "../components/Header"
 import { useState, useRef, useEffect } from "react"
-import { Shield, ChevronDown, Edit2, Trash2, Play, Plus, Lightbulb, X, Check } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Shield, ChevronDown, Edit2, Trash2, Play, Plus, Lightbulb, X, Check, Loader2 } from "lucide-react"
+import { Link, useSearchParams } from "react-router-dom"
+import {
+  examHallApi,
+  cameraApi,
+  studentZoneApi,
+  type ExamHall,
+  type Camera,
+} from "../services/api"
 
-// Types
 interface Zone {
   id: string
   studentId: string
   studentName: string
   rect: { x: number; y: number; width: number; height: number }
   zoneNumber: number
-}
-
-interface Hall {
-  id: string
-  name: string
-  building: string
-  numberOfStudents: number
-  cameras: number
+  backendId?: number
 }
 
 export default function ROIConfigurationPage() {
-  // State
-  const [activeCamera, setActiveCamera] = useState("Camera 1")
-  const [selectedHall, setSelectedHall] = useState<Hall>({
-    id: "1",
-    name: "Hall A",
-    building: "building 1",
-    numberOfStudents: 30,
-    cameras: 3,
-  })
-  const [halls, setHalls] = useState<Hall[]>([
-    { id: "1", name: "Hall A", building: "building 1", numberOfStudents: 30, cameras: 3 },
-    { id: "2", name: "Hall B", building: "building 1", numberOfStudents: 25, cameras: 2 },
-    { id: "3", name: "Hall C", building: "building 2", numberOfStudents: 40, cameras: 4 },
-  ])
-  const [zones, setZones] = useState<Zone[]>([
-    {
-      id: "1",
-      studentId: "18",
-      studentName: "Salma",
-      rect: { x: 180, y: 280, width: 100, height: 100 },
-      zoneNumber: 1,
-    },
-    { id: "2", studentId: "22", studentName: "Kiro", rect: { x: 380, y: 280, width: 100, height: 100 }, zoneNumber: 2 },
-  ])
+  const [searchParams] = useSearchParams()
+  const examIdParam = searchParams.get("examId")
+
+  // --- Real data state ---
+  const [halls, setHalls] = useState<ExamHall[]>([])
+  const [selectedHall, setSelectedHall] = useState<ExamHall | null>(null)
+  const [hallsLoading, setHallsLoading] = useState(true)
+  const [hallsError, setHallsError] = useState("")
+
+  const [cameras, setCameras] = useState<Camera[]>([])
+  const [camerasLoading, setCamerasLoading] = useState(false)
+  const [activeCamera, setActiveCamera] = useState("")
+
+  const [zones, setZones] = useState<Zone[]>([])
+  const [zonesLoading, setZonesLoading] = useState(false)
+  const [zoneSaving, setZoneSaving] = useState(false)
+  const [zoneError, setZoneError] = useState("")
+
   const [isDrawing, setIsDrawing] = useState(false)
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null)
@@ -58,8 +51,8 @@ export default function ROIConfigurationPage() {
   const [showAddHallModal, setShowAddHallModal] = useState(false)
   const [newHallName, setNewHallName] = useState("")
   const [newHallBuilding, setNewHallBuilding] = useState("")
-  const [newHallStudents, setNewHallStudents] = useState("")
-  const [newHallCameras, setNewHallCameras] = useState("")
+  const [newHallCapacity, setNewHallCapacity] = useState("")
+  const [hallSaving, setHallSaving] = useState(false)
 
   const [editingZoneId, setEditingZoneId] = useState<string | null>(null)
   const [editStudentId, setEditStudentId] = useState("")
@@ -69,7 +62,68 @@ export default function ROIConfigurationPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
 
-  const cameras = ["Camera 1", "Camera 2", "Camera 3"]
+  // Fetch halls on mount
+  useEffect(() => {
+    const load = async () => {
+      setHallsLoading(true)
+      setHallsError("")
+      try {
+        const data = await examHallApi.getAll()
+        setHalls(data)
+        if (data.length > 0) setSelectedHall(data[0])
+      } catch {
+        setHallsError("Failed to load exam halls.")
+      } finally {
+        setHallsLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  // Fetch cameras when selected hall changes
+  useEffect(() => {
+    if (!selectedHall) return
+    const load = async () => {
+      setCamerasLoading(true)
+      try {
+        const data = await cameraApi.getByHall(selectedHall.id)
+        setCameras(data)
+        if (data.length > 0) setActiveCamera(data[0].name)
+        else setActiveCamera("")
+      } catch {
+        setCameras([])
+      } finally {
+        setCamerasLoading(false)
+      }
+    }
+    load()
+  }, [selectedHall?.id])
+
+  // Fetch zones when examId is provided
+  useEffect(() => {
+    if (!examIdParam) return
+    const load = async () => {
+      setZonesLoading(true)
+      try {
+        const data = await studentZoneApi.getByExam(Number(examIdParam))
+        setZones(
+          data.map((z, i) => ({
+            id: String(z.id),
+            studentId: String(z.student),
+            studentName: z.student_name,
+            rect: { x: z.x1, y: z.y1, width: z.x2 - z.x1, height: z.y2 - z.y1 },
+            zoneNumber: i + 1,
+            backendId: z.id,
+          }))
+        )
+      } catch {
+        setZones([])
+      } finally {
+        setZonesLoading(false)
+      }
+    }
+    load()
+  }, [examIdParam])
 
   // Draw zones on canvas
   useEffect(() => {
@@ -88,7 +142,6 @@ export default function ROIConfigurationPage() {
       imageRef.current = img
       canvas.width = container.offsetWidth
       canvas.height = (container.offsetWidth / img.width) * img.height
-
       drawCanvas(ctx, canvas, img)
     }
   }, [zones, currentRect])
@@ -96,18 +149,15 @@ export default function ROIConfigurationPage() {
   const drawCanvas = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, img: HTMLImageElement) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Draw image (cropped to show just the classroom)
     const sourceX = 35
     const sourceY = 195
     const sourceWidth = 570
     const sourceHeight = 385
     ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height)
 
-    // Scale factor for zones
     const scaleX = canvas.width / sourceWidth
     const scaleY = canvas.height / sourceHeight
 
-    // Draw existing zones
     zones.forEach((zone, index) => {
       const scaledRect = {
         x: (zone.rect.x - sourceX) * scaleX,
@@ -120,13 +170,11 @@ export default function ROIConfigurationPage() {
       ctx.lineWidth = 3
       ctx.strokeRect(scaledRect.x, scaledRect.y, scaledRect.width, scaledRect.height)
 
-      // Draw zone number
       ctx.fillStyle = "#22c55e"
       ctx.font = "bold 20px sans-serif"
       ctx.fillText(String(index + 1), scaledRect.x + scaledRect.width / 2 - 5, scaledRect.y + scaledRect.height / 2 + 7)
     })
 
-    // Draw current drawing rectangle
     if (currentRect) {
       ctx.strokeStyle = "#22c55e"
       ctx.lineWidth = 2
@@ -139,26 +187,19 @@ export default function ROIConfigurationPage() {
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-
     setIsDrawing(true)
-    setStartPos({ x, y })
-    setCurrentRect({ x, y, width: 0, height: 0 })
+    setStartPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+    setCurrentRect({ x: e.clientX - rect.left, y: e.clientY - rect.top, width: 0, height: 0 })
   }
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing || !startPos) return
-
     const canvas = canvasRef.current
     if (!canvas) return
-
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-
     setCurrentRect({
       x: Math.min(startPos.x, x),
       y: Math.min(startPos.y, y),
@@ -171,15 +212,41 @@ export default function ROIConfigurationPage() {
     setIsDrawing(false)
   }
 
-  const addZone = () => {
+  const addZone = async () => {
     if (!studentId.trim() || !currentRect) return
 
     const newZone: Zone = {
       id: Date.now().toString(),
-      studentId: studentId,
-      studentName: studentName,
+      studentId,
+      studentName,
       rect: currentRect,
       zoneNumber: zones.length + 1,
+    }
+
+    if (examIdParam) {
+      setZoneSaving(true)
+      setZoneError("")
+      try {
+        const selectedCam = cameras.find(c => c.name === activeCamera)
+        const created = await studentZoneApi.create(Number(examIdParam), {
+          student: Number(studentId),
+          camera: selectedCam?.id,
+          seat_number: `Seat ${zones.length + 1}`,
+          x1: Math.round(currentRect.x),
+          y1: Math.round(currentRect.y),
+          x2: Math.round(currentRect.x + currentRect.width),
+          y2: Math.round(currentRect.y + currentRect.height),
+        })
+        newZone.backendId = created.id
+        newZone.id = String(created.id)
+        newZone.studentName = created.student_name || studentName
+      } catch {
+        setZoneError("Failed to save zone to server.")
+        setZoneSaving(false)
+        return
+      } finally {
+        setZoneSaving(false)
+      }
     }
 
     setZones([...zones, newZone])
@@ -189,8 +256,14 @@ export default function ROIConfigurationPage() {
     setStartPos(null)
   }
 
-  const deleteZone = (id: string) => {
-    setZones(zones.filter((zone) => zone.id !== id))
+  const deleteZone = async (id: string) => {
+    const zone = zones.find(z => z.id === id)
+    if (zone?.backendId) {
+      try {
+        await studentZoneApi.delete(zone.backendId)
+      } catch { /* proceed with local removal */ }
+    }
+    setZones(zones.filter(z => z.id !== id))
   }
 
   const startEditZone = (zone: Zone) => {
@@ -207,42 +280,43 @@ export default function ROIConfigurationPage() {
 
   const saveEditZone = () => {
     if (!editStudentId.trim() || !editingZoneId) return
-
     setZones(
-      zones.map((zone) =>
-        zone.id === editingZoneId ? { ...zone, studentId: editStudentId, studentName: editStudentName } : zone,
-      ),
+      zones.map(zone =>
+        zone.id === editingZoneId ? { ...zone, studentId: editStudentId, studentName: editStudentName } : zone
+      )
     )
     cancelEditZone()
   }
 
-  const addNewHall = () => {
-    if (!newHallName.trim() || !newHallBuilding.trim() || !newHallStudents || !newHallCameras) return
+  const addNewHall = async () => {
+    if (!newHallName.trim() || !newHallBuilding.trim() || !newHallCapacity) return
 
-    const newHall: Hall = {
-      id: Date.now().toString(),
-      name: newHallName,
-      building: newHallBuilding,
-      numberOfStudents: Number.parseInt(newHallStudents),
-      cameras: Number.parseInt(newHallCameras),
+    setHallSaving(true)
+    try {
+      const created = await examHallApi.create({
+        name: newHallName,
+        building: newHallBuilding,
+        capacity: Number(newHallCapacity),
+        is_active: true,
+      })
+      setHalls(prev => [...prev, created])
+      setSelectedHall(created)
+      setNewHallName("")
+      setNewHallBuilding("")
+      setNewHallCapacity("")
+      setShowAddHallModal(false)
+    } catch {
+      alert("Failed to create hall.")
+    } finally {
+      setHallSaving(false)
     }
-
-    setHalls([...halls, newHall])
-    setNewHallName("")
-    setNewHallBuilding("")
-    setNewHallStudents("")
-    setNewHallCameras("")
-    setShowAddHallModal(false)
   }
 
   return (
     <div className="min-h-screen bg-background pt-20">
-      {/* Header */}
       <Header showAccount={true} isRegistered={true} userType="instructor" />
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Title */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">ROI Configuration</h1>
           <p className="text-gray-600 max-w-2xl mx-auto">
@@ -259,7 +333,6 @@ export default function ROIConfigurationPage() {
               {/* Camera Controls */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  {/* Add New Hall Button */}
                   <button
                     onClick={() => setShowAddHallModal(true)}
                     className="flex items-center gap-2 px-3 py-2 bg-[#3b82f6] text-white rounded-lg hover:bg-[#2563eb] transition-colors"
@@ -269,42 +342,61 @@ export default function ROIConfigurationPage() {
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  {cameras.map((camera) => (
-                    <button
-                      key={camera}
-                      onClick={() => setActiveCamera(camera)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        activeCamera === camera
-                          ? "bg-gray-900 text-white"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                    >
-                      {camera}
-                    </button>
-                  ))}
+                  {camerasLoading ? (
+                    <Loader2 className="animate-spin text-gray-400" size={20} />
+                  ) : cameras.length === 0 ? (
+                    <span className="text-gray-400 text-sm">No cameras</span>
+                  ) : (
+                    cameras.map(camera => (
+                      <button
+                        key={camera.id}
+                        onClick={() => setActiveCamera(camera.name)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          activeCamera === camera.name
+                            ? "bg-gray-900 text-white"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        {camera.name}
+                      </button>
+                    ))
+                  )}
                   {/* Hall Dropdown */}
                   <div className="relative">
                     <button
                       onClick={() => setShowHallDropdown(!showHallDropdown)}
+                      disabled={hallsLoading}
                       className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg text-sm font-medium"
                     >
-                      {selectedHall.name} - {selectedHall.building}
+                      {hallsLoading ? (
+                        <Loader2 className="animate-spin" size={16} />
+                      ) : selectedHall ? (
+                        `${selectedHall.name} - ${selectedHall.building}`
+                      ) : (
+                        "Select Hall"
+                      )}
                       <ChevronDown className="w-4 h-4" />
                     </button>
                     {showHallDropdown && (
                       <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-10 min-w-[200px]">
-                        {halls.map((hall) => (
-                          <button
-                            key={hall.id}
-                            onClick={() => {
-                              setSelectedHall(hall)
-                              setShowHallDropdown(false)
-                            }}
-                            className="w-full text-left px-4 py-2 hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg"
-                          >
-                            {hall.name} - {hall.building}
-                          </button>
-                        ))}
+                        {hallsError ? (
+                          <p className="px-4 py-2 text-red-500 text-sm">{hallsError}</p>
+                        ) : halls.length === 0 ? (
+                          <p className="px-4 py-2 text-gray-500 text-sm">No halls found</p>
+                        ) : (
+                          halls.map(hall => (
+                            <button
+                              key={hall.id}
+                              onClick={() => {
+                                setSelectedHall(hall)
+                                setShowHallDropdown(false)
+                              }}
+                              className="w-full text-left px-4 py-2 hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg"
+                            >
+                              {hall.name} - {hall.building}
+                            </button>
+                          ))
+                        )}
                       </div>
                     )}
                   </div>
@@ -330,80 +422,87 @@ export default function ROIConfigurationPage() {
             {/* Active Zones Card */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <h3 className="font-semibold text-gray-900 mb-4">Active Zones</h3>
-              <div className="space-y-3">
-                {zones.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">
-                    No zones added yet. Draw on the camera view to add zones.
-                  </p>
-                ) : (
-                  zones.map((zone, index) => (
-                    <div
-                      key={zone.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border-l-4 border-[#c9a227]"
-                    >
-                      {editingZoneId === zone.id ? (
-                        <div className="flex items-center gap-3 flex-1">
-                          <input
-                            type="text"
-                            value={editStudentId}
-                            onChange={(e) => setEditStudentId(e.target.value)}
-                            placeholder="Student ID"
-                            className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                          />
-                          <input
-                            type="text"
-                            value={editStudentName}
-                            onChange={(e) => setEditStudentName(e.target.value)}
-                            placeholder="Student Name"
-                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                          />
-                          <div className="flex items-center gap-1">
-                            <button
-                              title="check"
-                              onClick={saveEditZone}
-                              className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-                            >
-                              <Check className="w-4 h-4" />
-                            </button>
-                            <button
-                              title="cancel"
-                              onClick={cancelEditZone}
-                              className="p-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div>
-                            <div className="font-semibold text-gray-900">{zone.studentId}</div>
-                            <div className="text-sm text-gray-600">
-                              Zone {index + 1} - {zone.studentName || "Unknown"}
+              {zonesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="animate-spin text-blue-600" size={24} />
+                  <span className="ml-2 text-gray-500">Loading zones...</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {zones.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">
+                      No zones added yet. Draw on the camera view to add zones.
+                    </p>
+                  ) : (
+                    zones.map((zone, index) => (
+                      <div
+                        key={zone.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border-l-4 border-[#c9a227]"
+                      >
+                        {editingZoneId === zone.id ? (
+                          <div className="flex items-center gap-3 flex-1">
+                            <input
+                              type="text"
+                              value={editStudentId}
+                              onChange={(e) => setEditStudentId(e.target.value)}
+                              placeholder="Student ID"
+                              className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
+                            />
+                            <input
+                              type="text"
+                              value={editStudentName}
+                              onChange={(e) => setEditStudentName(e.target.value)}
+                              placeholder="Student Name"
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
+                            />
+                            <div className="flex items-center gap-1">
+                              <button
+                                title="check"
+                                onClick={saveEditZone}
+                                className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                title="cancel"
+                                onClick={cancelEditZone}
+                                className="p-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              title="edit"
-                              onClick={() => startEditZone(zone)}
-                              className="p-2 bg-[#3b82f6] text-white rounded-lg hover:bg-[#2563eb]"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              title="delete"
-                              onClick={() => deleteZone(zone.id)}
-                              className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
+                        ) : (
+                          <>
+                            <div>
+                              <div className="font-semibold text-gray-900">{zone.studentId}</div>
+                              <div className="text-sm text-gray-600">
+                                Zone {index + 1} - {zone.studentName || "Unknown"}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                title="edit"
+                                onClick={() => startEditZone(zone)}
+                                className="p-2 bg-[#3b82f6] text-white rounded-lg hover:bg-[#2563eb]"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                title="delete"
+                                onClick={() => deleteZone(zone.id)}
+                                className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -412,6 +511,7 @@ export default function ROIConfigurationPage() {
             {/* Add New Zone Card */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <h3 className="font-semibold text-gray-900 mb-4">Add New Zone</h3>
+              {zoneError && <p className="text-red-500 text-sm mb-3">{zoneError}</p>}
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Student ID *</label>
@@ -435,9 +535,10 @@ export default function ROIConfigurationPage() {
                 </div>
                 <button
                   onClick={addZone}
-                  disabled={!studentId.trim() || !currentRect}
-                  className="w-full py-3 bg-[#3b82f6] text-white font-semibold rounded-lg hover:bg-[#2563eb] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  disabled={!studentId.trim() || !currentRect || zoneSaving}
+                  className="w-full py-3 bg-[#3b82f6] text-white font-semibold rounded-lg hover:bg-[#2563eb] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
+                  {zoneSaving && <Loader2 className="animate-spin" size={18} />}
                   +Add Zone
                 </button>
               </div>
@@ -469,11 +570,11 @@ export default function ROIConfigurationPage() {
             </div>
 
             {/* Start Monitoring Button */}
-            <Link to="/MonitoringOffline">
-            <button className="w-full py-4 bg-[#3b82f6] text-white font-semibold rounded-xl hover:bg-[#2563eb] transition-colors flex items-center justify-center gap-2">
-              <Play className="w-5 h-5" />
-              Start Monitoring
-            </button>
+            <Link to={examIdParam ? `/MonitoringOffline?examId=${examIdParam}` : "/MonitoringOffline"}>
+              <button className="w-full py-4 bg-[#3b82f6] text-white font-semibold rounded-xl hover:bg-[#2563eb] transition-colors flex items-center justify-center gap-2">
+                <Play className="w-5 h-5" />
+                Start Monitoring
+              </button>
             </Link>
           </div>
         </div>
@@ -501,34 +602,22 @@ export default function ROIConfigurationPage() {
                   type="text"
                   value={newHallBuilding}
                   onChange={(e) => setNewHallBuilding(e.target.value)}
-                  placeholder="e.g., building 3"
+                  placeholder="e.g., Building 3"
                   className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Number of Students *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Capacity *</label>
                 <input
                   type="number"
-                  value={newHallStudents}
-                  onChange={(e) => setNewHallStudents(e.target.value)}
+                  value={newHallCapacity}
+                  onChange={(e) => setNewHallCapacity(e.target.value)}
                   placeholder="e.g., 30"
                   min="1"
                   className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Number of Cameras *</label>
-                <input
-                  type="number"
-                  value={newHallCameras}
-                  onChange={(e) => setNewHallCameras(e.target.value)}
-                  placeholder="e.g., 3"
-                  min="1"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                />
-              </div>
               <div className="flex gap-3">
-                
                 <button
                   onClick={() => setShowAddHallModal(false)}
                   className="flex-1 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
@@ -537,9 +626,10 @@ export default function ROIConfigurationPage() {
                 </button>
                 <button
                   onClick={addNewHall}
-                  disabled={!newHallName.trim() || !newHallBuilding.trim() || !newHallStudents || !newHallCameras}
-                  className="flex-1 py-3 bg-[#3b82f6] text-white font-semibold rounded-lg hover:bg-[#2563eb] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  disabled={!newHallName.trim() || !newHallBuilding.trim() || !newHallCapacity || hallSaving}
+                  className="flex-1 py-3 bg-[#3b82f6] text-white font-semibold rounded-lg hover:bg-[#2563eb] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
+                  {hallSaving && <Loader2 className="animate-spin" size={18} />}
                   Add Hall
                 </button>
               </div>

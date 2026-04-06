@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     'instructors',
     'exam',
     'student',
+    'hardware',
+    'hardware.offline_monitoring',
 ]
 
 # ─── Middleware ───────────────────────────────────────────────────
