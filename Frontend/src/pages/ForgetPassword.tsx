@@ -49,7 +49,7 @@ export default function ForgetPassword() {
     setError("");
     // http://127.0.0.1:8000
     try {
-      await axios.post("https://examguard-ai-production.up.railway.app/api/auth/forget-password/", { email });
+      await axios.post("http://127.0.0.1:8000/api/auth/forget-password/", { email });
       setStep("otp");
       setCode(['', '', '', '', '', '']);
     } catch (err: any) {
@@ -99,7 +99,7 @@ export default function ForgetPassword() {
     setError("");
     // http://127.0.0.1:8000
     try {
-      await axios.post("https://examguard-ai-production.up.railway.app/api/auth/verify-otp/", {
+      await axios.post("http://127.0.0.1:8000/api/auth/verify-otp/", {
         email,
         otp: code.join('')
       });
@@ -124,7 +124,7 @@ export default function ForgetPassword() {
     setLoading(true);
     // http://127.0.0.1:8000
     try {
-      await axios.post("https://examguard-ai-production.up.railway.app/api/auth/reset-password/", {
+      await axios.post("http://127.0.0.1:8000/api/auth/reset-password/", {
         email,
         otp: code.join(''),
         new_password: newPassword

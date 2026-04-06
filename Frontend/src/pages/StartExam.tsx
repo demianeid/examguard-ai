@@ -95,7 +95,7 @@ const ExamInterface: React.FC = () => {
     const fetchExam = async () => {
       setExamLoading(true);
       try {
-        const res = await fetch(`https://examguard-ai-production.up.railway.app/api/student/exams/${examId}/`, {
+        const res = await fetch(`http://127.0.0.1:8000/api/student/exams/${examId}/`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (!res.ok) {
@@ -340,7 +340,7 @@ const ExamInterface: React.FC = () => {
       .filter(Boolean);
 
     try {
-      await fetch(`https://examguard-ai-production.up.railway.app/api/student/exams/${examData.id}/submit/`, {
+      await fetch(`http://127.0.0.1:8000/api/student/exams/${examData.id}/submit/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -403,7 +403,7 @@ const ExamInterface: React.FC = () => {
   // ============================================================
   const startExam = async () => {
     try {
-      await fetch(`https://examguard-ai-production.up.railway.app/api/student/exams/${examId}/start/`, {
+      await fetch(`http://127.0.0.1:8000/api/student/exams/${examId}/start/`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
       });

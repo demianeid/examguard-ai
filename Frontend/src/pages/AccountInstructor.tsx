@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 // ─── API ───────────────────────────────────────────────────────────────────
-const BASE = 'https://examguard-ai-production.up.railway.app';
+const BASE = 'http://127.0.0.1:8000';
 const getToken = () => localStorage.getItem('access_token');
 const authFetch = (url: string) =>
   fetch(url, { headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' } });
@@ -116,6 +116,13 @@ const computeStatus = (exam: ExamItem): 'upcoming' | 'active' | 'completed' => {
   return 'completed';
 };
 
+// ─── Resolve image URL for local server ────────────────────────────────────
+const getImageUrl = (url: string | null): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${BASE}${url}`;
+};
+
 // ─── StatusPill ────────────────────────────────────────────────────────────
 const StatusPill = ({ status }: { status: 'upcoming' | 'active' | 'completed' }) => {
   if (status === 'active')
@@ -176,9 +183,7 @@ const ExamRow = ({
       <div className="flex items-center gap-2 flex-shrink-0">
         <StatusPill status={status} />
         <button
-          onClick={() =>
-            onNavigate(exam.id, status)
-          }
+          onClick={() => onNavigate(exam.id, status)}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
             isActive
               ? 'bg-green-600 hover:bg-green-700 text-white shadow-md'
@@ -208,14 +213,14 @@ const ClassExamCard = ({
   const { cls, exams, colorIndex } = data;
   const pal = OCEAN[colorIndex % OCEAN.length];
 
-  const active   = exams.filter(e => (e.status ?? computeStatus(e)) === 'active');
-  const upcoming = exams.filter(e => (e.status ?? computeStatus(e)) === 'upcoming');
-  const completed= exams.filter(e => (e.status ?? computeStatus(e)) === 'completed');
+  const active    = exams.filter(e => (e.status ?? computeStatus(e)) === 'active');
+  const upcoming  = exams.filter(e => (e.status ?? computeStatus(e)) === 'upcoming');
+  const completed = exams.filter(e => (e.status ?? computeStatus(e)) === 'completed');
 
   const handleExamNavigate = (examId: number, status: string) => {
-    if (status === 'active')    onNavigate(`/proctor/${examId}`);
-    else if (status === 'upcoming') onNavigate(`/classes-instructor/${cls.id}/exams`);
-    else                           onNavigate(`/exam-results/${examId}`);
+    if (status === 'active')         onNavigate(`/proctor/${examId}`);
+    else if (status === 'upcoming')  onNavigate(`/classes-instructor/${cls.id}/exams`);
+    else                             onNavigate(`/exam-results/${examId}`);
   };
 
   return (
@@ -237,7 +242,6 @@ const ClassExamCard = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* badge pills */}
           {active.length > 0 && (
             <span className="flex items-center gap-1 px-2.5 py-1 bg-green-400/30 border border-green-300/50 text-white text-[11px] font-bold rounded-full">
               <span className="w-1.5 h-1.5 bg-green-300 rounded-full animate-pulse inline-block" />
@@ -255,7 +259,7 @@ const ClassExamCard = ({
       </div>
 
       {/* summary row (always visible) */}
-      <div className={`grid grid-cols-3 border-b border-slate-100 ${collapsed ? '' : ''}`}>
+      <div className="grid grid-cols-3 border-b border-slate-100">
         {[
           { label: 'Live',      count: active.length,    color: 'text-green-600', bg: 'bg-green-50' },
           { label: 'Upcoming',  count: upcoming.length,  color: pal.text,         bg: `bg-gradient-to-r ${pal.light}` },
@@ -286,7 +290,6 @@ const ClassExamCard = ({
                   <p className="text-xs text-gray-400">No exams for this class yet</p>
                 </div>
               ) : (
-                /* sort: active first, then upcoming, then completed */
                 [...active, ...upcoming, ...completed].map((exam, idx) => (
                   <ExamRow
                     key={`${exam.id}-${idx}`}
@@ -329,18 +332,17 @@ const AccountInstructor: React.FC = () => {
   const [dashboardLoading, setDashboardLoading] = useState(true);
 
   // live monitoring + alerts (real data)
-  const [liveStudents, setLiveStudents]     = useState<LiveStudent[]>([]);
-  const [alertItems, setAlertItems]         = useState<AlertItem[]>([]);
+  const [liveStudents, setLiveStudents]           = useState<LiveStudent[]>([]);
+  const [alertItems, setAlertItems]               = useState<AlertItem[]>([]);
   const [monitoringLoading, setMonitoringLoading] = useState(false);
   const [showAllMonitoring, setShowAllMonitoring] = useState(false);
 
   // ── fetch profile ──
-useEffect(() => {
+  useEffect(() => {
     const wasUpdated = location.state?.updated === true;
     if (wasUpdated) {
       setShowRefreshNotice(true);
       const t = setTimeout(() => setShowRefreshNotice(false), 3000);
-      
       navigate(location.pathname, { replace: true, state: {} });
       return () => clearTimeout(t);
     }
@@ -405,7 +407,6 @@ useEffect(() => {
       });
 
       setClassesWithExams(merged);
-      // kick off live monitoring + alert fetch using fresh data
       await fetchLiveActivity(merged);
     } catch { setClassesWithExams([]); }
     finally { setDashboardLoading(false); }
@@ -443,16 +444,16 @@ useEffect(() => {
       const endMs = start.getTime() + exam.duration * 60_000;
       const remaining = Math.max(0, Math.round((endMs - Date.now()) / 60_000));
       return students.map(s => ({
-        name:         s.full_name,
-        examTitle:    exam.title,
-        className:    cls.name,
-        classId:      cls.id,
-        examId:       exam.id,
+        name:          s.full_name,
+        examTitle:     exam.title,
+        className:     cls.name,
+        classId:       cls.id,
+        examId:        exam.id,
         colorIndex,
-        status:       'active' as const,
-        progress:     null,
+        status:        'active' as const,
+        progress:      null,
         timeRemaining: `${remaining} min`,
-        isLive:       true,
+        isLive:        true,
       }));
     });
     setLiveStudents(built);
@@ -468,11 +469,11 @@ useEffect(() => {
           incidents.forEach(inc => {
             const severity = inc.severity ?? 'medium';
             allAlerts.push({
-              type:      ['high','critical'].includes(severity) ? 'warning' : 'info',
+              type:      ['high', 'critical'].includes(severity) ? 'warning' : 'info',
               message:   inc.description ?? inc.incident_type ?? 'Suspicious activity detected',
               details:   `${inc.student_name ?? inc.student ?? 'Unknown'} | ${cls.name} – ${exam.title}`,
               time:      inc.created_at ?? inc.timestamp
-                ? formatRelativeTime(new Date(inc.created_at ?? inc.timestamp!))
+                ? formatRelativeTime(new Date((inc.created_at ?? inc.timestamp)!))
                 : 'Just now',
               examId:    exam.id,
               classId:   cls.id,
@@ -482,7 +483,6 @@ useEffect(() => {
         } catch {}
       })
     );
-    // sort newest first (approximation — keep original order if no timestamp)
     setAlertItems(allAlerts);
     setMonitoringLoading(false);
   };
@@ -502,10 +502,8 @@ useEffect(() => {
   const allExams       = classesWithExams.flatMap(c => c.exams);
   const liveExams      = allExams.filter(e => e.status === 'active');
   const upcomingExams  = allExams.filter(e => e.status === 'upcoming');
-  const completedExams = allExams.filter(e => e.status === 'completed');
   const totalStudents  = classesWithExams.reduce((s, c) => s + (c.cls.number_of_students ?? 0), 0);
 
-  // derived from real API
   const visibleStudents = showAllMonitoring ? liveStudents : liveStudents.slice(0, 3);
 
   // ── loading / error screens ──
@@ -564,9 +562,15 @@ useEffect(() => {
               <div className="flex justify-center -mt-16 mb-4">
                 <motion.div whileHover={{ scale: 1.05 }} transition={{ duration: 0.3 }}
                   className="w-32 h-32 rounded-full shadow-xl border-4 border-white overflow-hidden bg-gradient-to-br from-[#3F72B7] to-[#3DA5FA] flex items-center justify-center relative">
-                  {profile?.profile_image
-                    ? <img src={`${BASE}${profile.profile_image}`} alt={profile.full_name} className="w-full h-full object-cover" />
-                    : <User className="w-16 h-16 text-white" />}
+                  {getImageUrl(profile?.profile_image ?? null)
+                    ? <img
+                        src={getImageUrl(profile!.profile_image)!}
+                        alt={profile!.full_name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    : <User className="w-16 h-16 text-white" />
+                  }
                   <div className="absolute bottom-0 right-0 w-5 h-5 bg-green-500 rounded-full border-2 border-white" />
                 </motion.div>
               </div>
@@ -590,10 +594,10 @@ useEffect(() => {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.15 }}
             className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { value: liveExams.length.toString(),      label: 'Live Exams',       icon: Zap,        color: 'from-green-500 to-emerald-600' },
-              { value: totalStudents.toString(),         label: 'Total Students',   icon: Users,      color: 'from-[#3F72B7] to-[#3DA5FA]' },
-              { value: totalClasses.toString(),          label: 'Classes',          icon: School,     color: 'from-[#3DA5FA] to-[#2B8CDB]' },
-              { value: upcomingExams.length.toString(),  label: 'Upcoming Exams',   icon: Calendar,   color: 'from-[#3F72B7] to-[#2E5A9B]' },
+              { value: liveExams.length.toString(),     label: 'Live Exams',     icon: Zap,      color: 'from-green-500 to-emerald-600' },
+              { value: totalStudents.toString(),        label: 'Total Students', icon: Users,    color: 'from-[#3F72B7] to-[#3DA5FA]' },
+              { value: totalClasses.toString(),         label: 'Classes',        icon: School,   color: 'from-[#3DA5FA] to-[#2B8CDB]' },
+              { value: upcomingExams.length.toString(), label: 'Upcoming Exams', icon: Calendar, color: 'from-[#3F72B7] to-[#2E5A9B]' },
             ].map(({ value, label, icon: Icon, color }, idx) => (
               <motion.div key={idx} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 + idx * 0.08 }}
@@ -610,11 +614,10 @@ useEffect(() => {
             ))}
           </motion.div>
 
-          {/* ── Exams Across All Classes (main new section) ── */}
+          {/* ── Exams Across All Classes ── */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.25 }}
             className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
 
-            {/* section header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3F72B7] to-[#3DA5FA] flex items-center justify-center shadow-md">
@@ -637,7 +640,7 @@ useEffect(() => {
                   </span>
                 )}
                 <button
-                title="Refresh" onClick={fetchAllClassesWithExams}
+                  title="Refresh" onClick={fetchAllClassesWithExams}
                   className="p-2 text-gray-400 hover:text-[#3F72B7] hover:bg-blue-50 rounded-lg transition-colors">
                   <RefreshCw size={15} />
                 </button>
@@ -725,7 +728,6 @@ useEffect(() => {
                             : 'bg-blue-50/50 border-blue-100'
                         }`}>
 
-                        {/* avatar + live dot */}
                         <div className="relative flex-shrink-0">
                           <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-sm bg-gradient-to-br ${
                             student.status === 'warning' ? 'from-yellow-400 to-orange-500' : pal.bg
@@ -737,7 +739,6 @@ useEffect(() => {
                           }`} />
                         </div>
 
-                        {/* info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <p className="text-sm font-semibold text-gray-800 truncate">{student.name}</p>
@@ -759,7 +760,6 @@ useEffect(() => {
                           )}
                         </div>
 
-                        {/* time + action */}
                         <div className="flex-shrink-0 text-right space-y-1">
                           <p className="text-[10px] text-gray-400 flex items-center gap-0.5 justify-end">
                             <Clock size={9} />{student.timeRemaining}
@@ -837,7 +837,6 @@ useEffect(() => {
                       }`}
                       onClick={() => navigate(`/proctor/${alert.examId}?tab=activity`)}>
 
-                      {/* icon */}
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
                         alert.type === 'warning' ? 'bg-orange-100' : 'bg-blue-100'
                       }`}>
@@ -846,7 +845,6 @@ useEffect(() => {
                           : <Eye size={15} className="text-blue-500" />}
                       </div>
 
-                      {/* content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-gray-800 leading-tight">{alert.message}</p>
@@ -865,7 +863,6 @@ useEffect(() => {
                 )}
               </div>
 
-              {/* footer */}
               <div className="px-4 pb-4">
                 <button
                   onClick={() => navigate('/classes-instructor')}

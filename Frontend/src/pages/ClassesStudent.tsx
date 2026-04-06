@@ -156,7 +156,7 @@ const ClassesStudent = () => {
   // http://localhost:8000/api/student/classes/
   const fetchMyClasses = async () => {
     try {
-      const res = await fetch('https://examguard-ai-production.up.railway.app/api/student/classes/', {
+      const res = await fetch('http://127.0.0.1:8000/api/student/classes/', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
       });
       if (!res.ok) throw new Error('Failed to fetch classes');
@@ -225,7 +225,7 @@ const ClassesStudent = () => {
     const code = searchQuery.trim();
     if (!code) return;
     try {
-      const res = await fetch('https://examguard-ai-production.up.railway.app/api/student/classes/join/', {
+      const res = await fetch('http://127.0.0.1:8000/api/student/classes/join/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -254,7 +254,7 @@ const ClassesStudent = () => {
   const handleLeaveClass = async (cls: ClassType) => {
     setLeaveLoading(true);
     try {
-      const res = await fetch(`https://examguard-ai-production.up.railway.app/api/student/classes/${cls.id}/leave/`, {
+      const res = await fetch(`http://127.0.0.1:8000/api/student/classes/${cls.id}/leave/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -285,7 +285,7 @@ const ClassesStudent = () => {
     const [overallGrade, setOverallGrade] = useState<number | null>(null);
 
 useEffect(() => {
-  fetch(`https://examguard-ai-production.up.railway.app/api/student/classes/${cls.id}/grades/`, {
+  fetch(`http://127.0.0.1:8000/api/student/classes/${cls.id}/grades/`, {
     headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
   })
     .then(r => r.json())
@@ -302,7 +302,7 @@ useEffect(() => {
       const fetchNextExam = async () => {
         setExamLoading(true);
         try {
-          const res = await fetch(`https://examguard-ai-production.up.railway.app/api/student/classes/${cls.id}/exams/`, {
+          const res = await fetch(`http://127.0.0.1:8000/api/student/classes/${cls.id}/exams/`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
           });
           if (!res.ok) throw new Error('Failed');
@@ -532,7 +532,7 @@ useEffect(() => {
       if (!selectedClass) return;
       const fetchExams = async () => {
         try {
-          const res = await fetch(`https://examguard-ai-production.up.railway.app/api/student/classes/${selectedClass.id}/exams/`, {
+          const res = await fetch(`http://127.0.0.1:8000/api/student/classes/${selectedClass.id}/exams/`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
           });
           if (!res.ok) throw new Error('Failed');
@@ -659,7 +659,7 @@ useEffect(() => {
       const fetchGrades = async () => {
         setGradesLoading(true);
         try {
-          const res = await fetch(`https://examguard-ai-production.up.railway.app/api/student/classes/${selectedClass.id}/grades/`, {
+          const res = await fetch(`https://http://localhost:8000/api/student/classes/${selectedClass.id}/grades/`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
           });
           if (!res.ok) throw new Error('Failed');

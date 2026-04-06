@@ -8,7 +8,16 @@ import Header from '../components/Header';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from "framer-motion";
 
-// Toast Notification Component
+// ─── Resolve image URL ─────────────────────────────────────────────────────
+const BASE = 'http://127.0.0.1:8000';
+
+const resolveImageUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${BASE}${url}`;
+};
+
+// ─── Toast ─────────────────────────────────────────────────────────────────
 const Toast: React.FC<{
   message: string;
   type: 'success' | 'error';
@@ -25,9 +34,7 @@ const Toast: React.FC<{
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -60 }}
       className={`fixed top-24 left-1/2 -translate-x-1/2 z-50 rounded-2xl shadow-2xl px-8 py-5 flex items-center gap-4 border ${
-        type === 'success'
-          ? 'bg-white border-green-100'
-          : 'bg-white border-red-100'
+        type === 'success' ? 'bg-white border-green-100' : 'bg-white border-red-100'
       }`}
     >
       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
@@ -51,7 +58,7 @@ const Toast: React.FC<{
   );
 };
 
-// Modal Component
+// ─── Modal ─────────────────────────────────────────────────────────────────
 const Modal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -59,29 +66,20 @@ const Modal: React.FC<{
   children: React.ReactNode;
 }> = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
-
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
+        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
         className="bg-white rounded-2xl max-w-md w-full p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold text-slate-900">{title}</h3>
-          <button
-            title="Close"
-            onClick={onClose}
-            className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
-          >
+          <button title="Close" onClick={onClose} className="p-1 hover:bg-slate-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-slate-500" />
           </button>
         </div>
@@ -91,6 +89,7 @@ const Modal: React.FC<{
   );
 };
 
+// ─── Types ─────────────────────────────────────────────────────────────────
 interface ProfileData {
   id?: string;
   first_name: string;
@@ -102,58 +101,56 @@ interface ProfileData {
   user_role?: string;
 }
 
+// ─── Main Component ────────────────────────────────────────────────────────
 const SettingsPage: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate    = useNavigate();
+  const location    = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [emailNotifications, setEmailNotifications] = useState(() => {
     const saved = localStorage.getItem('emailNotifications');
     return saved ? JSON.parse(saved) : true;
   });
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSaving, setIsSaving]       = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [toast, setToast]             = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-  };
+  const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type });
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [show2FAModal, setShow2FAModal] = useState(false);
-  
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [showDeleteModal, setShowDeleteModal]     = useState(false);
+  const [show2FAModal, setShow2FAModal]           = useState(false);
+
+  const [currentPassword, setCurrentPassword]   = useState("");
+  const [newPassword, setNewPassword]           = useState("");
+  const [confirmPassword, setConfirmPassword]   = useState("");
+  const [passwordError, setPasswordError]       = useState("");
+  const [passwordSuccess, setPasswordSuccess]   = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  const [deletePassword, setDeletePassword] = useState("");
+  const [deletePassword, setDeletePassword]         = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [deleteError, setDeleteError] = useState("");
-  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [deleteSuccess, setDeleteSuccess] = useState(false);
+  const [deleteError, setDeleteError]               = useState("");
+  const [isDeletingAccount, setIsDeletingAccount]   = useState(false);
+  const [deleteSuccess, setDeleteSuccess]           = useState(false);
 
-  const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [userId, setUserId] = useState("");
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profile, setProfile]           = useState<ProfileData | null>(null);
+  const [firstName, setFirstName]       = useState("");
+  const [lastName, setLastName]         = useState("");
+  const [phone, setPhone]               = useState("");
+  const [email, setEmail]               = useState("");
+  const [userId, setUserId]             = useState("");
+  const [profileImage, setProfileImage] = useState<string | null>(null); // always full URL
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [isStudent, setIsStudent] = useState(false);
-  const [returnPath, setReturnPath] = useState<string>('');
-  
-  const [hasChanges, setHasChanges] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);  // local blob
+
+  const [loading, setLoading]         = useState(true);
+  const [fetchError, setFetchError]   = useState<string | null>(null);
+  const [saveError, setSaveError]     = useState<string | null>(null);
+  const [isStudent, setIsStudent]     = useState(false);
+  const [returnPath, setReturnPath]   = useState<string>('');
+  const [hasChanges, setHasChanges]   = useState(false);
+  const [emailError, setEmailError]   = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem('emailNotifications', JSON.stringify(emailNotifications));
@@ -174,42 +171,32 @@ const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     if (profile) {
-      const initialFirstName = profile.first_name || "";
-      const initialLastName = profile.last_name || "";
-      const initialPhone = profile.phone || profile.phone_number || "";
-      const initialEmail = profile.email || "";
-      
-      const isChanged = 
-        firstName !== initialFirstName ||
-        lastName !== initialLastName ||
-        phone !== initialPhone ||
-        email !== initialEmail ||
+      const init = {
+        firstName: profile.first_name || "",
+        lastName:  profile.last_name  || "",
+        phone:     profile.phone || profile.phone_number || "",
+        email:     profile.email || "",
+      };
+      const changed =
+        firstName !== init.firstName ||
+        lastName  !== init.lastName  ||
+        phone     !== init.phone     ||
+        email     !== init.email     ||
         selectedImage !== null;
-      
-      setHasChanges(isChanged);
+      setHasChanges(changed);
     }
   }, [firstName, lastName, phone, email, selectedImage, profile]);
 
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  const validateEmail = (val: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
 
+  // ── Fetch Profile ──────────────────────────────────────────────
   const fetchProfile = async () => {
     const token = localStorage.getItem('access_token');
-    if (!token) {
-      setFetchError('No access token found');
-      setLoading(false);
-      return;
-    }
+    if (!token) { setFetchError('No access token found'); setLoading(false); return; }
 
     try {
-      const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/profile/', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await fetch(`${BASE}/api/auth/profile/`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
 
       if (response.status === 401) {
@@ -223,11 +210,14 @@ const SettingsPage: React.FC = () => {
       if (response.ok) {
         setProfile(data);
         setFirstName(data.first_name || "");
-        setLastName(data.last_name || "");
+        setLastName(data.last_name   || "");
         setPhone(data.phone || data.phone_number || "");
         setEmail(data.email || "");
-        setUserId(data.id || "");
-        if (data.profile_image) setProfileImage(data.profile_image);
+        setUserId(data.id   || "");
+
+        // ✅ Always resolve to full URL
+        setProfileImage(resolveImageUrl(data.profile_image));
+
         if (data.user_role === 'student') {
           setIsStudent(true);
           setReturnPath(prev => prev || '/account-student');
@@ -238,13 +228,14 @@ const SettingsPage: React.FC = () => {
       } else {
         setFetchError(data.error || 'Failed to load profile');
       }
-    } catch (err) {
+    } catch {
       setFetchError('Network error. Please check your connection.');
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Image Select ───────────────────────────────────────────────
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -255,36 +246,42 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  // ── Save Profile ───────────────────────────────────────────────
   const handleSaveProfile = async () => {
-    if (!email.trim()) { setEmailError('Email is required'); return; }
+    if (!email.trim())       { setEmailError('Email is required'); return; }
     if (!validateEmail(email)) { setEmailError('Please enter a valid email address'); return; }
     setEmailError(null);
     setSaveError(null);
     if (!firstName.trim()) { setSaveError('First name is required'); return; }
-    if (!lastName.trim()) { setSaveError('Last name is required'); return; }
+    if (!lastName.trim())  { setSaveError('Last name is required');  return; }
 
     const token = localStorage.getItem('access_token');
     if (!token) { setSaveError('No access token found'); return; }
 
     setIsSaving(true);
-
     try {
       const formData = new FormData();
       formData.append('first_name', firstName);
-      formData.append('last_name', lastName);
+      formData.append('last_name',  lastName);
       formData.append('phone_number', phone);
       formData.append('email', email);
       if (selectedImage) formData.append('profile_image', selectedImage);
 
-      const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/profile/update/', {
-        method: 'PATCH',
+      const response = await fetch(`${BASE}/api/auth/profile/update/`, {
+        method:  'PATCH',
         headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
+        body:    formData,
       });
 
       const data = await response.json();
 
       if (response.ok) {
+        // ✅ Update displayed image with full URL from response
+        if (data.profile_image) {
+          setProfileImage(resolveImageUrl(data.profile_image));
+          setPreviewImage(null);
+          setSelectedImage(null);
+        }
         setShowSuccess(true);
         setTimeout(() => {
           const path = returnPath || (isStudent ? '/account-student' : '/account-instructor');
@@ -293,102 +290,69 @@ const SettingsPage: React.FC = () => {
       } else {
         setSaveError(data.error || 'Failed to update profile');
       }
-    } catch (err) {
+    } catch {
       setSaveError('Network error. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
+  // ── Change Password ────────────────────────────────────────────
   const handleChangePassword = async () => {
-    setPasswordError("");
-    setPasswordSuccess("");
-
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setPasswordError("All fields are required");
-      return;
-    }
-    if (newPassword.length < 8) {
-      setPasswordError("New password must be at least 8 characters long");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError("New passwords do not match");
-      return;
-    }
+    setPasswordError(""); setPasswordSuccess("");
+    if (!currentPassword || !newPassword || !confirmPassword) { setPasswordError("All fields are required"); return; }
+    if (newPassword.length < 8)       { setPasswordError("New password must be at least 8 characters"); return; }
+    if (newPassword !== confirmPassword) { setPasswordError("New passwords do not match"); return; }
 
     const token = localStorage.getItem('access_token');
     if (!token) { setPasswordError("No access token found"); return; }
-
     setIsChangingPassword(true);
 
     try {
-      const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/change-password/', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          old_password: currentPassword,
-          new_password: newPassword,
-          confirm_password: confirmPassword
-        })
+      const response = await fetch(`${BASE}/api/auth/change-password/`, {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ old_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword }),
       });
-
       const data = await response.json();
-
       if (response.ok) {
         setPasswordSuccess("Password changed successfully!");
         setTimeout(() => {
           setShowPasswordModal(false);
-          setCurrentPassword("");
-          setNewPassword("");
-          setConfirmPassword("");
-          setPasswordSuccess("");
+          setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setPasswordSuccess("");
           showToast("Password updated successfully!", "success");
         }, 2000);
       } else {
         setPasswordError(data.error || "Failed to change password");
       }
-    } catch (err) {
-      setPasswordError("Network error. Please try again.");
-    } finally {
-      setIsChangingPassword(false);
-    }
+    } catch { setPasswordError("Network error. Please try again."); }
+    finally  { setIsChangingPassword(false); }
   };
 
+  // ── Delete Account ─────────────────────────────────────────────
   const handleDeleteAccount = async () => {
     setDeleteError("");
-
-    if (!deletePassword) { setDeleteError("Please enter your password"); return; }
+    if (!deletePassword)                { setDeleteError("Please enter your password"); return; }
     if (deleteConfirmation !== "DELETE") { setDeleteError("Please type DELETE to confirm"); return; }
 
     const token = localStorage.getItem('access_token');
     if (!token) { setDeleteError("No access token found"); return; }
-
     setIsDeletingAccount(true);
 
     try {
-      const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/delete-account/', {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ password: deletePassword })
+      const response = await fetch(`${BASE}/api/auth/delete-account/`, {
+        method:  'DELETE',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ password: deletePassword }),
       });
-
       const text = await response.text();
-      let data;
+      let data: any;
       try { data = JSON.parse(text); } catch { data = { error: text }; }
 
       if (response.ok) {
         setDeleteSuccess(true);
         localStorage.clear();
-        setTimeout(() => {
-          navigate('/Login', { replace: true });
-        }, 2500);
+        setTimeout(() => navigate('/Login', { replace: true }), 2500);
       } else {
         setDeleteError(data.error || `Error: ${response.status}`);
         setIsDeletingAccount(false);
@@ -399,18 +363,18 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  // ── Download Data ──────────────────────────────────────────────
   const handleDownloadData = async () => {
     const token = localStorage.getItem('access_token');
     if (!token) return;
     try {
-      const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/download-data/', {
-        method: 'GET',
+      const response = await fetch(`${BASE}/api/auth/download-data/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        const url  = window.URL.createObjectURL(blob);
+        const a    = document.createElement('a');
         a.href = url;
         a.download = `my-data-${new Date().toISOString().split('T')[0]}.json`;
         document.body.appendChild(a);
@@ -420,122 +384,69 @@ const SettingsPage: React.FC = () => {
       } else {
         showToast("Failed to download data", "error");
       }
-    } catch (err) {
-      showToast("Network error. Please try again.", "error");
-    }
+    } catch { showToast("Network error. Please try again.", "error"); }
   };
-
-  const handleEnable2FA = () => navigate('/setup-2fa');
-  const handleContactSupport = () => navigate('/contact');
-  const handleHelpCenter = () => navigate('/help-center');
-  const handleTerms = () => navigate('/terms-conditions');
-  const handlePrivacy = () => navigate('/privacy-policy');
 
   const handleBack = () => {
     const path = returnPath || (isStudent ? '/account-student' : '/account-instructor');
     navigate(path, { state: { fromSettings: true } });
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#E8F1FA] pt-20 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading settings...</p>
-        </div>
+  // ── Loading / Error ────────────────────────────────────────────
+  if (loading) return (
+    <div className="min-h-screen bg-[#E8F1FA] pt-20 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-gray-600">Loading settings...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (fetchError) {
-    return (
-      <div className="min-h-screen bg-[#E8F1FA] pt-20 flex items-center justify-center">
-        <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
-          <p className="text-red-500 mb-4">{fetchError}</p>
-          <button onClick={() => navigate('/Login')} className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
-            Go to Login
-          </button>
-        </div>
+  if (fetchError) return (
+    <div className="min-h-screen bg-[#E8F1FA] pt-20 flex items-center justify-center">
+      <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
+        <p className="text-red-500 mb-4">{fetchError}</p>
+        <button onClick={() => navigate('/Login')} className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">Go to Login</button>
       </div>
-    );
-  }
+    </div>
+  );
 
+  // ── Render ─────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#E8F1FA] pt-20 overflow-hidden">
 
-      {/* Global Toast */}
       <AnimatePresence>
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        )}
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       </AnimatePresence>
 
-      {/* Modals */}
       <AnimatePresence>
 
-        {/* ✅ FIXED: Password Change Modal — added id/name/htmlFor */}
+        {/* Password Modal */}
         {showPasswordModal && (
           <Modal isOpen={showPasswordModal} onClose={() => !isChangingPassword && setShowPasswordModal(false)} title="Change Password">
             <div className="space-y-4">
-              <div>
-                <label htmlFor="current_password" className="block text-sm font-semibold text-slate-700 mb-2">
-                  Current Password
-                </label>
-                <input
-                  id="current_password"
-                  name="current_password"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  disabled={isChangingPassword}
-                  autoComplete="current-password"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] disabled:opacity-60"
-                  placeholder="Enter current password"
-                />
-              </div>
-              <div>
-                <label htmlFor="new_password" className="block text-sm font-semibold text-slate-700 mb-2">
-                  New Password
-                </label>
-                <input
-                  id="new_password"
-                  name="new_password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  disabled={isChangingPassword}
-                  autoComplete="new-password"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] disabled:opacity-60"
-                  placeholder="Enter new password"
-                />
-              </div>
-              <div>
-                <label htmlFor="confirm_password" className="block text-sm font-semibold text-slate-700 mb-2">
-                  Confirm New Password
-                </label>
-                <input
-                  id="confirm_password"
-                  name="confirm_password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={isChangingPassword}
-                  autoComplete="new-password"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] disabled:opacity-60"
-                  placeholder="Confirm new password"
-                />
-              </div>
+              {[
+                { id: 'current_password', label: 'Current Password', value: currentPassword, setter: setCurrentPassword, autoComplete: 'current-password' },
+                { id: 'new_password',     label: 'New Password',     value: newPassword,     setter: setNewPassword,     autoComplete: 'new-password' },
+                { id: 'confirm_password', label: 'Confirm New Password', value: confirmPassword, setter: setConfirmPassword, autoComplete: 'new-password' },
+              ].map(({ id, label, value, setter, autoComplete }) => (
+                <div key={id}>
+                  <label htmlFor={id} className="block text-sm font-semibold text-slate-700 mb-2">{label}</label>
+                  <input
+                    id={id} name={id} type="password" value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    disabled={isChangingPassword} autoComplete={autoComplete}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] disabled:opacity-60"
+                    placeholder={`Enter ${label.toLowerCase()}`}
+                  />
+                </div>
+              ))}
 
               {passwordError && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="text-red-600 text-sm">{passwordError}</p>
                 </div>
               )}
-
               {passwordSuccess && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
                   <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
@@ -543,49 +454,33 @@ const SettingsPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="text-left pt-2 pb-2">
-                <button
-                  onClick={() => {
-                    setShowPasswordModal(false);
-                    navigate('/ForgetPassword', { state: { email: profile?.email } });
-                  }}
-                  disabled={isChangingPassword}
-                  className="text-sm text-[#3F72B7] hover:text-[#2C4F8A] hover:underline transition-colors font-medium disabled:opacity-50"
-                >
-                  Forgot your password?
-                </button>
-              </div>
+              <button
+                onClick={() => { setShowPasswordModal(false); navigate('/ForgetPassword', { state: { email: profile?.email } }); }}
+                disabled={isChangingPassword}
+                className="text-sm text-[#3F72B7] hover:underline font-medium disabled:opacity-50"
+              >
+                Forgot your password?
+              </button>
 
               <button
                 onClick={handleChangePassword}
                 disabled={isChangingPassword || !!passwordSuccess}
-                className="w-full bg-[#3F72B7] hover:bg-[#3565A3] text-white font-semibold py-3 rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full bg-[#3F72B7] hover:bg-[#3565A3] text-white font-semibold py-3 rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                {isChangingPassword ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Updating...</span>
-                  </>
-                ) : passwordSuccess ? (
-                  <>
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Updated!</span>
-                  </>
-                ) : (
-                  <span>Update Password</span>
-                )}
+                {isChangingPassword
+                  ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>Updating...</span></>
+                  : passwordSuccess
+                  ? <><CheckCircle className="w-5 h-5" /><span>Updated!</span></>
+                  : <span>Update Password</span>
+                }
               </button>
             </div>
           </Modal>
         )}
 
-        {/* ✅ FIXED: Delete Account Modal — added id/name/htmlFor */}
+        {/* Delete Modal */}
         {showDeleteModal && (
-          <Modal
-            isOpen={showDeleteModal}
-            onClose={() => !isDeletingAccount && !deleteSuccess && setShowDeleteModal(false)}
-            title="Delete Account"
-          >
+          <Modal isOpen={showDeleteModal} onClose={() => !isDeletingAccount && !deleteSuccess && setShowDeleteModal(false)} title="Delete Account">
             {deleteSuccess ? (
               <div className="py-6 text-center space-y-4">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
@@ -595,7 +490,7 @@ const SettingsPage: React.FC = () => {
                   <p className="font-bold text-slate-900 text-lg">Account Deleted</p>
                   <p className="text-slate-500 text-sm mt-1">Redirecting to login page...</p>
                 </div>
-                <div className="w-8 h-8 border-4 border-slate-200 border-t-[#3F72B7] rounded-full animate-spin mx-auto"></div>
+                <div className="w-8 h-8 border-4 border-slate-200 border-t-[#3F72B7] rounded-full animate-spin mx-auto" />
               </div>
             ) : (
               <div className="space-y-4">
@@ -604,64 +499,36 @@ const SettingsPage: React.FC = () => {
                     <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />
                     <p className="font-semibold text-red-600">Warning: This action cannot be undone</p>
                   </div>
-                  <p className="text-sm text-red-600">
-                    All your data will be permanently deleted. This includes your profile, exams, and history.
-                  </p>
+                  <p className="text-sm text-red-600">All your data will be permanently deleted.</p>
                 </div>
-
-                <div>
-                  <label htmlFor="delete_password" className="block text-sm font-semibold text-slate-700 mb-2">
-                    Enter your password to confirm
-                  </label>
-                  <input
-                    id="delete_password"
-                    name="delete_password"
-                    type="password"
-                    value={deletePassword}
-                    onChange={(e) => setDeletePassword(e.target.value)}
-                    disabled={isDeletingAccount}
-                    autoComplete="current-password"
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
-                    placeholder="Enter your password"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="delete_confirmation" className="block text-sm font-semibold text-slate-700 mb-2">
-                    Type <span className="font-bold text-red-600">DELETE</span> to confirm
-                  </label>
-                  <input
-                    id="delete_confirmation"
-                    name="delete_confirmation"
-                    type="text"
-                    value={deleteConfirmation}
-                    onChange={(e) => setDeleteConfirmation(e.target.value)}
-                    disabled={isDeletingAccount}
-                    autoComplete="off"
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
-                    placeholder="DELETE"
-                  />
-                </div>
-
+                {[
+                  { id: 'delete_password',     label: 'Enter your password to confirm', placeholder: 'Enter your password', type: 'password', value: deletePassword, setter: setDeletePassword },
+                  { id: 'delete_confirmation', label: <>Type <span className="font-bold text-red-600">DELETE</span> to confirm</>, placeholder: 'DELETE', type: 'text', value: deleteConfirmation, setter: setDeleteConfirmation },
+                ].map(({ id, label, placeholder, type, value, setter }) => (
+                  <div key={id}>
+                    <label htmlFor={id} className="block text-sm font-semibold text-slate-700 mb-2">{label}</label>
+                    <input
+                      id={id} name={id} type={type} value={value}
+                      onChange={(e) => setter(e.target.value)}
+                      disabled={isDeletingAccount} autoComplete="off"
+                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
+                      placeholder={placeholder}
+                    />
+                  </div>
+                ))}
                 {deleteError && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                     <p className="text-red-600 text-sm">{deleteError}</p>
                   </div>
                 )}
-
                 <button
-                  onClick={handleDeleteAccount}
-                  disabled={isDeletingAccount}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={handleDeleteAccount} disabled={isDeletingAccount}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  {isDeletingAccount ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Deleting Account...</span>
-                    </>
-                  ) : (
-                    <span>Permanently Delete Account</span>
-                  )}
+                  {isDeletingAccount
+                    ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>Deleting...</span></>
+                    : <span>Permanently Delete Account</span>
+                  }
                 </button>
               </div>
             )}
@@ -672,19 +539,11 @@ const SettingsPage: React.FC = () => {
         {show2FAModal && (
           <Modal isOpen={show2FAModal} onClose={() => setShow2FAModal(false)} title="Two-Factor Authentication">
             <div className="space-y-4">
-              <p className="text-slate-600">
-                Two-factor authentication adds an extra layer of security to your account.
-                Once enabled, you'll need to enter a code from your authenticator app in addition to your password.
-              </p>
+              <p className="text-slate-600">Two-factor authentication adds an extra layer of security to your account.</p>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> You'll need an authenticator app like Google Authenticator or Authy to use 2FA.
-                </p>
+                <p className="text-sm text-blue-800"><strong>Note:</strong> You'll need an authenticator app like Google Authenticator or Authy.</p>
               </div>
-              <button
-                onClick={handleEnable2FA}
-                className="w-full bg-[#3F72B7] hover:bg-[#3565A3] text-white font-semibold py-3 rounded-lg transition-all"
-              >
+              <button onClick={() => navigate('/setup-2fa')} className="w-full bg-[#3F72B7] hover:bg-[#3565A3] text-white font-semibold py-3 rounded-lg transition-all">
                 Continue to Setup
               </button>
             </div>
@@ -692,13 +551,11 @@ const SettingsPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Profile Update Success Alert */}
+      {/* Profile Update Success */}
       <AnimatePresence>
         {showSuccess && (
           <motion.div
-            initial={{ opacity: 0, y: -60 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -60 }}
+            initial={{ opacity: 0, y: -60 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -60 }}
             className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-white rounded-2xl shadow-2xl px-8 py-5 flex items-center gap-4 border border-green-100"
           >
             <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -716,7 +573,7 @@ const SettingsPage: React.FC = () => {
 
       <div className="max-w-3xl mx-auto px-6 py-16">
 
-        {/* Header */}
+        {/* Header Card */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -741,9 +598,7 @@ const SettingsPage: React.FC = () => {
         {/* Profile Information */}
         <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <User className="w-5 h-5 text-[#3F72B7]" />
-            </div>
+            <div className="p-2 bg-blue-50 rounded-lg"><User className="w-5 h-5 text-[#3F72B7]" /></div>
             <h2 className="text-xl font-bold text-slate-900">Profile Information</h2>
           </div>
 
@@ -752,8 +607,16 @@ const SettingsPage: React.FC = () => {
             <div className="flex flex-col items-center mb-6">
               <div className="relative">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
-                  {previewImage || profileImage ? (
-                    <img src={previewImage || profileImage || ''} alt="Profile" className="w-full h-full object-cover" />
+                  {/* ✅ previewImage (local blob) takes priority, then resolved full URL */}
+                  {previewImage ? (
+                    <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
+                  ) : profileImage ? (
+                    <img
+                      src={profileImage}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
                   ) : (
                     <User className="w-12 h-12 text-white" />
                   )}
@@ -765,90 +628,54 @@ const SettingsPage: React.FC = () => {
                 >
                   <Camera className="w-4 h-4" />
                 </button>
-                {/* ✅ FIXED: added id and name to file input */}
                 <input
-                  id="profile_image"
-                  name="profile_image"
-                  title="Change Profile Picture"
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImageSelect}
-                  accept="image/*"
-                  className="hidden"
+                  id="profile_image" name="profile_image" title="Change Profile Picture"
+                  type="file" ref={fileInputRef} onChange={handleImageSelect}
+                  accept="image/*" className="hidden"
                 />
               </div>
               <p className="text-sm text-slate-500 mt-2">Click the camera icon to change your profile picture</p>
             </div>
 
-            {/* ✅ FIXED: All inputs now have id, name, and labels have htmlFor */}
-            <div>
-              <label htmlFor="first_name" className="block text-sm font-semibold text-slate-700 mb-2">First Name</label>
-              <input
-                id="first_name"
-                name="first_name"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Enter your first name"
-                disabled={isSaving}
-                autoComplete="given-name"
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
-              />
-            </div>
-            <div>
-              <label htmlFor="last_name" className="block text-sm font-semibold text-slate-700 mb-2">Last Name</label>
-              <input
-                id="last_name"
-                name="last_name"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                placeholder="Enter your last name"
-                disabled={isSaving}
-                autoComplete="family-name"
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
-              />
-            </div>
+            {/* Text Fields */}
+            {[
+              { id: 'first_name',    label: 'First Name',    value: firstName, setter: setFirstName, type: 'text',  autoComplete: 'given-name' },
+              { id: 'last_name',     label: 'Last Name',     value: lastName,  setter: setLastName,  type: 'text',  autoComplete: 'family-name' },
+              { id: 'phone_number',  label: 'Phone Number',  value: phone,     setter: setPhone,     type: 'tel',   autoComplete: 'tel' },
+            ].map(({ id, label, value, setter, type, autoComplete }) => (
+              <div key={id}>
+                <label htmlFor={id} className="block text-sm font-semibold text-slate-700 mb-2">{label}</label>
+                <input
+                  id={id} name={id} type={type} value={value}
+                  onChange={(e) => setter(e.target.value)}
+                  placeholder={`Enter your ${label.toLowerCase()}`}
+                  disabled={isSaving} autoComplete={autoComplete}
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
+                />
+              </div>
+            ))}
+
+            {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                value={email}
+                id="email" name="email" type="email" value={email}
                 onChange={(e) => { setEmail(e.target.value); setEmailError(null); }}
                 placeholder="Enter your email address"
-                disabled={isSaving}
-                autoComplete="email"
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all ${emailError ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}
+                disabled={isSaving} autoComplete="email"
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] transition-all ${emailError ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}
               />
               {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
             </div>
-            <div>
-              <label htmlFor="phone_number" className="block text-sm font-semibold text-slate-700 mb-2">Phone Number</label>
-              <input
-                id="phone_number"
-                name="phone_number"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Enter your phone number"
-                disabled={isSaving}
-                autoComplete="tel"
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] focus:border-transparent transition-all"
-              />
-            </div>
+
+            {/* ID (read-only) */}
             <div>
               <label htmlFor="user_id" className="block text-sm font-semibold text-slate-700 mb-2">
                 {isStudent ? 'Student ID' : 'Professor ID'}
               </label>
               <input
-                id="user_id"
-                name="user_id"
-                type="text"
-                value={userId}
-                disabled
-                autoComplete="off"
+                id="user_id" name="user_id" type="text" value={userId}
+                disabled autoComplete="off"
                 className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500"
               />
             </div>
@@ -862,13 +689,14 @@ const SettingsPage: React.FC = () => {
             <button
               onClick={handleSaveProfile}
               disabled={isSaving || !hasChanges}
-              className={`w-full font-semibold py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4 ${hasChanges ? 'bg-[#3F72B7] hover:bg-[#3565A3] text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
+              className={`w-full font-semibold py-3 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4 ${
+                hasChanges ? 'bg-[#3F72B7] hover:bg-[#3565A3] text-white' : 'bg-slate-300 text-slate-500'
+              }`}
             >
-              {isSaving ? (
-                <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div><span>Saving...</span></>
-              ) : (
-                <><Save className="w-5 h-5" /><span>Save Changes</span></>
-              )}
+              {isSaving
+                ? <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /><span>Saving...</span></>
+                : <><Save className="w-5 h-5" /><span>Save Changes</span></>
+              }
             </button>
             {!hasChanges && <p className="text-sm text-slate-500 text-center mt-2">Make changes to enable save button</p>}
           </div>
@@ -910,28 +738,22 @@ const SettingsPage: React.FC = () => {
             <div className="p-2 bg-blue-50 rounded-lg"><Bell className="w-5 h-5 text-[#3F72B7]" /></div>
             <h2 className="text-xl font-bold text-slate-900">Notifications</h2>
           </div>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200">
-              <div className="flex items-center gap-3">
-                <Bell className="w-5 h-5 text-slate-600" />
-                <div>
-                  <p className="font-semibold text-slate-900">Email Notifications</p>
-                  <p className="text-sm text-slate-500">Receive updates via email</p>
-                </div>
+          <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200">
+            <div className="flex items-center gap-3">
+              <Bell className="w-5 h-5 text-slate-600" />
+              <div>
+                <p className="font-semibold text-slate-900">Email Notifications</p>
+                <p className="text-sm text-slate-500">Receive updates via email</p>
               </div>
-              <label htmlFor="email_notifications" className="relative inline-flex items-center cursor-pointer">
-                <input
-                  id="email_notifications"
-                  name="email_notifications"
-                  title="Toggle email notifications"
-                  type="checkbox"
-                  checked={emailNotifications}
-                  onChange={() => setEmailNotifications(!emailNotifications)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F72B7]"></div>
-              </label>
             </div>
+            <label htmlFor="email_notifications" className="relative inline-flex items-center cursor-pointer">
+              <input
+                id="email_notifications" name="email_notifications" type="checkbox"
+                checked={emailNotifications} onChange={() => setEmailNotifications(!emailNotifications)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F72B7]"></div>
+            </label>
           </div>
         </div>
 
@@ -973,10 +795,10 @@ const SettingsPage: React.FC = () => {
           </div>
           <div className="space-y-4">
             {[
-              { icon: HelpCircle, label: 'Help Center', desc: 'Find answers to common questions', action: handleHelpCenter },
-              { icon: MessageCircle, label: 'Contact Support', desc: 'Get help from our support team', action: handleContactSupport },
-              { icon: FileText, label: 'Terms & Conditions', desc: 'Read our terms of services', action: handleTerms },
-              { icon: Eye, label: 'Privacy Policy', desc: 'Learn how we protect your data', action: handlePrivacy },
+              { icon: HelpCircle,    label: 'Help Center',       desc: 'Find answers to common questions',  action: () => navigate('/help-center') },
+              { icon: MessageCircle, label: 'Contact Support',   desc: 'Get help from our support team',    action: () => navigate('/contact') },
+              { icon: FileText,      label: 'Terms & Conditions',desc: 'Read our terms of services',        action: () => navigate('/terms-conditions') },
+              { icon: Eye,           label: 'Privacy Policy',    desc: 'Learn how we protect your data',    action: () => navigate('/privacy-policy') },
             ].map(({ icon: Icon, label, desc, action }) => (
               <button key={label} onClick={action} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg transition-all border border-slate-200">
                 <div className="flex items-center gap-3">
@@ -991,6 +813,7 @@ const SettingsPage: React.FC = () => {
             ))}
           </div>
         </div>
+
       </div>
     </div>
   );

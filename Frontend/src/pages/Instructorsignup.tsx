@@ -97,7 +97,7 @@ export default function ProfessorSignup() {
     if (formData.identityCard) data.append("identity_card", formData.identityCard);
 // http://127.0.0.1:8000
     try {
-      await axios.post("https://examguard-ai-production.up.railway.app/api/auth/register/professor/", data, {
+      await axios.post("http://127.0.0.1:8000/api/auth/register/professor/", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setSubmitted(true);

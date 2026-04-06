@@ -49,7 +49,7 @@ export default function Login() {
     setServerError("");
     // http://127.0.0.1:8000/api/auth/login/
     try {
-      const response = await axios.post("https://examguard-ai-production.up.railway.app/api/auth/login/", {
+      const response = await axios.post("http://127.0.0.1:8000/api/auth/login/", {
         email: formData.email.trim(),
         password: formData.password.trim(),
       });

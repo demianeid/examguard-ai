@@ -37,8 +37,7 @@ const CreateClass = () => {
 
     try {
       const token = localStorage.getItem('access_token');
-// http://127.0.0.1:8000
-      const response = await fetch('https://examguard-ai-production.up.railway.app/api/instructors/classes/', {
+      const response = await fetch('http://127.0.0.1:8000/api/instructors/classes/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

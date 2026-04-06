@@ -98,7 +98,7 @@ export default function StudentSignup() {
 
 // http://127.0.0.1:8000
     try {
-      await axios.post("https://examguard-ai-production.up.railway.app/api/auth/register/student/", data, {
+      await axios.post("http://127.0.0.1:8000/api/auth/register/student/", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
