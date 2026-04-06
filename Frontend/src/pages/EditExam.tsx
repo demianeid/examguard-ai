@@ -65,7 +65,7 @@ interface Student {
 // ============================================================
 // CONSTANTS
 // ============================================================
-const BASE_URL = "https://examguard-ai-production.up.railway.app/api/exam";
+const BASE_URL = "http://127.0.0.1:8000/api/exam";
 
 const typeToBackend: Record<string, string> = {
   "multiple-choice": "multiple_choice",
@@ -245,7 +245,7 @@ export default function EditExam() {
           setStudentsLoading(true);
           try {
             const studRes = await fetch(
-              `https://examguard-ai-production.up.railway.app/api/instructors/classes/${classId}/students/`,
+              `http://127.0.0.1:8000/api/instructors/classes/${classId}/students/`,
               { headers: { Authorization: `Bearer ${token}` } }
             );
             const studData = await studRes.json();

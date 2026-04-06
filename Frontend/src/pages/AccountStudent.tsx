@@ -59,7 +59,7 @@ const AccountStudent: React.FC = () => {
     }
 
     try {
-      const response = await fetch('https://examguard-ai-production.up.railway.app/api/auth/profile/', {
+      const response = await fetch('http://127.0.0.1:8000/api/auth/profile/', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -93,17 +93,14 @@ const AccountStudent: React.FC = () => {
   const handleEditProfile = () => navigate("/settings", { state: { from: 'student-account' } });
   const handleRefresh = () => { setLoading(true); setRefreshKey(prev => prev + 1); };
 
-  // // ─── Resolve image URL (Cloudinary URLs already start with https://) ───
-  // const getImageUrl = (url: string | null): string | null => {
-  //   if (!url) return null;
-  //   if (url.startsWith('https://') || url.startsWith('http://')) return url;
-  //   return `https://examguard-ai-production.up.railway.app${url}`;
-  // };
+  // ─── Resolve image URL for local server ───
   const getImageUrl = (url: string | null): string | null => {
-  if (!url) return null;
-  if (url.startsWith('https://res.cloudinary.com')) return url;
-  return null; // Old local path → show icon instead
-};
+    if (!url) return null;
+    // Already a full URL (http:// or https://)
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    // Relative path — prepend local backend base URL
+    return `http://127.0.0.1:8000${url}`;
+  };
 
   if (loading) {
     return (
@@ -187,8 +184,6 @@ const AccountStudent: React.FC = () => {
                     <img
                       src={getImageUrl(profile!.profile_image)!}
                       alt={profile!.full_name}
-                      crossOrigin="anonymous"      // ✅ Fix CORB issue
-                      referrerPolicy="no-referrer" // ✅ Extra safety
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         // Fallback to icon if image fails to load

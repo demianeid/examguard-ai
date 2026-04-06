@@ -6,27 +6,20 @@ from pathlib import Path
 from datetime import timedelta
 import os
 from decouple import config
-import dj_database_url
-import cloudinary
-
-# ─── Fix for headless server (no display) ─────────────────────────
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-os.environ.setdefault("MPLBACKEND", "Agg")
-os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "0")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ─── Security ─────────────────────────────────────────────────────
 SECRET_KEY    = config('SECRET_KEY')
-DEBUG         = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost', cast=lambda v: [s.strip() for s in v.split(',')])
+DEBUG         = config('DEBUG', default=True, cast=bool)
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # ─── CORS ─────────────────────────────────────────────────────────
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True
-
-CORS_ALLOW_METHODS = [
-    'DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT',
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 CORS_ALLOW_HEADERS = [
     'accept',
@@ -40,8 +33,6 @@ CORS_ALLOW_HEADERS = [
 
 # ─── CSRF ─────────────────────────────────────────────────────────
 CSRF_TRUSTED_ORIGINS = [
-    "https://examguard-ai-production.up.railway.app",
-    "https://examguard-os7m704jx-marwa-diabs-projects.vercel.app",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
@@ -53,9 +44,6 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'cloudinary_storage',
-    'cloudinary',
-    'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -65,17 +53,12 @@ INSTALLED_APPS = [
     'instructors',
     'exam',
     'student',
-    #Hardware
-    'hardware.offline_monitoring',
-    'hardware.ai_detection',
-    'hardware.camera_stream',
 ]
 
 # ─── Middleware ───────────────────────────────────────────────────
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -84,8 +67,8 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF      = 'backend.urls'
-WSGI_APPLICATION  = 'backend.wsgi.application'
+ROOT_URLCONF     = 'backend.urls'
+WSGI_APPLICATION = 'backend.wsgi.application'
 
 TEMPLATES = [
     {
@@ -104,26 +87,16 @@ TEMPLATES = [
 ]
 
 # ─── Database ─────────────────────────────────────────────────────
-DATABASE_URL = config('DATABASE_URL', default=None)
-
-if DATABASE_URL:
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=DATABASE_URL,
-            conn_max_age=600
-        )
+DATABASES = {
+    'default': {
+        'ENGINE':   config('DB_ENGINE',   default='django.db.backends.postgresql'),
+        'NAME':     config('DB_NAME',     default='examguard_db'),
+        'USER':     config('DB_USER',     default='postgres'),
+        'PASSWORD': config('DB_PASSWORD', default=''),
+        'HOST':     config('DB_HOST',     default='localhost'),
+        'PORT':     config('DB_PORT',     default='5432'),
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE':   config('DB_ENGINE',   default='django.db.backends.postgresql'),
-            'NAME':     config('DB_NAME',     default='examguard_db'),
-            'USER':     config('DB_USER',     default='postgres'),
-            'PASSWORD': config('DB_PASSWORD', default=''),
-            'HOST':     config('DB_HOST',     default='localhost'),
-            'PORT':     config('DB_PORT',     default='5432'),
-        }
-    }
+}
 
 # ─── Auth ─────────────────────────────────────────────────────────
 AUTH_USER_MODEL = 'authentication.BaseUser'
@@ -156,11 +129,14 @@ TIME_ZONE     = 'UTC'
 USE_I18N      = True
 USE_TZ        = True
 
-# ─── Static ───────────────────────────────────────────────────────
-STATIC_URL          = '/static/'
-STATIC_ROOT         = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
-DEFAULT_AUTO_FIELD  = 'django.db.models.BigAutoField'
+# ─── Static & Media ───────────────────────────────────────────────
+STATIC_URL  = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+MEDIA_URL  = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ─── Email ────────────────────────────────────────────────────────
 EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
@@ -170,21 +146,3 @@ EMAIL_USE_TLS       = config('EMAIL_USE_TLS',       default=True, cast=bool)
 EMAIL_HOST_USER     = config('EMAIL_HOST_USER',     default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL',  default='ExamGuard <noreply@examguard.com>')
-
-# ─── Cloudinary Storage ───────────────────────────────────────────
-CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME', default=''),
-    'API_KEY':    config('CLOUDINARY_API_KEY',    default=''),
-    'API_SECRET': config('CLOUDINARY_API_SECRET', default=''),
-    'SECURE':     True,
-    'MEDIA_TAG':  'media',
-}
-
-cloudinary.config(
-    cloud_name = config('CLOUDINARY_CLOUD_NAME', default=''),
-    api_key    = config('CLOUDINARY_API_KEY',    default=''),
-    api_secret = config('CLOUDINARY_API_SECRET', default=''),
-    secure     = True,
-)
-
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'

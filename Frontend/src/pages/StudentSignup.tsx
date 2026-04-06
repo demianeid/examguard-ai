@@ -1,342 +1,229 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  ScanFace, Camera, CheckCircle, AlertTriangle,
-  RefreshCw, Loader2, UserCheck, UserX, Shield,
-  ChevronLeft, Info
-} from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { ArrowLeft, Upload } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import Header from "../components/Header";
+import { Link } from "react-router-dom";
+import axios, { AxiosError } from "axios";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type RegisterStatus =
-  | 'idle'
-  | 'requesting-camera'
-  | 'scanning'
-  | 'registering'
-  | 'success'
-  | 'failed'
-  | 'camera-error';
+interface DjangoErrorData {
+  [key: string]: string[];
+}
 
-// ─── Component ────────────────────────────────────────────────────────────────
-const FaceRegister: React.FC = () => {
+export default function StudentSignup() {
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+    profileImage: null as File | null,
+  });
+
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState("");
   const navigate = useNavigate();
-  const token = localStorage.getItem('access_token');
 
-  // جيب student_id من الـ JWT
-  const studentId = (() => {
-    try {
-      const payload = JSON.parse(atob(token!.split('.')[1]));
-      return payload.custom_id as string;
-    } catch {
-      return null;
+  // Cleanup object URL to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (formData.profileImage) {
+        URL.revokeObjectURL(URL.createObjectURL(formData.profileImage));
+      }
+    };
+  }, [formData.profileImage]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const validTypes = ["image/png", "image/jpeg", "image/jpg"];
+
+      if (!validTypes.includes(file.type)) {
+        setErrors({ ...errors, profileImage: "Invalid file type. Please use PNG or JPG." });
+        return;
+      }
+      if (file.size > 3 * 1024 * 1024) {
+        setErrors({ ...errors, profileImage: "File size exceeds 3MB." });
+        return;
+      }
+
+      setErrors({ ...errors, profileImage: "" });
+      setFormData({ ...formData, profileImage: file });
     }
-  })();
+  };
 
-  const [status, setStatus] = useState<RegisterStatus>('idle');
-  const [message, setMessage] = useState('');
-  const [attempts, setAttempts] = useState(0);
-  const MAX_ATTEMPTS = 3;
+  const validate = () => {
+    const newErrors: { [key: string]: string } = {};
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+    if (!formData.firstName.trim()) newErrors.firstName = "First name is required.";
+    if (!formData.lastName.trim()) newErrors.lastName = "Last name is required.";
+    if (!formData.email.trim()) newErrors.email = "Email is required.";
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = "Invalid email address.";
+    if (!formData.phone.trim()) newErrors.phone = "Phone number is required.";
+    if (!formData.password) newErrors.password = "Password is required.";
+    else if (formData.password.length < 6) newErrors.password = "Min 6 characters.";
+    if (formData.confirmPassword !== formData.password) newErrors.confirmPassword = "Passwords do not match.";
+    if (!formData.profileImage) newErrors.profileImage = "Profile image is required.";
 
-  // ── Camera helpers ──────────────────────────────────────────────────────────
-  const startCamera = useCallback(async () => {
-    setStatus('requesting-camera');
-    setMessage('');
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    setLoading(true);
+    setServerError("");
+
+    const data = new FormData();
+    // These keys MUST match your Django Serializer fields exactly
+    data.append("first_name", formData.firstName);
+    data.append("last_name", formData.lastName);
+    data.append("email", formData.email); // FIXED: Changed from "Email address"
+    data.append("phone_number", formData.phone);
+    data.append("password", formData.password);
+    data.append("role", "student"); // Good practice to include the role explicitly
+
+    if (formData.profileImage) {
+      data.append("profile_image", formData.profileImage);
+    }
+
+// http://127.0.0.1:8000
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: 'user' },
+      await axios.post("http://127.0.0.1:8000/api/auth/register/student/", data, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+
+      navigate("/Login");
+    } catch (err: unknown) {
+      const axiosError = err as AxiosError<DjangoErrorData>;
+      const errorData = axiosError.response?.data;
+      let message = "Registration failed. Please try again.";
+
+      if (errorData) {
+        // Extract the first error message from the dictionary
+        const firstErrorKey = Object.keys(errorData)[0];
+        const errorVal = errorData[firstErrorKey];
+        message = `${firstErrorKey}: ${Array.isArray(errorVal) ? errorVal[0] : errorVal}`;
       }
-      setStatus('scanning');
-    } catch {
-      setStatus('camera-error');
-      setMessage('Camera access was denied. Please allow camera permissions and try again.');
+      setServerError(message);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
 
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-  }, []);
-
-  const captureFrame = useCallback((): string | null => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return null;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    ctx.drawImage(video, 0, 0);
-    return canvas.toDataURL('image/jpeg', 0.85);
-  }, []);
-
-  // Stop camera when leaving
-  useEffect(() => () => stopCamera(), [stopCamera]);
-
-  // ── Register ────────────────────────────────────────────────────────────────
-  const handleRegister = useCallback(async () => {
-    if (status !== 'scanning') return;
-    const image = captureFrame();
-    if (!image) return;
-
-    setStatus('registering');
-    setMessage('');
-
-    try {
-      const response = await fetch(
-        'https://examguard-ai-production.up.railway.app/api/student/face/register/',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ student_id: studentId, image }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage(data.message || 'Face registered successfully!');
-        setStatus('success');
-        stopCamera();
-      } else {
-        setMessage(data.message || 'Registration failed. Please try again.');
-        setStatus('failed');
-        setAttempts(prev => prev + 1);
-      }
-    } catch {
-      setMessage('Connection error. Please check your internet and try again.');
-      setStatus('failed');
-      setAttempts(prev => prev + 1);
-    }
-  }, [status, captureFrame, studentId, token, stopCamera]);
-
-  const handleRetry = useCallback(() => {
-    setMessage('');
-    setStatus('scanning');
-  }, []);
-
-  const attemptsLeft = MAX_ATTEMPTS - attempts;
-  const isMaxAttempts = attempts >= MAX_ATTEMPTS;
-
-  // ── Border colour by status ─────────────────────────────────────────────────
-  const borderColor =
-    status === 'success' ? 'border-emerald-500' :
-    status === 'failed' ? 'border-red-500' :
-    status === 'registering' ? 'border-amber-400' :
-    'border-blue-500';
-
-  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-6">
+    <div className="bg-background px-4 py-8 md:p-20">
+      <Header hideSignup={true} />
 
-      {/* Card */}
-      <div className="w-full max-w-lg bg-slate-800/70 backdrop-blur-xl border border-slate-700 rounded-3xl shadow-2xl overflow-hidden">
+      <div className="min-h-screen bg-background px-4 py-6 md:px-8">
+        <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-8">
+          <Link to="/Signup" className="flex items-center gap-2 text-gray-600 mb-6 hover:text-gray-800">
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm">Back to role selection</span>
+          </Link>
 
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
-          <button
-            onClick={() => { stopCamera(); navigate(-1); }}
-            className="flex items-center gap-1 text-blue-100 hover:text-white text-sm mb-4 transition-colors"
-          >
-            <ChevronLeft size={16} /> Back
-          </button>
-          <div className="flex items-center gap-4">
-            <div className="bg-white/20 p-3 rounded-2xl">
-              <ScanFace className="w-8 h-8 text-white" />
+          <div className="flex flex-col items-center">
+            <div className="w-28 h-28 md:w-40 md:h-40 rounded-full bg-blue-100 flex items-center justify-center mb-4 shadow-lg overflow-hidden border-4 border-white">
+              <img
+                src={formData.profileImage ? URL.createObjectURL(formData.profileImage) : "/images/slogin.png"}
+                alt="Avatar"
+                className="w-full h-full object-cover"
+              />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">Face Registration</h1>
-              <p className="text-blue-100 text-sm mt-0.5">
-                Register your face for secure exam verification
+
+            <h1 className="text-2xl md:text-3xl font-bold text-primary mb-1 text-center uppercase">Let's Get Started</h1>
+            <p className="text-primary font-semibold mb-6 md:mb-8 text-center uppercase">Student Sign Up</p>
+
+            {serverError && (
+              <div className="w-full max-w-2xl bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6 text-center text-sm">
+                {serverError}
+              </div>
+            )}
+
+            <div className="w-full max-w-2xl">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-left text-sm text-gray-600 mb-1">First name *</label>
+                  <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="John"
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${errors.firstName ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
+                  {errors.firstName && <p className="text-red-500 text-xs mt-1 text-left">{errors.firstName}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-left text-sm text-gray-600 mb-1">Last name *</label>
+                  <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Doe"
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${errors.lastName ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
+                  {errors.lastName && <p className="text-red-500 text-xs mt-1 text-left">{errors.lastName}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-left text-sm text-gray-600 mb-1">Email *</label>
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="example@mail.com"
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${errors.email ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
+                  {errors.email && <p className="text-red-500 text-xs mt-1 text-left">{errors.email}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-left text-sm text-gray-600 mb-1">Phone *</label>
+                  <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="0123456789"
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${errors.phone ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
+                  {errors.phone && <p className="text-red-500 text-xs mt-1 text-left">{errors.phone}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-left text-sm text-gray-600 mb-1">Password *</label>
+                  <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="••••••••"
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${errors.password ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
+                  {errors.password && <p className="text-red-500 text-xs mt-1 text-left">{errors.password}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-left text-sm text-gray-600 mb-1">Confirm Password *</label>
+                  <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} placeholder="••••••••"
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 ${errors.confirmPassword ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:ring-blue-500"}`} />
+                  {errors.confirmPassword && <p className="text-red-500 text-xs mt-1 text-left">{errors.confirmPassword}</p>}
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-left text-sm text-gray-600 mb-2 font-medium">Upload Profile Image *</label>
+                <label className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50 hover:border-blue-400 transition cursor-pointer flex flex-col items-center justify-center">
+                  <Upload className="w-8 h-8 text-blue-500 mb-2" />
+                  <span className="text-sm text-gray-600 italic">
+                    {formData.profileImage ? formData.profileImage.name : "Click to upload avatar"}
+                  </span>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                </label>
+                {errors.profileImage && <p className="text-red-500 text-xs mt-1 text-left">{errors.profileImage}</p>}
+              </div>
+
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className={`w-full text-white py-3 rounded-lg font-bold transition shadow-md ${
+                  loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                }`}
+              >
+                {loading ? "CREATING ACCOUNT..." : "SIGN UP"}
+              </button>
+
+              <p className="text-center mt-4 text-sm text-gray-600">
+                Already Have An Account?{" "}
+                <Link to="/Login" className="text-blue-600 font-bold hover:underline">Sign In</Link>
               </p>
             </div>
           </div>
         </div>
-
-        <div className="px-8 py-6 space-y-6">
-
-          {/* Info Banner */}
-          <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
-            <Info size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
-            <p className="text-blue-200 text-sm leading-relaxed">
-              Your face data is stored securely and used only for identity verification
-              during exams. Make sure you're in a well-lit environment.
-            </p>
-          </div>
-
-          {/* Camera View */}
-          <div className={`relative rounded-2xl overflow-hidden bg-slate-900 aspect-video border-4 transition-all duration-300 ${borderColor}`}>
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              style={{ transform: 'scaleX(-1)' }}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${
-                ['registering', 'success', 'failed'].includes(status) ? 'opacity-30' : 'opacity-100'
-              }`}
-            />
-            <canvas ref={canvasRef} className="hidden" />
-
-            {/* Overlays */}
-            {status === 'scanning' && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                {/* Face oval guide */}
-                <div className="w-44 h-56 border-4 border-blue-400 rounded-full opacity-70 animate-pulse" />
-                <div className="absolute bottom-4 left-0 right-0 text-center">
-                  <span className="bg-black/60 text-white text-xs px-3 py-1.5 rounded-full">
-                    Position your face in the oval
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {status === 'requesting-camera' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
-                <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
-                <p className="text-white text-sm">Starting camera...</p>
-              </div>
-            )}
-
-            {status === 'registering' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                <Loader2 className="w-12 h-12 text-amber-400 animate-spin" />
-                <p className="text-white font-semibold text-lg">Registering Face...</p>
-                <p className="text-slate-300 text-sm">Please hold still</p>
-              </div>
-            )}
-
-            {status === 'success' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                <div className="bg-emerald-500/20 p-4 rounded-full">
-                  <UserCheck className="w-14 h-14 text-emerald-400" />
-                </div>
-                <p className="text-white font-bold text-xl">Registration Successful!</p>
-                <p className="text-slate-300 text-sm text-center px-6">{message}</p>
-              </div>
-            )}
-
-            {status === 'failed' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                <div className="bg-red-500/20 p-4 rounded-full">
-                  <UserX className="w-14 h-14 text-red-400" />
-                </div>
-                <p className="text-white font-bold text-xl">Registration Failed</p>
-                <p className="text-slate-300 text-sm text-center px-6">{message}</p>
-              </div>
-            )}
-
-            {status === 'camera-error' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
-                <Camera className="w-12 h-12 text-slate-500" />
-                <p className="text-white font-semibold">Camera Access Denied</p>
-                <p className="text-slate-400 text-xs text-center px-6">{message}</p>
-              </div>
-            )}
-
-            {status === 'idle' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900">
-                <Camera className="w-12 h-12 text-slate-600" />
-                <p className="text-slate-400 text-sm">Camera not started</p>
-              </div>
-            )}
-
-            {/* Attempts badge */}
-            {attempts > 0 && status !== 'success' && (
-              <div className={`absolute top-3 right-3 text-white text-xs px-2.5 py-1 rounded-full font-medium shadow ${
-                isMaxAttempts ? 'bg-red-600' : 'bg-orange-500'
-              }`}>
-                {isMaxAttempts ? 'No attempts left' : `${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} left`}
-              </div>
-            )}
-          </div>
-
-          {/* Tips (only when scanning) */}
-          {status === 'scanning' && (
-            <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4">
-              <h3 className="font-semibold text-slate-200 text-sm mb-2 flex items-center gap-2">
-                <ScanFace size={16} className="text-blue-400" /> Tips for best results
-              </h3>
-              <ul className="text-slate-400 text-sm space-y-1">
-                <li>• Make sure your face is well-lit from the front</li>
-                <li>• Look directly at the camera lens</li>
-                <li>• Remove glasses or hat if possible</li>
-                <li>• Keep your face centered in the oval guide</li>
-              </ul>
-            </div>
-          )}
-
-          {/* Max attempts warning */}
-          {isMaxAttempts && status === 'failed' && (
-            <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl p-4">
-              <AlertTriangle className="text-red-400 flex-shrink-0 mt-0.5" size={18} />
-              <div>
-                <p className="text-red-300 font-semibold text-sm">Maximum attempts reached</p>
-                <p className="text-red-400 text-xs mt-1">
-                  Please ensure your profile photo is clear and contact your instructor if the problem persists.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            {(status === 'idle' || status === 'camera-error') && (
-              <button
-                onClick={startCamera}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
-              >
-                <Camera size={20} /> Start Camera
-              </button>
-            )}
-
-            {status === 'scanning' && (
-              <button
-                onClick={handleRegister}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
-              >
-                <ScanFace size={20} /> Register My Face
-              </button>
-            )}
-
-            {status === 'failed' && !isMaxAttempts && (
-              <button
-                onClick={handleRetry}
-                className="flex-1 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
-              >
-                <RefreshCw size={18} /> Try Again
-              </button>
-            )}
-
-            {status === 'success' && (
-              <button
-                onClick={() => navigate(-1)}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
-              >
-                <CheckCircle size={20} /> Done — Go Back
-              </button>
-            )}
-          </div>
-
-          {/* Footer */}
-          <p className="text-center text-xs text-slate-500 flex items-center justify-center gap-1">
-            <Shield size={12} /> Face data is encrypted and stored securely
-          </p>
-
-        </div>
       </div>
     </div>
   );
-};
-
-export default FaceRegister;
+}

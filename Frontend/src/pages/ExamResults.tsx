@@ -39,7 +39,7 @@ const ExamResults: React.FC = () => {
       setLoading(true);
       // http://localhost:8000
       try {
-        const res = await fetch(`https://examguard-ai-production.up.railway.app/api/exam/${examId}/results/`, {
+        const res = await fetch(`http://localhost:8000/api/exam/${examId}/results/`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (!res.ok) throw new Error('Failed to load results');

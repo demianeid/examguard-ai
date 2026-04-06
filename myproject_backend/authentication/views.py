@@ -7,10 +7,24 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .serializers import StudentRegisterSerializer, ProfessorRegisterSerializer
+from .serializers import (
+    StudentRegisterSerializer,
+    ProfessorRegisterSerializer,
+    ProfileSerializer,
+    ProfileUpdateSerializer,
+)
 from .models import BaseUser
+
+
+# ─── Shared helper ────────────────────────────────────────────────
+def build_image_url(request, image_field):
+    if not image_field:
+        return None
+    return request.build_absolute_uri(image_field.url)
+
 
 # ─── Student Register ─────────────────────────────────────────────
 class StudentRegisterView(APIView):
@@ -25,10 +39,11 @@ class StudentRegisterView(APIView):
                 "data": {
                     "student_id":    user.custom_id,
                     "username":      user.username,
-                    "profile_image": user.profile_image.url if user.profile_image else None
+                    "profile_image": build_image_url(request, user.profile_image),
                 }
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 # ─── Professor Register ───────────────────────────────────────────
 class ProfessorRegisterView(APIView):
@@ -43,10 +58,11 @@ class ProfessorRegisterView(APIView):
                 "data": {
                     "professor_id":  user.custom_id,
                     "full_name":     user.get_full_name(),
-                    "profile_image": user.profile_image.url if user.profile_image else None
+                    "profile_image": build_image_url(request, user.profile_image),
                 }
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 # ─── Login ────────────────────────────────────────────────────────
 class LoginView(APIView):
@@ -57,7 +73,6 @@ class LoginView(APIView):
         if not email or not password:
             return Response({"detail": "Email and password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Updated to use 'email'
         user = BaseUser.objects.filter(email=email).first()
 
         if not user or not user.check_password(password):
@@ -77,6 +92,40 @@ class LoginView(APIView):
             "id":        user.custom_id,
         }, status=status.HTTP_200_OK)
 
+
+# ─── Profile (GET) ────────────────────────────────────────────────
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = ProfileSerializer(request.user, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# ─── Profile Update (PUT / PATCH) ────────────────────────────────
+class ProfileUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes     = (MultiPartParser, FormParser)
+
+    def patch(self, request):
+        serializer = ProfileUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({
+                "message":       "Profile updated successfully!",
+                "profile_image": build_image_url(request, user.profile_image),
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        return self.patch(request)
+
+
 # ─── Forget Password ──────────────────────────────────────────────
 class ForgetPasswordView(APIView):
     def post(self, request):
@@ -88,7 +137,7 @@ class ForgetPasswordView(APIView):
         if not user:
             return Response({"error": "This email is not registered."}, status=status.HTTP_404_NOT_FOUND)
 
-        otp = str(random.randint(100000, 999999))
+        otp             = str(random.randint(100000, 999999))
         user.otp_code   = otp
         user.otp_expiry = timezone.now() + timedelta(seconds=70)
         user.save()
@@ -98,12 +147,13 @@ class ForgetPasswordView(APIView):
                 'ExamGuard - Reset Code',
                 f'Hello {user.first_name},\n\nYour password reset code is: {otp}\nValid for 60 seconds.',
                 settings.EMAIL_HOST_USER,
-                [user.email], 
+                [user.email],
                 fail_silently=False,
             )
             return Response({"message": "OTP sent to your email."}, status=status.HTTP_200_OK)
         except Exception:
             return Response({"error": "Failed to send email."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 # ─── Verify OTP ───────────────────────────────────────────────────
 class VerifyOtpView(APIView):
@@ -122,6 +172,7 @@ class VerifyOtpView(APIView):
             return Response({"error": "OTP has expired. Please request a new one."}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({"message": "OTP verified successfully."}, status=status.HTTP_200_OK)
+
 
 # ─── Reset Password ───────────────────────────────────────────────
 class ResetPasswordView(APIView):

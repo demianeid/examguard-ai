@@ -9,8 +9,8 @@ import {
   Trash2, Filter, MoreVertical, Download, Settings, ChevronDown, Search
 } from "lucide-react";
 
-const BASE_URL = 'https://examguard-ai-production.up.railway.app/api/instructors';
-const PROFILE_URL = 'https://examguard-ai-production.up.railway.app/api/auth/profile/';
+const BASE_URL = 'http://127.0.0.1:8000/api/instructors';
+const PROFILE_URL = 'http://127.0.0.1:8000/api/auth/profile/';
 const getToken = () => localStorage.getItem('access_token');
 
 const apiRequest = async (url: string, options: RequestInit = {}) => {
@@ -251,7 +251,7 @@ const ClassesInstructor = () => {
   const fetchExams = async (id: number) => {
     setExamsLoading(true);
     try {
-      const data = await apiRequest(`https://examguard-ai-production.up.railway.app/api/exam/class/${id}/`);
+      const data = await apiRequest(`http://127.0.0.1:8000/api/exam/class/${id}/`);
 
       const now = new Date();
       const withStatus = data.map((exam: any) => {
@@ -351,7 +351,7 @@ const ClassesInstructor = () => {
     setIsSubmitting(true);
     try {
       await fetch(
-        `https://examguard-ai-production.up.railway.app/api/exam/${deleteExamConfirmation.examId}/`,
+        `http://localhost:8000/api/exam/${deleteExamConfirmation.examId}/`,
         { method: 'DELETE', headers: { 'Authorization': `Bearer ${getToken()}` } }
       );
       setExams(prev => prev.filter(e => e.id !== deleteExamConfirmation.examId));
