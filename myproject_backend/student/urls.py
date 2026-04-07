@@ -1,6 +1,4 @@
 from django.urls import path
-from django.urls import path
-from . import face_views
 from .views import (
     StudentClassesView,
     JoinClassView,
@@ -12,7 +10,6 @@ from .views import (
     StudentExamResultView,
     StudentClassGradesView,
 )
-from .face_views import face_register, face_verify, get_students
 
 urlpatterns = [
     path('classes/',                              StudentClassesView.as_view(),    name='student-classes'),
@@ -28,5 +25,4 @@ urlpatterns = [
     # path('face/register/', face_views.face_register, name='face-register'),
     # path('face/verify/', face_views.face_verify, name='face-verify'),
     # path('face/students/', face_views.get_students, name='get-students'),
-
 ]

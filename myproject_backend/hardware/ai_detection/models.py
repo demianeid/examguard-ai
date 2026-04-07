@@ -17,7 +17,7 @@ class MonitoringSession(models.Model):
     status     = models.CharField(max_length=20, choices=STATUS_CHOICES, default='running')
 
     class Meta:
-        db_table = 'monitoring_sessions'
+        db_table = 'H_monitoring_sessions'
 
     def __str__(self):
         return f"Session - {self.exam.title}"
@@ -50,7 +50,7 @@ class Alert(models.Model):
     snapshot   = models.ImageField(upload_to='alerts/snapshots/', null=True, blank=True)
 
     class Meta:
-        db_table = 'alerts'
+        db_table = 'H_alerts'
         ordering = ['-timestamp']
 
     def __str__(self):
@@ -59,11 +59,7 @@ class Alert(models.Model):
 
 class ViolationLog(models.Model):
     """السجل النهائي لكل طالب بعد الامتحان"""
-    student          = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='violations'
-    )
+    zone             = models.ForeignKey(StudentZone, on_delete=models.CASCADE, related_name='violations')
     session          = models.ForeignKey(MonitoringSession, on_delete=models.CASCADE, related_name='violations')
     total_alerts     = models.PositiveIntegerField(default=0)
     high_severity    = models.PositiveIntegerField(default=0)
@@ -74,8 +70,8 @@ class ViolationLog(models.Model):
     created_at       = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'violation_logs'
-        unique_together = ['student', 'session']
+        db_table = 'H_violation_logs'
+        unique_together = ['zone', 'session']
 
     def __str__(self):
-        return f"{self.student} - Score: {self.violation_score}"
+        return f"Seat {self.zone.seat_number} - Score: {self.violation_score}"

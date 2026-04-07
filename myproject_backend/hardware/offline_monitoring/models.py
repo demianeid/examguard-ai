@@ -11,7 +11,7 @@ class ExamHall(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'exam_halls'
+        db_table = 'H_exam_halls'
 
     def __str__(self):
         return f"{self.name} - {self.building}"
@@ -32,7 +32,7 @@ class Camera(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'cameras'
+        db_table = 'H_cameras'
 
     def __str__(self):
         return f"{self.name} - {self.hall.name}"
@@ -61,7 +61,7 @@ class OfflineExam(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'offline_exams'
+        db_table = 'H_offline_exams'
 
     def __str__(self):
         return f"{self.title} - {self.hall.name}"
@@ -77,14 +77,13 @@ class StudentZone(models.Model):
         related_name='zones'
     )
     seat_number = models.CharField(max_length=20)
-    # الـ rectangle coordinates
     x1 = models.IntegerField()
     y1 = models.IntegerField()
     x2 = models.IntegerField()
     y2 = models.IntegerField()
 
     class Meta:
-        db_table = 'student_zones'
+        db_table = 'H_student_zones'
 
     def __str__(self):
         return f"Seat {self.seat_number} - {self.student}"

@@ -16,11 +16,11 @@ class StreamSession(models.Model):
     ended_at   = models.DateTimeField(null=True, blank=True)
     status     = models.CharField(max_length=20, choices=STATUS_CHOICES, default='connecting')
     fps        = models.FloatField(default=0)
-    resolution = models.CharField(max_length=20, blank=True, null=True)  # e.g. "1920x1080"
+    resolution = models.CharField(max_length=20, blank=True, null=True)
     error_log  = models.TextField(blank=True, null=True)
 
     class Meta:
-        db_table = 'stream_sessions'
+        db_table = 'H_stream_sessions'
         ordering = ['-started_at']
 
     def __str__(self):
