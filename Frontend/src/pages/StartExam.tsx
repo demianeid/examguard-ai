@@ -455,8 +455,7 @@ const ExamInterface: React.FC = () => {
   const payload = JSON.parse(atob(token!.split('.')[1]));
   const studentId = payload.custom_id;
 
-  const response = await fetch('https://examguard-ai-production.up.railway.app/api/student/face/verify/', {
-    method: 'POST',
+const response = await fetch('http://localhost:8000/api/student/face/verify/', {    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,

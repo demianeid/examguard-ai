@@ -19,7 +19,7 @@ import {
   Search,
 } from "lucide-react";
 
-const BASE_URL = 'https://examguard-ai-production.up.railway.app';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const getToken = () => localStorage.getItem('access_token');
 
 interface ExamFormData {

@@ -37,6 +37,7 @@ class StudentRegisterView(APIView):
             return Response({
                 "message": "Student registered successfully!",
                 "data": {
+                    "id":            user.id,
                     "student_id":    user.custom_id,
                     "username":      user.username,
                     "profile_image": build_image_url(request, user.profile_image),

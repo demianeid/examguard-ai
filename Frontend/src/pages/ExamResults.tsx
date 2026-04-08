@@ -57,16 +57,15 @@ const ExamResults: React.FC = () => {
 
 const handleViewProfile = (student: StudentResult) => {
   navigate(`/instructor/student-profile/${student.student_id}`, {
-    state: {
-      studentData: {
-        full_name: student.student_name,
-        student_custom_id: student.student_id,
-        profile_image: student.profile_image
-          ? `https://examguard-ai-production.up.railway.app${student.profile_image}`
-          : null,
-      }
-      // http://localhost:8000
-    }
+   state: {
+  studentData: {
+    full_name: student.student_name,
+    student_custom_id: student.student_id,
+    profile_image: student.profile_image
+      ? `http://localhost:8000${student.profile_image}`
+      : null,
+  }
+}
   });
 };
   const handleExportResults = () => {
@@ -252,10 +251,10 @@ const handleViewProfile = (student: StudentResult) => {
                             <div className="flex items-center gap-3">
                               {student.profile_image ? (
   <img
-    src={`https://examguard-ai-production.up.railway.app${student.profile_image}`}
-    alt={student.student_name}
-    className="w-10 h-10 rounded-full object-cover border-2 border-blue-100"
-  />
+  src={`http://localhost:8000${student.profile_image}`}
+  alt={student.student_name}
+  className="w-10 h-10 rounded-full object-cover border-2 border-blue-100"
+/>
   // http://localhost:8000
 ) : (
   <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">

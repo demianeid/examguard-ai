@@ -37,6 +37,10 @@ urlpatterns = [
     path('api/hardware/monitoring/', include('hardware.offline_monitoring.urls')),
     path('api/hardware/detection/',  include('hardware.ai_detection.urls')),
     path('api/hardware/stream/',     include('hardware.camera_stream.urls')),
+
+    #face
+    path("", include("face.urls")),
+
 ]
 # Serve media files in development
 if settings.DEBUG:

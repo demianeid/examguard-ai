@@ -69,7 +69,7 @@ def _send_email(subject, html_content, to_email):
     try:
         send_mail(
             subject=subject,
-            message="", 
+            message="",
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[to_email],
             html_message=html_content,
@@ -90,6 +90,12 @@ class StudentProfile(models.Model):
         limit_choices_to={'role': 'student'}
     )
 
+    # ─── Face Embedding ──────────────────────────────────────────
+    # بيتحفظ هنا بعد التسجيل مباشرة من face/views.py → register_face
+    # JSON list من 512 رقم ناتجة من InsightFace buffalo_l
+    # بيُستخدم وقت الامتحان للمقارنة مع الـ live image
+    face_embedding = models.TextField(blank=True, null=True)
+
     class Meta:
         db_table = 'student_profiles'
         verbose_name = 'Student'
@@ -100,7 +106,7 @@ class StudentProfile(models.Model):
         subject = 'Welcome to ExamGuard — Your Academic Account is Ready'
         password_display = raw_password or "[Your provided password]"
 
-        html_content = html_content = f"""
+        html_content = f"""
         <!DOCTYPE html>
         <html>
         <head><meta charset="UTF-8"></head>

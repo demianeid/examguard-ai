@@ -21,8 +21,4 @@ urlpatterns = [
     path('exams/<int:exam_id>/start/',            StudentExamStartView.as_view(),  name='student-exam-start'),
     path('exams/<int:exam_id>/submit/',           StudentExamSubmitView.as_view(), name='student-exam-submit'),
     path('exams/<int:exam_id>/result/',           StudentExamResultView.as_view(), name='student-exam-result'),
-
-    # path('face/register/', face_views.face_register, name='face-register'),
-    # path('face/verify/', face_views.face_verify, name='face-verify'),
-    # path('face/students/', face_views.get_students, name='get-students'),
 ]

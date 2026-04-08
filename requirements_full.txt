@@ -1,0 +1,91 @@
+# ==============================================================
+# SECTION 1 — BASE ENVIRONMENT PACKAGES
+# General-purpose packages already in the environment
+# ==============================================================
+
+# ── HTTP & Networking ─────────────────────────────────────────
+certifi==2025.11.12
+charset-normalizer==3.4.4
+idna==3.11
+requests==2.32.5
+urllib3==2.6.2
+
+# ── Computer Vision ───────────────────────────────────────────
+numpy==2.3.5
+opencv-python==4.12.0.88
+pillow==12.0.0
+
+# ── Utilities ─────────────────────────────────────────────────
+joblib==1.5.2
+packaging==25.0
+python-dateutil==2.9.0.post0
+pytz==2025.2
+six==1.17.0
+threadpoolctl==3.6.0
+typing_extensions==4.15.0
+tzdata==2025.2
+
+
+# ==============================================================
+# SECTION 2 — FACE APP PACKAGES
+# Installed for face recognition & ID card verification
+# (myproject_backend/face app)
+# Install with: pip install insightface onnxruntime torch transformers
+# ==============================================================
+
+# ── Face Recognition (InsightFace) ────────────────────────────
+insightface==0.7.3
+onnx==1.21.0
+onnxruntime==1.24.4
+easydict==1.13
+Cython==3.2.4
+prettytable==3.17.0
+opencv-python-headless==4.13.0.92
+
+# ── Image Processing (InsightFace deps) ───────────────────────
+albumentations==2.0.8
+albucore==0.0.24
+scikit-image==0.26.0
+ImageIO==2.37.3
+tifffile==2026.3.3
+lazy-loader==0.5
+simsimd==6.5.16
+stringzilla==4.6.0
+
+# ── PyTorch ───────────────────────────────────────────────────
+torch==2.11.0
+sympy==1.14.0
+mpmath==1.3.0
+networkx==3.6.1
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+PyYAML==6.0.3
+filelock==3.25.2
+fsspec==2026.3.0
+
+# ── HuggingFace Transformers (CLIP — ID card detection) ───────
+transformers==5.5.0
+tokenizers==0.22.2
+safetensors==0.7.0
+huggingface_hub==1.9.1
+hf-xet==1.4.3
+regex==2026.4.4
+tqdm==4.67.3
+
+# ── HTTP (HuggingFace deps) ───────────────────────────────────
+httpx==0.28.1
+httpcore==1.0.9
+h11==0.16.0
+anyio==4.13.0
+
+# ── Pydantic & Typing (deps) ──────────────────────────────────
+pydantic==2.12.5
+pydantic_core==2.41.5
+annotated-types==0.7.0
+typing-inspection==0.4.2
+annotated-doc==0.0.4
+
+# ── CLI Utilities ─────────────────────────────────────────────
+typer==0.24.1
+click==8.3.2
+shellingham==1.5.4

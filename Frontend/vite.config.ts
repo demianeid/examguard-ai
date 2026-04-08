@@ -7,11 +7,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://examguard-ai-production.up.railway.app',
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '/api')
-      }
+  target: 'http://localhost:8000',
+  changeOrigin: true,
+  secure: false,
+  rewrite: (path) => path.replace(/^\/api/, '/api')
+}
     }
   }
 })
