@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
+import { LayoutDashboard, Crosshair, Building2, Shield } from "lucide-react";
+import { Link } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import Signup from "./pages/Signup";
 import StudentSignup from "./pages/StudentSignup";
@@ -24,7 +26,6 @@ import EditExam from './pages/EditExam';
 import ReviewIncidents from "./pages/ReviewIncidents";
 import LiveProctoring from "./pages/LiveProctoring";
 import OfflineMode from "./pages/OfflineMode";
-import Roi from "./pages/Roi";
 import MonitoringOffline from "./pages/MonitoringOffline";
 import CreateClass from "./pages/CreateClass";
 import FaceRecognition from './pages/FaceRecognition';
@@ -32,8 +33,124 @@ import ProctoringPage from './pages/ProctoringPage';
 import HelpCenter from './pages/HelpCenter';
 import TermsConditions from './pages/TermsConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import FacilitiesPage from './pages/Facilitiespage';
+import DashboardPage from './pages/Dashboardpage';
+import ROIConfigurationPage from './pages/Roi'; // استيراد الصفحة الصحيحة
 
+function Sidebar() {
+  const location = useLocation();
+  const links = [
+    { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
+    { to: "/roi-config", icon: <Crosshair size={18} />, label: "Zone Config" },
+    { to: "/facilites", icon: <Building2 size={18} />, label: "Facilities" },
+  ];
 
+  return (
+    <aside
+      style={{
+        width: 260,
+        minHeight: "100vh",
+        background: "#ffffff",
+        borderRight: "1px solid #e5e7eb",
+        display: "flex",
+        flexDirection: "column",
+        position: "fixed",
+        top: 0,
+        left: 0,
+        bottom: 0,
+        zIndex: 100,
+      }}
+    >
+      <div style={{ padding: "24px 20px 20px", borderBottom: "1px solid #e5e7eb" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: "#3b82f6",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Shield size={18} color="#fff" />
+          </div>
+          <span style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>ExamGuard</span>
+        </div>
+      </div>
+      <nav style={{ flex: 1, padding: "16px 12px" }}>
+        {links.map((link) => {
+          const active = location.pathname === link.to;
+          return (
+            <Link
+              key={link.to}
+              to={link.to}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 14px",
+                borderRadius: 8,
+                marginBottom: 4,
+                background: active ? "#3b82f6" : "transparent",
+                color: active ? "#fff" : "#6b7280",
+                fontWeight: active ? 600 : 400,
+                fontSize: 14,
+                textDecoration: "none",
+              }}
+            >
+              {link.icon}
+              {link.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <div
+        style={{
+          padding: "16px 20px",
+          borderTop: "1px solid #e5e7eb",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            background: "#3b82f6",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#fff",
+          }}
+        >
+          AD
+        </div>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Admin User</div>
+          <div style={{ fontSize: 11, color: "#9ca3af" }}>System Administrator</div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+// ==================== MainLayout Component ====================
+function MainLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#f9fafb", fontFamily: "system-ui, sans-serif" }}>
+      <Sidebar />
+      <div style={{ marginLeft: 260, flex: 1, display: "flex", flexDirection: "column" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const location = useLocation();
@@ -44,7 +161,7 @@ function App() {
 
   return (
     <Routes>
-      {/* Public Routes */}
+      {/* Public Routes (without Sidebar) */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/Signup" element={<Signup />} />
       <Route path="/signup/student" element={<StudentSignup />} />
@@ -55,7 +172,7 @@ function App() {
       <Route path="/how-it-works" element={<HowItWorks />} />
       <Route path="/contact" element={<Contact />} />
 
-      {/* Student Routes */}
+      {/* Student Routes (without Sidebar) */}
       <Route path="/home" element={<HomeRegistered />} />
       <Route path="/account-student" element={<AccountStudent />} />
       <Route path="/classes" element={<ClassesStudent />}>
@@ -66,14 +183,11 @@ function App() {
       <Route path="/exam/:examId" element={<StartExam />} />
       <Route path="/StartExam" element={<StartExam />} />
 
-      {/* Instructor Routes */}
+      {/* Instructor Routes (without Sidebar) */}
       <Route path="/home-instructor" element={<HomeRegisteredInstructor />} />
       <Route path="/account-instructor" element={<AccountInstructor />} />
-      
-      {/* دي الصفحة اللي Login هيحول الدكتور ليها لو is_active: false */}
       <Route path="/classes-instructor" element={<ClassesInstructor />} />
       <Route path="/classes-instructor/:classId/:tab" element={<ClassesInstructor />} />
-      
       <Route path="/create-class" element={<CreateClass />} />
       <Route path="/instructor/student-profile/:studentId" element={<AccountStudentInstructorView />} />
       <Route path="/CreateExam" element={<CreateExam />} />
@@ -83,16 +197,35 @@ function App() {
       <Route path="/live-proctoring" element={<LiveProctoring />} />
       <Route path="/proctor/:examId" element={<ProctoringPage />} />
 
-      {/* Other Tools */}
+      {/* Other Tools (without Sidebar) */}
       <Route path="/settings" element={<Settings />} />
       <Route path="/help-center" element={<HelpCenter />} />
-     <Route path="/terms-conditions" element={<TermsConditions />} />
+      <Route path="/terms-conditions" element={<TermsConditions />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/OfflineMode" element={<OfflineMode />} />
-      <Route path="/Roi" element={<Roi />} />
       <Route path="/MonitoringOffline" element={<MonitoringOffline />} />
       <Route path="/FaceRecognition" element={<FaceRecognition />} />
 
+      {/* Routes WITH Sidebar - Wrap them with MainLayout */}
+      <Route path="/dashboard" element={
+        <MainLayout>
+          <DashboardPage />
+        </MainLayout>
+      } />
+      <Route path="/facilites" element={
+        <MainLayout>
+          <FacilitiesPage />
+        </MainLayout>
+      } />
+      
+    
+ <Route path="/roi-config/*" element={
+  <MainLayout>
+    <ROIConfigurationPage />
+  </MainLayout>
+} />
+      
+   
     </Routes>
   );
 }
