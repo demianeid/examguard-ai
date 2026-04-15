@@ -16,9 +16,11 @@ urllib3==2.6.2
 # ==============================================================
 # SECTION 2 — COMPUTER VISION
 # ==============================================================
-ImageIO==2.37.3
+imageio==2.37.3
 numpy==2.3.5
-opencv-python==4.12.0.88
+# NOTE: Use ONLY one of opencv-python or opencv-python-headless.
+# opencv-python-headless is used here (server/backend environment — no GUI needed).
+# Remove it and add opencv-python if you need imshow/GUI support locally.
 opencv-python-headless==4.13.0.92
 pillow==12.1.1
 
@@ -75,7 +77,6 @@ transformers==5.5.0
 # ==============================================================
 # SECTION 6 — PYDANTIC & TYPING
 # ==============================================================
-annotated-doc==0.0.4
 annotated-types==0.7.0
 pydantic==2.12.5
 pydantic_core==2.41.5
@@ -102,10 +103,9 @@ whitenoise==6.12.0
 # ==============================================================
 # SECTION 8 — DATABASE
 # ==============================================================
-psycopg==3.3.3
-psycopg-binary==3.3.3
-psycopg2-binary==2.9.11
-
+# psycopg3 (modern Psycopg — use psycopg[binary] for pre-compiled install).
+# Do NOT mix with psycopg2-binary; they conflict at the driver level.
+psycopg[binary]==3.3.3
 
 
 # ==============================================================
