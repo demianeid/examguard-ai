@@ -23,7 +23,7 @@ class MonitoringSessionSerializer(serializers.ModelSerializer):
 
 
 class ViolationLogSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source='student.get_full_name', read_only=True)
+    student_name = serializers.CharField(source='zone.student.get_full_name', read_only=True)
     exam_title   = serializers.CharField(source='session.exam.title', read_only=True)
 
     class Meta:

@@ -2,12 +2,13 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from .models import ExamHall, Camera, OfflineExam, StudentZone
+from .models import ExamHall, Camera, OfflineExam, StudentZone, HallEnrollment
 from .serializers import (
     ExamHallSerializer,
     CameraSerializer,
     OfflineExamSerializer,
-    StudentZoneSerializer
+    StudentZoneSerializer,
+    HallEnrollmentSerializer
 )
 
 
@@ -77,13 +78,29 @@ def camera_list(request, hall_id):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def camera_detail(request, pk):
+    try:
+        camera = Camera.objects.get(pk=pk)
+    except Camera.DoesNotExist:
+        return Response({'error': 'Camera not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    camera.delete()
+    return Response({'message': 'Camera deleted'}, status=status.HTTP_200_OK)
+
+
 # ─── OfflineExam ──────────────────────────────────────────────────
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def offline_exam_list(request):
     if request.method == 'GET':
-        exams = OfflineExam.objects.filter(professor=request.user)
+        # ✅ Admin يشوف كل الامتحانات، Professor يشوف بتاعته بس
+        if request.user.role == 'ADMIN':
+            exams = OfflineExam.objects.all()
+        else:
+            exams = OfflineExam.objects.filter(professor=request.user)
         serializer = OfflineExamSerializer(exams, many=True)
         return Response(serializer.data)
 
@@ -135,6 +152,14 @@ def student_zone_list(request, exam_id):
         return Response(serializer.data)
 
     elif request.method == 'POST':
+        # ✅ تحقق إن الـ camera من نفس الـ hall بتاع الـ exam
+        camera_id = request.data.get('camera')
+        if not Camera.objects.filter(pk=camera_id, hall=exam.hall).exists():
+            return Response(
+                {'error': 'Camera does not belong to this exam hall'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         serializer = StudentZoneSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(exam=exam)
@@ -152,3 +177,56 @@ def student_zone_detail(request, pk):
 
     zone.delete()
     return Response({'message': 'Zone deleted'}, status=status.HTTP_200_OK)
+
+
+# ─── HallEnrollment ───────────────────────────────────────────────
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def hall_enrollment_list(request, hall_id):
+    try:
+        hall = ExamHall.objects.get(pk=hall_id)
+    except ExamHall.DoesNotExist:
+        return Response({'error': 'Hall not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'GET':
+        enrollments = HallEnrollment.objects.filter(hall=hall)
+        serializer  = HallEnrollmentSerializer(enrollments, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        # ✅ بعت hall في save() بس، مش في الـ data
+        serializer = HallEnrollmentSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(hall=hall)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def hall_enrollment_detail(request, pk):
+    try:
+        enrollment = HallEnrollment.objects.get(pk=pk)
+    except HallEnrollment.DoesNotExist:
+        return Response({'error': 'Enrollment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    enrollment.delete()
+    return Response({'message': 'Student removed from hall'}, status=status.HTTP_200_OK)
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def student_list_view(request):
+    students = User.objects.filter(role='STUDENT').values('id', 'first_name', 'last_name', 'email')
+    data = [
+        {
+            'id': s['id'],
+            'name': f"{s['first_name']} {s['last_name']}".strip() or s['email'],
+            'email': s['email'],
+        }
+        for s in students
+    ]
+    return Response(data)

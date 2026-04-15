@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ExamHall, Camera, OfflineExam, StudentZone
+from .models import ExamHall, Camera, OfflineExam, StudentZone, HallEnrollment
 
 
 class CameraSerializer(serializers.ModelSerializer):
@@ -9,7 +9,7 @@ class CameraSerializer(serializers.ModelSerializer):
 
 
 class ExamHallSerializer(serializers.ModelSerializer):
-    cameras      = CameraSerializer(many=True, read_only=True)
+    cameras       = CameraSerializer(many=True, read_only=True)
     total_cameras = serializers.IntegerField(source='cameras.count', read_only=True)
 
     class Meta:
@@ -32,4 +32,13 @@ class StudentZoneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = StudentZone
+        fields = '__all__'
+
+
+class HallEnrollmentSerializer(serializers.ModelSerializer):
+    student_name  = serializers.CharField(source='student.get_full_name', read_only=True)
+    student_email = serializers.CharField(source='student.email', read_only=True)
+
+    class Meta:
+        model  = HallEnrollment
         fields = '__all__'

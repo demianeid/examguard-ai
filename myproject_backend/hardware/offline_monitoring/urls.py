@@ -8,6 +8,7 @@ urlpatterns = [
 
     # Camera
     path('halls/<int:hall_id>/cameras/', views.camera_list, name='camera-list'),
+    path('cameras/<int:pk>/', views.camera_detail, name='camera-detail'),
 
     # OfflineExam
     path('exams/',          views.offline_exam_list,   name='offline-exam-list'),
@@ -16,4 +17,8 @@ urlpatterns = [
     # StudentZone
     path('exams/<int:exam_id>/zones/', views.student_zone_list,   name='student-zone-list'),
     path('zones/<int:pk>/',            views.student_zone_detail, name='student-zone-detail'),
+    
+    path('halls/<int:hall_id>/students/',      views.hall_enrollment_list,   name='hall-enrollment-list'),
+path('halls/students/<int:pk>/remove/',    views.hall_enrollment_detail, name='hall-enrollment-detail'),
+path('students/list/', views.student_list_view, name='student-list'),
 ]

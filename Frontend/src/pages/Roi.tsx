@@ -1,11 +1,24 @@
 "use client"
 
 import type React from "react"
-
-import Header from "../components/Header"
 import { useState, useRef, useEffect } from "react"
-import { Shield, ChevronDown, Edit2, Trash2, Play, Plus, Lightbulb, X, Check, Loader2 } from "lucide-react"
-import { Link, useSearchParams } from "react-router-dom"
+import {
+  LayoutDashboard,
+  Crosshair,
+  Building2,
+  Shield,
+  Edit2,
+  Trash2,
+  X,
+  Check,
+  Loader2,
+  Video,
+  ChevronDown,
+  Save,
+  Plus,
+  Users,
+} from "lucide-react"
+import { Link, useSearchParams, useLocation } from "react-router-dom"
 import {
   examHallApi,
   cameraApi,
@@ -23,11 +36,11 @@ interface Zone {
   backendId?: number
 }
 
+// ==================== ROIConfigurationPage (Zone Config) ====================
 export default function ROIConfigurationPage() {
   const [searchParams] = useSearchParams()
   const examIdParam = searchParams.get("examId")
 
-  // --- Real data state ---
   const [halls, setHalls] = useState<ExamHall[]>([])
   const [selectedHall, setSelectedHall] = useState<ExamHall | null>(null)
   const [hallsLoading, setHallsLoading] = useState(true)
@@ -62,7 +75,6 @@ export default function ROIConfigurationPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
 
-  // Fetch halls on mount
   useEffect(() => {
     const load = async () => {
       setHallsLoading(true)
@@ -80,7 +92,6 @@ export default function ROIConfigurationPage() {
     load()
   }, [])
 
-  // Fetch cameras when selected hall changes
   useEffect(() => {
     if (!selectedHall) return
     const load = async () => {
@@ -99,7 +110,6 @@ export default function ROIConfigurationPage() {
     load()
   }, [selectedHall?.id])
 
-  // Fetch zones when examId is provided
   useEffect(() => {
     if (!examIdParam) return
     const load = async () => {
@@ -125,19 +135,15 @@ export default function ROIConfigurationPage() {
     load()
   }, [examIdParam])
 
-  // Draw zones on canvas
   useEffect(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
     if (!canvas || !container) return
-
     const ctx = canvas.getContext("2d")
     if (!ctx) return
-
     const img = new Image()
     img.crossOrigin = "anonymous"
     img.src = "/images/roi.jpg"
-
     img.onload = () => {
       imageRef.current = img
       canvas.width = container.offsetWidth
@@ -146,15 +152,17 @@ export default function ROIConfigurationPage() {
     }
   }, [zones, currentRect])
 
-  const drawCanvas = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, img: HTMLImageElement) => {
+  const drawCanvas = (
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    img: HTMLImageElement
+  ) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-
     const sourceX = 35
     const sourceY = 195
     const sourceWidth = 570
     const sourceHeight = 385
     ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height)
-
     const scaleX = canvas.width / sourceWidth
     const scaleY = canvas.height / sourceHeight
 
@@ -165,21 +173,27 @@ export default function ROIConfigurationPage() {
         width: zone.rect.width * scaleX,
         height: zone.rect.height * scaleY,
       }
-
       ctx.strokeStyle = "#22c55e"
       ctx.lineWidth = 3
       ctx.strokeRect(scaledRect.x, scaledRect.y, scaledRect.width, scaledRect.height)
+      ctx.fillStyle = "rgba(34,197,94,0.12)"
+      ctx.fillRect(scaledRect.x, scaledRect.y, scaledRect.width, scaledRect.height)
 
+      const label = zone.studentId || String(index + 1)
       ctx.fillStyle = "#22c55e"
-      ctx.font = "bold 20px sans-serif"
-      ctx.fillText(String(index + 1), scaledRect.x + scaledRect.width / 2 - 5, scaledRect.y + scaledRect.height / 2 + 7)
+      ctx.fillRect(scaledRect.x, scaledRect.y, label.length * 8 + 12, 22)
+      ctx.fillStyle = "#fff"
+      ctx.font = "bold 12px sans-serif"
+      ctx.fillText(label, scaledRect.x + 6, scaledRect.y + 15)
     })
 
     if (currentRect) {
-      ctx.strokeStyle = "#22c55e"
+      ctx.strokeStyle = "#3b82f6"
       ctx.lineWidth = 2
-      ctx.setLineDash([5, 5])
+      ctx.setLineDash([6, 4])
       ctx.strokeRect(currentRect.x, currentRect.y, currentRect.width, currentRect.height)
+      ctx.fillStyle = "rgba(59,130,246,0.08)"
+      ctx.fillRect(currentRect.x, currentRect.y, currentRect.width, currentRect.height)
       ctx.setLineDash([])
     }
   }
@@ -208,13 +222,10 @@ export default function ROIConfigurationPage() {
     })
   }
 
-  const handleMouseUp = () => {
-    setIsDrawing(false)
-  }
+  const handleMouseUp = () => setIsDrawing(false)
 
   const addZone = async () => {
     if (!studentId.trim() || !currentRect) return
-
     const newZone: Zone = {
       id: Date.now().toString(),
       studentId,
@@ -222,12 +233,11 @@ export default function ROIConfigurationPage() {
       rect: currentRect,
       zoneNumber: zones.length + 1,
     }
-
     if (examIdParam) {
       setZoneSaving(true)
       setZoneError("")
       try {
-        const selectedCam = cameras.find(c => c.name === activeCamera)
+        const selectedCam = cameras.find((c) => c.name === activeCamera)
         const created = await studentZoneApi.create(Number(examIdParam), {
           student: Number(studentId),
           camera: selectedCam?.id,
@@ -248,7 +258,6 @@ export default function ROIConfigurationPage() {
         setZoneSaving(false)
       }
     }
-
     setZones([...zones, newZone])
     setStudentId("")
     setStudentName("")
@@ -257,13 +266,11 @@ export default function ROIConfigurationPage() {
   }
 
   const deleteZone = async (id: string) => {
-    const zone = zones.find(z => z.id === id)
+    const zone = zones.find((z) => z.id === id)
     if (zone?.backendId) {
-      try {
-        await studentZoneApi.delete(zone.backendId)
-      } catch { /* proceed with local removal */ }
+      try { await studentZoneApi.delete(zone.backendId) } catch { }
     }
-    setZones(zones.filter(z => z.id !== id))
+    setZones(zones.filter((z) => z.id !== id))
   }
 
   const startEditZone = (zone: Zone) => {
@@ -281,8 +288,10 @@ export default function ROIConfigurationPage() {
   const saveEditZone = () => {
     if (!editStudentId.trim() || !editingZoneId) return
     setZones(
-      zones.map(zone =>
-        zone.id === editingZoneId ? { ...zone, studentId: editStudentId, studentName: editStudentName } : zone
+      zones.map((zone) =>
+        zone.id === editingZoneId
+          ? { ...zone, studentId: editStudentId, studentName: editStudentName }
+          : zone
       )
     )
     cancelEditZone()
@@ -290,7 +299,6 @@ export default function ROIConfigurationPage() {
 
   const addNewHall = async () => {
     if (!newHallName.trim() || !newHallBuilding.trim() || !newHallCapacity) return
-
     setHallSaving(true)
     try {
       const created = await examHallApi.create({
@@ -299,7 +307,7 @@ export default function ROIConfigurationPage() {
         capacity: Number(newHallCapacity),
         is_active: true,
       })
-      setHalls(prev => [...prev, created])
+      setHalls((prev) => [...prev, created])
       setSelectedHall(created)
       setNewHallName("")
       setNewHallBuilding("")
@@ -313,323 +321,337 @@ export default function ROIConfigurationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pt-20">
-      <Header showAccount={true} isRegistered={true} userType="instructor" />
-
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">ROI Configuration</h1>
-          <p className="text-gray-600 max-w-2xl mx-auto">
-            Draw rectangles around each student&apos;s area and assign their ID. Our AI will automatically detect
-            phones, suspicious movements, and other cheating behaviors.
-          </p>
+    <div className="min-h-screen bg-background">
+      {/* Top bar with title + hall dropdown */}
+      <div className="bg-white border-b border-gray-200 px-7 py-3.5 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <Crosshair size={20} className="text-blue-600" />
+          <h1 className="text-xl font-bold text-gray-900 m-0">Zone Mapping</h1>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Camera View & Active Zones */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Camera View Card */}
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              {/* Camera Controls */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowAddHallModal(true)}
-                    className="flex items-center gap-2 px-3 py-2 bg-[#3b82f6] text-white rounded-lg hover:bg-[#2563eb] transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add New Hall
-                  </button>
-                </div>
-                <div className="flex items-center gap-2">
-                  {camerasLoading ? (
-                    <Loader2 className="animate-spin text-gray-400" size={20} />
-                  ) : cameras.length === 0 ? (
-                    <span className="text-gray-400 text-sm">No cameras</span>
-                  ) : (
-                    cameras.map(camera => (
-                      <button
-                        key={camera.id}
-                        onClick={() => setActiveCamera(camera.name)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          activeCamera === camera.name
-                            ? "bg-gray-900 text-white"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                      >
-                        {camera.name}
-                      </button>
-                    ))
-                  )}
-                  {/* Hall Dropdown */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowHallDropdown(!showHallDropdown)}
-                      disabled={hallsLoading}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg text-sm font-medium"
-                    >
-                      {hallsLoading ? (
-                        <Loader2 className="animate-spin" size={16} />
-                      ) : selectedHall ? (
-                        `${selectedHall.name} - ${selectedHall.building}`
-                      ) : (
-                        "Select Hall"
-                      )}
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                    {showHallDropdown && (
-                      <div className="absolute right-0 top-full mt-2 bg-white rounded-lg shadow-lg border border-gray-200 z-10 min-w-[200px]">
-                        {hallsError ? (
-                          <p className="px-4 py-2 text-red-500 text-sm">{hallsError}</p>
-                        ) : halls.length === 0 ? (
-                          <p className="px-4 py-2 text-gray-500 text-sm">No halls found</p>
-                        ) : (
-                          halls.map(hall => (
-                            <button
-                              key={hall.id}
-                              onClick={() => {
-                                setSelectedHall(hall)
-                                setShowHallDropdown(false)
-                              }}
-                              className="w-full text-left px-4 py-2 hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg"
-                            >
-                              {hall.name} - {hall.building}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setShowAddHallModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all"
+          >
+            <Save size={14} />
+            Register Hall
+          </button>
 
-              {/* Camera View */}
-              <div className="mb-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Classroom Camera View</h3>
-                <div ref={containerRef} className="relative rounded-lg overflow-hidden cursor-crosshair">
-                  <canvas
-                    ref={canvasRef}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    className="w-full"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Active Zones Card */}
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-900 mb-4">Active Zones</h3>
-              {zonesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="animate-spin text-blue-600" size={24} />
-                  <span className="ml-2 text-gray-500">Loading zones...</span>
-                </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowHallDropdown(!showHallDropdown)}
+              disabled={hallsLoading}
+              className="flex items-center gap-2 px-3.5 py-2 border border-gray-200 rounded-lg bg-white text-sm font-medium text-gray-700 cursor-pointer min-w-[160px]"
+            >
+              {hallsLoading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : selectedHall ? (
+                `${selectedHall.name}`
               ) : (
-                <div className="space-y-3">
-                  {zones.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">
-                      No zones added yet. Draw on the camera view to add zones.
-                    </p>
-                  ) : (
-                    zones.map((zone, index) => (
-                      <div
-                        key={zone.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border-l-4 border-[#c9a227]"
-                      >
-                        {editingZoneId === zone.id ? (
-                          <div className="flex items-center gap-3 flex-1">
-                            <input
-                              type="text"
-                              value={editStudentId}
-                              onChange={(e) => setEditStudentId(e.target.value)}
-                              placeholder="Student ID"
-                              className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                            />
-                            <input
-                              type="text"
-                              value={editStudentName}
-                              onChange={(e) => setEditStudentName(e.target.value)}
-                              placeholder="Student Name"
-                              className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                            />
-                            <div className="flex items-center gap-1">
-                              <button
-                                title="check"
-                                onClick={saveEditZone}
-                                className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button
-                                title="cancel"
-                                onClick={cancelEditZone}
-                                className="p-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div>
-                              <div className="font-semibold text-gray-900">{zone.studentId}</div>
-                              <div className="text-sm text-gray-600">
-                                Zone {index + 1} - {zone.studentName || "Unknown"}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                title="edit"
-                                onClick={() => startEditZone(zone)}
-                                className="p-2 bg-[#3b82f6] text-white rounded-lg hover:bg-[#2563eb]"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                title="delete"
-                                onClick={() => deleteZone(zone.id)}
-                                className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))
-                  )}
+                "-- Select Hall --"
+              )}
+              <ChevronDown size={14} className="ml-auto" />
+            </button>
+            {showHallDropdown && (
+              <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px] overflow-hidden">
+                {hallsError ? (
+                  <p className="px-3.5 py-2.5 text-red-500 text-sm">{hallsError}</p>
+                ) : halls.length === 0 ? (
+                  <p className="px-3.5 py-2.5 text-gray-400 text-sm">No halls found</p>
+                ) : (
+                  halls.map((hall) => (
+                    <button
+                      key={hall.id}
+                      onClick={() => { setSelectedHall(hall); setShowHallDropdown(false) }}
+                      className={`block w-full text-left px-3.5 py-2.5 text-sm transition-colors ${
+                        selectedHall?.id === hall.id
+                          ? "bg-blue-50 text-blue-600"
+                          : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {hall.name} — {hall.building}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Camera tab bar */}
+      <div className="bg-white border-b border-gray-200 px-7 flex items-center gap-1">
+        {camerasLoading ? (
+          <div className="py-3 flex items-center gap-1.5">
+            <Loader2 size={14} className="text-gray-400 animate-spin" />
+            <span className="text-sm text-gray-400">Loading cameras...</span>
+          </div>
+        ) : cameras.length === 0 ? (
+          <div className="py-3">
+            <span className="text-sm text-gray-400">No cameras found for this hall</span>
+          </div>
+        ) : (
+          cameras.map((camera) => (
+            <button
+              key={camera.id}
+              onClick={() => setActiveCamera(camera.name)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
+                activeCamera === camera.name
+                  ? "text-blue-600 border-blue-600"
+                  : "text-gray-500 border-transparent hover:text-gray-700"
+              }`}
+            >
+              <Video size={14} />
+              {camera.name}
+            </button>
+          ))
+        )}
+      </div>
+
+      {/* Content: canvas + right panel */}
+      <div className="flex-1 flex">
+        {/* Canvas column */}
+        <div className="flex-1 p-6 flex flex-col gap-3">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div
+              ref={containerRef}
+              className="relative cursor-crosshair bg-gray-100 min-h-[340px]"
+            >
+              <canvas
+                ref={canvasRef}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                className="w-full block"
+              />
+              {cameras.length === 0 && !camerasLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 min-h-[340px]">
+                  <Crosshair size={32} className="text-gray-300" />
+                  <p className="text-gray-400 text-sm m-0 text-center">
+                    Select a camera to start drawing Regions of Interest (ROI).
+                  </p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Right Column - Add Zone Form & Instructions */}
-          <div className="space-y-6">
-            {/* Add New Zone Card */}
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h3 className="font-semibold text-gray-900 mb-4">Add New Zone</h3>
-              {zoneError && <p className="text-red-500 text-sm mb-3">{zoneError}</p>}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Student ID *</label>
-                  <input
-                    type="text"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                    placeholder="Enter Student ID (e.g., STU-001)"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Student Name (Optional)</label>
-                  <input
-                    type="text"
-                    value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    placeholder="Student's full name"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                  />
-                </div>
-                <button
-                  onClick={addZone}
-                  disabled={!studentId.trim() || !currentRect || zoneSaving}
-                  className="w-full py-3 bg-[#3b82f6] text-white font-semibold rounded-lg hover:bg-[#2563eb] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {zoneSaving && <Loader2 className="animate-spin" size={18} />}
-                  +Add Zone
-                </button>
-              </div>
+          <div className="bg-white border border-gray-200 rounded-lg px-4 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Crosshair size={14} className="text-blue-600" />
+              Click and drag to draw a new bounding box.
+            </div>
+            <span className="bg-blue-50 text-blue-600 px-3 py-0.5 rounded-full text-xs font-medium">
+              {zones.length} active zones mapped
+            </span>
+          </div>
+        </div>
+
+        {/* Right panel */}
+        <div className="w-[300px] bg-white border-l border-gray-200 flex flex-col">
+          <div className="p-5">
+            <div className="mb-4">
+              <h2 className="text-base font-bold text-gray-900 m-0 mb-1">
+                Add New Zone
+              </h2>
+              <p className="text-xs text-gray-400 m-0">Map drawn region to a student.</p>
             </div>
 
-            {/* How It Works Card */}
-            <div className="bg-[#f5efc7] rounded-xl p-6">
-              <div className="flex items-center gap-2 text-[#a08b26] font-semibold mb-3">
-                <Lightbulb className="w-5 h-5" />
-                How It Works
-              </div>
-              <div className="space-y-2 text-sm text-[#6b5d1f]">
-                <p>
-                  <span className="font-semibold">Step 1:</span> Click and drag on the camera view to draw a rectangle
-                  around each student
-                </p>
-                <p>
-                  <span className="font-semibold">Step 2:</span> Enter the Student ID for that zone
-                </p>
-                <p>
-                  <span className="font-semibold">Step 3:</span> Click &quot;Add Zone&quot; - Our AI handles everything
-                  else automatically!
-                </p>
-                <p>
-                  <span className="font-semibold">Step 4:</span> Click &quot;Start Monitoring&quot; when all students
-                  are registered
-                </p>
-              </div>
+            {zoneError && (
+              <p className="text-red-500 text-xs mb-2.5">{zoneError}</p>
+            )}
+
+            <div className="mb-3">
+              <label className="text-xs font-medium text-gray-700 block mb-1.5">
+                Student ID *
+              </label>
+              <input
+                type="text"
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
+                placeholder="Enter Student ID"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors"
+              />
             </div>
 
-            {/* Start Monitoring Button */}
+            <div className="mb-3.5">
+              <label className="text-xs font-medium text-gray-700 block mb-1.5">
+                Zone Label
+              </label>
+              <input
+                type="text"
+                value={studentName}
+                onChange={(e) => setStudentName(e.target.value)}
+                placeholder="e.g. Desk 12"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            <button
+              onClick={addZone}
+              disabled={!studentId.trim() || !currentRect || zoneSaving}
+              className={`w-full py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition-all ${
+                !studentId.trim() || !currentRect || zoneSaving
+                  ? "bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {zoneSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              Save Mapped Zone
+            </button>
+          </div>
+
+          <div className="h-px bg-gray-200" />
+
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            <h3 className="text-[11px] font-bold text-gray-400 tracking-wide uppercase m-0 mb-3">
+              Active Zones
+            </h3>
+
+            {zonesLoading ? (
+              <div className="flex items-center gap-2 text-gray-400 text-sm">
+                <Loader2 size={14} className="animate-spin" />
+                Loading zones...
+              </div>
+            ) : zones.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center mt-6">
+                No zones configured for this camera.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {zones.map((zone) => (
+                  <div
+                    key={zone.id}
+                    className="bg-gray-50 border border-gray-200 border-l-[3px] border-l-yellow-600 rounded-lg p-2.5"
+                  >
+                    {editingZoneId === zone.id ? (
+                      <div>
+                        <input
+                          type="text"
+                          value={editStudentId}
+                          onChange={(e) => setEditStudentId(e.target.value)}
+                          placeholder="Student ID"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors mb-1.5"
+                        />
+                        <input
+                          type="text"
+                          value={editStudentName}
+                          onChange={(e) => setEditStudentName(e.target.value)}
+                          placeholder="Student Name"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors mb-2"
+                        />
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={saveEditZone}
+                            className="flex-1 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md flex items-center justify-center transition-all"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            onClick={cancelEditZone}
+                            className="flex-1 py-1.5 bg-gray-500 hover:bg-gray-600 text-white rounded-md flex items-center justify-center transition-all"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {zone.studentId}
+                          </div>
+                          <div className="text-[11px] text-gray-400">
+                            Zone {zone.zoneNumber} · {zone.studentName || "Unknown"}
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => startEditZone(zone)}
+                            title="Edit"
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 rounded-md text-blue-600 transition-all"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => deleteZone(zone.id)}
+                            title="Delete"
+                            className="p-1.5 bg-red-50 hover:bg-red-100 rounded-md text-red-500 transition-all"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-gray-200">
             <Link to={examIdParam ? `/MonitoringOffline?examId=${examIdParam}` : "/MonitoringOffline"}>
-              <button className="w-full py-4 bg-[#3b82f6] text-white font-semibold rounded-xl hover:bg-[#2563eb] transition-colors flex items-center justify-center gap-2">
-                <Play className="w-5 h-5" />
-                Start Monitoring
+              <button className="w-full py-3 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all">
+                <div className="w-5 h-5 rounded-full border-2 border-white/50 flex items-center justify-center">
+                  <div className="w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-l-[7px] border-l-white ml-0.5" />
+                </div>
+                Start Live Monitoring
               </button>
             </Link>
           </div>
         </div>
-      </main>
+      </div>
 
-      {/* Add New Hall Modal */}
+      {/* Add Hall Modal */}
       {showAddHallModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">Add New Hall</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Hall Name *</label>
-                <input
-                  type="text"
-                  value={newHallName}
-                  onChange={(e) => setNewHallName(e.target.value)}
-                  placeholder="e.g., Hall D"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Building *</label>
-                <input
-                  type="text"
-                  value={newHallBuilding}
-                  onChange={(e) => setNewHallBuilding(e.target.value)}
-                  placeholder="e.g., Building 3"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Capacity *</label>
-                <input
-                  type="number"
-                  value={newHallCapacity}
-                  onChange={(e) => setNewHallCapacity(e.target.value)}
-                  placeholder="e.g., 30"
-                  min="1"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3b82f6]"
-                />
-              </div>
-              <div className="flex gap-3">
+        <div className="fixed inset-0 bg-black/35 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-7 w-full max-w-[420px] mx-4">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-gray-900 m-0">Add New Hall</h3>
+              <button
+                onClick={() => setShowAddHallModal(false)}
+                className="bg-none border-none cursor-pointer text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-3.5">
+              {[
+                { label: "Hall Name *", value: newHallName, setter: setNewHallName, placeholder: "e.g. Hall D", type: "text" },
+                { label: "Building *", value: newHallBuilding, setter: setNewHallBuilding, placeholder: "e.g. Building 3", type: "text" },
+                { label: "Capacity *", value: newHallCapacity, setter: setNewHallCapacity, placeholder: "e.g. 30", type: "number" },
+              ].map(({ label, value, setter, placeholder, type }) => (
+                <div key={label}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    {label}
+                  </label>
+                  <input
+                    type={type}
+                    value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    placeholder={placeholder}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              ))}
+              <div className="flex gap-2.5 mt-1">
                 <button
                   onClick={() => setShowAddHallModal(false)}
-                  className="flex-1 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 py-2.5 border border-gray-200 rounded-lg bg-white text-gray-700 text-sm font-medium cursor-pointer hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={addNewHall}
                   disabled={!newHallName.trim() || !newHallBuilding.trim() || !newHallCapacity || hallSaving}
-                  className="flex-1 py-3 bg-[#3b82f6] text-white font-semibold rounded-lg hover:bg-[#2563eb] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                    !newHallName.trim() || !newHallBuilding.trim() || !newHallCapacity || hallSaving
+                      ? "bg-gray-300 text-white cursor-not-allowed"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
                 >
-                  {hallSaving && <Loader2 className="animate-spin" size={18} />}
+                  {hallSaving && <Loader2 size={14} className="animate-spin" />}
                   Add Hall
                 </button>
               </div>

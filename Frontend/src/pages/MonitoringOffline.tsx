@@ -11,9 +11,15 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   examHallApi,
   monitoringApi,
+  offlineExamApi,
+  studentZoneApi,
+  cameraApi,
   type ExamHall,
   type Alert as HwAlert,
   type MonitoringSession,
+  type OfflineExam,
+  type StudentZone,
+  type Camera as CameraType,
 } from '../services/api';
 
 type SeatStatus = 'normal' | 'warning' | 'alert';
@@ -23,11 +29,14 @@ interface Seat {
   id: number;
   studentId: string;
   studentName: string;
+  seatNumber: string;
   status: SeatStatus;
   faceMatch: boolean;
   violations: number;
   lastActivity: string;
   cameraId: number;
+  streamUrl: string;
+  zoneId: number;
 }
 
 interface Stats {
@@ -50,11 +59,15 @@ const OfflineMonitoringPage: FC = () => {
   const [searchParams] = useSearchParams();
   const examIdParam = searchParams.get('examId');
 
-  // --- Real data state ---
   const [halls, setHalls] = useState<ExamHall[]>([]);
   const [selectedHallId, setSelectedHallId] = useState<number | null>(null);
   const [hallsLoading, setHallsLoading] = useState(true);
   const [hallsError, setHallsError] = useState('');
+
+  const [exam, setExam] = useState<OfflineExam | null>(null);
+  const [zones, setZones] = useState<StudentZone[]>([]);
+  const [hallCameras, setHallCameras] = useState<CameraType[]>([]);
+  const [zonesLoading, setZonesLoading] = useState(false);
 
   const [session, setSession] = useState<MonitoringSession | null>(null);
   const [alerts, setAlerts] = useState<HwAlert[]>([]);
@@ -69,20 +82,39 @@ const OfflineMonitoringPage: FC = () => {
 
   const currentHall = halls.find(h => h.id === selectedHallId);
 
-  // Derive seats from the selected hall's capacity
+  // Build seats from zones + alerts
   const seats: Seat[] = React.useMemo(() => {
-    const count = currentHall?.capacity ?? 0;
-    return Array.from({ length: count }, (_, i) => ({
-      id: i + 1,
-      studentId: `STD${2021000 + i}`,
-      studentName: `Student ${i + 1}`,
-      status: (i % 12 === 0 ? 'warning' : i % 20 === 0 ? 'alert' : 'normal') as SeatStatus,
-      faceMatch: i % 20 !== 0,
-      violations: i % 20 === 0 ? Math.floor(Math.random() * 5) + 3 : i % 12 === 0 ? 1 : 0,
-      lastActivity: `${Math.floor(Math.random() * 60)} min ago`,
-      cameraId: Math.floor(i / 8) + 1,
-    }));
-  }, [currentHall?.capacity]);
+    return zones.map((zone, i) => {
+      const zoneAlerts = alerts.filter(a => a.zone === zone.id);
+      const highCount = zoneAlerts.filter(a => a.severity === 'high').length;
+      const mediumCount = zoneAlerts.filter(a => a.severity === 'medium').length;
+
+      let status: SeatStatus = 'normal';
+      if (highCount > 0) status = 'alert';
+      else if (mediumCount > 0) status = 'warning';
+
+      const cam = hallCameras.find(c => c.id === zone.camera);
+      const faceAlerts = zoneAlerts.filter(a =>
+        a.alert_type === 'no_face' || a.alert_type === 'multiple_faces'
+      );
+
+      return {
+        id: i + 1,
+        studentId: String(zone.student),
+        studentName: zone.student_name || `Student ${zone.student}`,
+        seatNumber: zone.seat_number || `Seat ${i + 1}`,
+        status,
+        faceMatch: faceAlerts.length === 0,
+        violations: zoneAlerts.length,
+        lastActivity: zoneAlerts.length > 0
+          ? new Date(zoneAlerts[zoneAlerts.length - 1].timestamp).toLocaleTimeString()
+          : 'No activity',
+        cameraId: zone.camera,
+        streamUrl: cam?.stream_url || '',
+        zoneId: zone.id,
+      };
+    });
+  }, [zones, alerts, hallCameras]);
 
   const stats: Stats = React.useMemo(() => {
     const total = seats.length;
@@ -93,13 +125,13 @@ const OfflineMonitoringPage: FC = () => {
       normalBehavior: total - violationCount - suspiciousCount,
       suspicious: suspiciousCount,
       violations: violationCount,
-      camerasOnline: currentHall ? Math.ceil((currentHall.capacity || 1) / 8) : 0,
+      camerasOnline: hallCameras.length,
       faceMatchRate: total > 0 ? Math.round((seats.filter(s => s.faceMatch).length / total) * 100) : 0,
       avgViolationsPerStudent: total > 0 ? parseFloat((seats.reduce((sum, s) => sum + s.violations, 0) / total).toFixed(2)) : 0,
     };
-  }, [seats, currentHall]);
+  }, [seats, hallCameras]);
 
-  // Fetch halls on mount
+  // Fetch halls
   useEffect(() => {
     const load = async () => {
       setHallsLoading(true);
@@ -107,7 +139,7 @@ const OfflineMonitoringPage: FC = () => {
       try {
         const data = await examHallApi.getAll();
         setHalls(data);
-        if (data.length > 0) setSelectedHallId(data[0].id);
+        if (!examIdParam && data.length > 0) setSelectedHallId(data[0].id);
       } catch {
         setHallsError('Failed to load exam halls.');
       } finally {
@@ -117,6 +149,35 @@ const OfflineMonitoringPage: FC = () => {
     load();
   }, []);
 
+  // Fetch exam details → auto-select hall
+  useEffect(() => {
+    if (!examIdParam) return;
+    offlineExamApi.getById(Number(examIdParam))
+      .then(e => {
+        setExam(e);
+        setSelectedHallId(e.hall);
+      })
+      .catch(() => {});
+  }, [examIdParam]);
+
+  // Fetch zones for exam
+  useEffect(() => {
+    if (!examIdParam) return;
+    setZonesLoading(true);
+    studentZoneApi.getByExam(Number(examIdParam))
+      .then(z => setZones(z))
+      .catch(() => setZones([]))
+      .finally(() => setZonesLoading(false));
+  }, [examIdParam]);
+
+  // Fetch cameras for the exam's hall
+  useEffect(() => {
+    if (!exam?.hall) return;
+    cameraApi.getByHall(exam.hall)
+      .then(c => setHallCameras(c))
+      .catch(() => setHallCameras([]));
+  }, [exam?.hall]);
+
   // Fetch session + alerts when examId is present
   useEffect(() => {
     if (!examIdParam) return;
@@ -125,7 +186,11 @@ const OfflineMonitoringPage: FC = () => {
       try {
         const s = await monitoringApi.getSession(examId);
         setSession(s);
-        setIsMonitoring(s.status === 'active');
+        if (s.status === 'active' || s.status === 'running') {
+          setIsMonitoring(true);
+          const elapsed = Math.floor((Date.now() - new Date(s.started_at).getTime()) / 1000);
+          setTime(Math.max(0, elapsed));
+        }
         if (s.id) {
           setAlertsLoading(true);
           const a = await monitoringApi.getAlerts(s.id);
@@ -133,13 +198,13 @@ const OfflineMonitoringPage: FC = () => {
           setAlertsLoading(false);
         }
       } catch {
-        // No active session yet — that's fine
+        // No active session yet
       }
     };
     loadSession();
   }, [examIdParam]);
 
-  // Poll alerts every 10 seconds while monitoring is active
+  // Poll alerts every 5 seconds while monitoring
   useEffect(() => {
     if (!isMonitoring || !session?.id) return;
     const interval = setInterval(async () => {
@@ -147,7 +212,7 @@ const OfflineMonitoringPage: FC = () => {
         const a = await monitoringApi.getAlerts(session.id);
         setAlerts(a);
       } catch { /* ignore */ }
-    }, 10_000);
+    }, 5_000);
     return () => clearInterval(interval);
   }, [isMonitoring, session?.id]);
 
@@ -196,7 +261,14 @@ const OfflineMonitoringPage: FC = () => {
     setActionError('');
     try {
       await monitoringApi.generateReport(session.id);
-      alert('Report generated successfully!');
+      const violations = await monitoringApi.getViolations(session.id);
+      const blob = new Blob([JSON.stringify(violations, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `violation-report-session-${session.id}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch {
       setActionError('Failed to generate report.');
     } finally {
@@ -209,6 +281,24 @@ const OfflineMonitoringPage: FC = () => {
       await monitoringApi.reviewAlert(alertId);
       setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, is_reviewed: true } : a));
     } catch { /* ignore */ }
+  };
+
+  const handleFlagForInvestigation = async () => {
+    if (!session?.id || !selectedSeat) return;
+    setActionLoading(true);
+    setActionError('');
+    try {
+      const newAlert = await monitoringApi.createAlert(session.id, {
+        zone: selectedSeat.zoneId,
+        alert_type: 'head_movement',
+        severity: 'high',
+      });
+      setAlerts(prev => [...prev, newAlert]);
+    } catch {
+      setActionError('Failed to flag student.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // --- Helpers ---
@@ -239,11 +329,11 @@ const OfflineMonitoringPage: FC = () => {
 
   const getAlertIcon = (type: string): React.ReactNode => {
     switch (type) {
-      case 'phone': return <Phone size={16} />;
-      case 'face': return <User size={16} />;
-      case 'movement': return <Activity size={16} />;
-      case 'audio': return <Volume2 size={16} />;
-      case 'paper': return <FileText size={16} />;
+      case 'mobile_phone': return <Phone size={16} />;
+      case 'multiple_faces': case 'no_face': return <User size={16} />;
+      case 'head_movement': case 'looking_away': return <Activity size={16} />;
+      case 'voice_detected': return <Volume2 size={16} />;
+      case 'external_paper': return <FileText size={16} />;
       default: return <AlertCircle size={16} />;
     }
   };
@@ -416,7 +506,7 @@ const OfflineMonitoringPage: FC = () => {
           <MapPin className="text-blue-600" size={24} />
           <div>
             <h3 className="font-semibold text-gray-800">Hall Seating Map</h3>
-            <p className="text-sm text-gray-600">Monitoring {currentHall?.name ?? 'N/A'}</p>
+            <p className="text-sm text-gray-600">Monitoring {currentHall?.name ?? exam?.hall_name ?? 'N/A'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -447,8 +537,17 @@ const OfflineMonitoringPage: FC = () => {
       </div>
 
       <div className="bg-gray-50 p-6 rounded-lg">
-        {seats.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">No seats to display. Select a hall with capacity.</p>
+        {zonesLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="animate-spin text-blue-600" size={24} />
+            <span className="ml-3 text-gray-600">Loading zones...</span>
+          </div>
+        ) : seats.length === 0 ? (
+          <p className="text-center text-gray-500 py-8">
+            {examIdParam
+              ? 'No zones configured. Go to Zone Config to set up student zones.'
+              : 'No seats to display. Select a hall with capacity.'}
+          </p>
         ) : (
           <div className="grid grid-cols-8 gap-3">
             {seats.map(seat => (
@@ -520,7 +619,7 @@ const OfflineMonitoringPage: FC = () => {
                       <span className="font-semibold text-gray-800">{a.seat_number || `Zone ${a.zone}`}</span>
                       <span className="text-xs text-gray-500">{new Date(a.timestamp).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-sm text-gray-600">{a.student_name} — {a.alert_type}</p>
+                    <p className="text-sm text-gray-600">{a.student_name} — {a.alert_type.replace(/_/g, ' ')}</p>
                   </div>
                 </div>
                 {!a.is_reviewed && (
@@ -562,8 +661,8 @@ const OfflineMonitoringPage: FC = () => {
               </div>
               <div>
                 <h4 className="font-bold text-gray-800">{selectedSeat.studentName}</h4>
-                <p className="text-sm text-gray-600">{selectedSeat.studentId}</p>
-                <p className="text-xs text-gray-500">Seat #{selectedSeat.id}</p>
+                <p className="text-sm text-gray-600">ID: {selectedSeat.studentId}</p>
+                <p className="text-xs text-gray-500">{selectedSeat.seatNumber}</p>
               </div>
             </div>
             <div className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
@@ -586,8 +685,12 @@ const OfflineMonitoringPage: FC = () => {
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-700 mb-2">Camera Feed</p>
-            <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center">
-              <Video className="text-gray-600" size={48} />
+            <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center overflow-hidden">
+              {selectedSeat.streamUrl ? (
+                <img src={selectedSeat.streamUrl} alt="Camera Feed" className="w-full h-full object-cover" />
+              ) : (
+                <Video className="text-gray-600" size={48} />
+              )}
             </div>
             <p className="text-xs text-gray-500 mt-2">Camera {selectedSeat.cameraId} • ROI Active</p>
           </div>
@@ -595,8 +698,17 @@ const OfflineMonitoringPage: FC = () => {
             <button className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
               <Eye size={18} className="inline mr-2" />View Full Recording
             </button>
-            <button className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors">
-              <AlertCircle size={18} className="inline mr-2" />Flag for Investigation
+            <button
+              onClick={handleFlagForInvestigation}
+              disabled={!session?.id || actionLoading}
+              className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+            >
+              {actionLoading ? (
+                <Loader2 size={18} className="inline mr-2 animate-spin" />
+              ) : (
+                <AlertCircle size={18} className="inline mr-2" />
+              )}
+              Flag for Investigation
             </button>
           </div>
         </div>
@@ -646,7 +758,9 @@ const OfflineMonitoringPage: FC = () => {
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">Offline Exam Monitoring</h1>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                {exam?.title || 'Offline Exam Monitoring'}
+              </h1>
               <p className="text-gray-600">Real-time monitoring with AI-powered detection</p>
             </div>
             <div className="flex items-center gap-3">
