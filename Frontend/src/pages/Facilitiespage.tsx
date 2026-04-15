@@ -15,11 +15,11 @@ import {
   X,
 } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
-import axios from 'axios'
 import {
   examHallApi,
   cameraApi,
-  studentZoneApi,
+  hallEnrollmentApi,
+  studentListApi,
   type ExamHall,
   type Camera,
 } from "../services/api"
@@ -58,10 +58,9 @@ export default function FacilitiesPage() {
 
   // Enroll Student modal
   const [showStudentModal, setShowStudentModal] = useState(false)
-  const [newStudentName, setNewStudentName] = useState("")
-  const [newStudentId, setNewStudentId] = useState("")
-  const [newStudentSeat, setNewStudentSeat] = useState("")
-  const [studentSaving, setStudentSaving] = useState(false)
+const [studentSaving, setStudentSaving] = useState(false)
+const [availableStudents, setAvailableStudents] = useState<{id: number, name: string}[]>([])
+const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -85,9 +84,21 @@ export default function FacilitiesPage() {
       } catch { setCameras([]) }
       finally { setCamerasLoading(false) }
     }
+    const loadStudents = async () => {
+      setStudentsLoading(true)
+      try {
+        const data = await hallEnrollmentApi.getByHall(selectedHall.id)
+        setStudents(data.map(e => ({
+          id: e.id,
+          name: e.student_name || 'Unknown',
+          student_id: String(e.student),
+          seat_number: '-',
+        })))
+      } catch { setStudents([]) }
+      finally { setStudentsLoading(false) }
+    }
     loadCams()
-    // stub: load students similarly
-    setStudents([])
+    loadStudents()
   }, [selectedHall?.id])
 
   const addHall = async () => {
@@ -125,16 +136,25 @@ const addCamera = async () => {
   finally { setCamSaving(false) }
 }
 
- const deleteCamera = async (id: number) => {
-  if (!confirm("Are you sure you want to delete this camera?")) return
-  try {
-    await axios.delete(`/cameras/${id}/`)
-    setCameras((prev) => prev.filter((c) => c.id !== id))
-  } catch (error) {
-    console.error("Failed to delete camera:", error)
-    alert("Failed to delete camera.")
+  const deleteCamera = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this camera?")) return
+    try {
+      await cameraApi.delete(id)
+      setCameras((prev) => prev.filter((c) => c.id !== id))
+    } catch {
+      alert("Failed to delete camera.")
+    }
   }
-}
+
+  const deleteStudent = async (id: number) => {
+    if (!confirm("Remove this student from the hall?")) return
+    try {
+      await hallEnrollmentApi.delete(id)
+      setStudents((prev) => prev.filter((s) => s.id !== id))
+    } catch {
+      alert("Failed to remove student.")
+    }
+  }
 
   const fieldStyle: React.CSSProperties = {
     width: "100%",
@@ -384,8 +404,14 @@ const addCamera = async () => {
                   <h3 className="text-lg font-bold text-gray-900">
                     Enrolled Students
                   </h3>
-                  <button
-                    onClick={() => setShowStudentModal(true)}
+                 <button
+  onClick={async () => {
+    setShowStudentModal(true)
+    try {
+      const data = await studentListApi.getAll()
+      setAvailableStudents(data)
+    } catch {}
+  }}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-all"
                   >
                     <Plus size={14} />
@@ -407,7 +433,7 @@ const addCamera = async () => {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="bg-gray-50 border-b border-gray-200">
-                          {["STUDENT ID", "NAME", "SEAT NO."].map((h) => (
+                          {["STUDENT ID", "NAME", "SEAT NO.", ""].map((h) => (
                             <th
                               key={h}
                               className="px-4 py-3 text-left text-xs font-bold text-gray-400 uppercase tracking-wider"
@@ -431,6 +457,15 @@ const addCamera = async () => {
                               <span className="bg-gray-50 border border-gray-200 rounded-md px-3 py-1 text-xs text-gray-700">
                                 {s.seat_number}
                               </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => deleteStudent(s.id)}
+                                title="Remove student"
+                                className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                              >
+                                <Trash2 size={16} />
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -512,39 +547,60 @@ const addCamera = async () => {
         </Modal>
       )}
 
-      {/* Enroll Student Modal */}
-      {showStudentModal && (
-        <Modal
-          title="Enroll Student"
-          onClose={() => setShowStudentModal(false)}
-          onSubmit={() => {
-            // stub — wire up your API
-            setShowStudentModal(false)
-          }}
-          saving={studentSaving}
-          disabled={!newStudentName.trim() || !newStudentId.trim()}
-          submitLabel="Enroll Student"
+  {/* Enroll Student Modal */}
+{showStudentModal && (
+  <Modal
+    title="Enroll Student"
+    onClose={() => { setShowStudentModal(false); setSelectedStudentId(null) }}
+    onSubmit={async () => {
+      if (!selectedStudentId || !selectedHall) return
+      setStudentSaving(true)
+      try {
+        const created = await hallEnrollmentApi.create(selectedHall.id, {
+          student: selectedStudentId,
+        })
+        setStudents(prev => [...prev, {
+          id: created.id,
+          name: created.student_name || 'Unknown',
+          student_id: String(created.student),
+          seat_number: '-',
+        }])
+        setSelectedStudentId(null)
+        setShowStudentModal(false)
+      } catch {
+        alert("Failed to enroll student.")
+      } finally {
+        setStudentSaving(false)
+      }
+    }}
+    saving={studentSaving}
+    disabled={!selectedStudentId}
+    submitLabel="Enroll Student"
+  >
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        Select Student
+      </label>
+      {availableStudents.length === 0 ? (
+        <div className="flex items-center gap-2 text-gray-400 text-sm py-2">
+          <Loader2 size={14} className="animate-spin" />
+          Loading students...
+        </div>
+      ) : (
+        <select
+          onChange={(e) => setSelectedStudentId(Number(e.target.value))}
+          className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500"
         >
-          {[
-            { label: "Student Name", value: newStudentName, setter: setNewStudentName, placeholder: "John Doe", type: "text" },
-            { label: "Student ID Code", value: newStudentId, setter: setNewStudentId, placeholder: "STU-2024-001", type: "text" },
-            { label: "Assigned Seat", value: newStudentSeat, setter: setNewStudentSeat, placeholder: "A1", type: "text" },
-          ].map(({ label, value, setter, placeholder, type }) => (
-            <div key={label}>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                {label}
-              </label>
-              <input
-                type={type}
-                value={value}
-                onChange={(e) => setter(e.target.value)}
-                placeholder={placeholder}
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
+          <option value="">-- Select a student --</option>
+          {availableStudents.map(s => (
+            <option key={s.id} value={s.id}>{s.name}</option>
           ))}
-        </Modal>
+        </select>
       )}
+    </div>
+  </Modal>
+)}
+   
     </div>
   )
 }

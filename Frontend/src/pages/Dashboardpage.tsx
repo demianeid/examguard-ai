@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import {
   Building2,
   Shield,
@@ -8,10 +9,30 @@ import {
   Activity,
   AlertTriangle,
   ChevronRight,
+  Loader2,
+  Clock,
+  MapPin,
+  Calendar,
 } from "lucide-react"
 import { Link } from "react-router-dom"
+import { offlineExamApi, type OfflineExam } from "../services/api"
 
 export default function DashboardPage() {
+  const [exams, setExams] = useState<OfflineExam[]>([])
+  const [examsLoading, setExamsLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      setExamsLoading(true)
+      try {
+        const data = await offlineExamApi.getAll()
+        setExams(data)
+      } catch {}
+      finally { setExamsLoading(false) }
+    }
+    load()
+  }, [])
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
@@ -37,7 +58,7 @@ export default function DashboardPage() {
 
           {/* CTA Buttons */}
           <div className="flex gap-4 justify-center flex-wrap">
-            <Link to="/roi-config?examId=1">
+            <Link to={exams.length > 0 ? `/MonitoringOffline?examId=${exams[0].id}` : "/roi-config"}>
               <button className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg">
                 <Play size={16} />
                 Start Session
@@ -54,7 +75,72 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Platform Capabilities Cards - بدون عنوان */}
+      {/* Active Exams */}
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-5">Active Exams</h2>
+        {examsLoading ? (
+          <div className="flex items-center gap-2 text-gray-500 justify-center py-8">
+            <Loader2 size={20} className="animate-spin" />
+            Loading exams...
+          </div>
+        ) : exams.length === 0 ? (
+          <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
+            <Calendar size={40} className="text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No exams created yet. Set up an exam from Facilities.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {exams.map((exam) => (
+              <div
+                key={exam.id}
+                className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-gray-900 text-lg">{exam.title}</h3>
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                    exam.status === 'active'
+                      ? 'bg-green-100 text-green-700'
+                      : exam.status === 'completed'
+                      ? 'bg-gray-100 text-gray-600'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {exam.status?.toUpperCase() || 'PENDING'}
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-sm text-gray-600 mb-4">
+                  <div className="flex items-center gap-2">
+                    <MapPin size={14} />
+                    {exam.hall_name}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Calendar size={14} />
+                    {exam.date}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock size={14} />
+                    {exam.start_time} — {exam.end_time}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Link to={`/MonitoringOffline?examId=${exam.id}`} className="flex-1">
+                    <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors text-sm">
+                      <Play size={14} />
+                      Start Session
+                    </button>
+                  </Link>
+                  <Link to={`/roi-config?examId=${exam.id}`}>
+                    <button className="px-4 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                      Zone Config
+                    </button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Platform Capabilities Cards */}
       <div className="max-w-6xl mx-auto px-6 py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[

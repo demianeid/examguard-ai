@@ -87,3 +87,20 @@ class StudentZone(models.Model):
 
     def __str__(self):
         return f"Seat {self.seat_number} - {self.student}"
+    
+class HallEnrollment(models.Model):
+    hall       = models.ForeignKey(ExamHall, on_delete=models.CASCADE, related_name='enrollments')
+    student    = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE,
+        related_name='hall_enrollments',
+        limit_choices_to={'role': 'STUDENT'}
+    )
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table      = 'H_hall_enrollments'
+        unique_together = ['hall', 'student']
+
+    def __str__(self):
+        return f"{self.student} - {self.hall.name}"

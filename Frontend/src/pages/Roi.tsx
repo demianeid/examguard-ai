@@ -26,7 +26,6 @@ import {
   type ExamHall,
   type Camera,
 } from "../services/api"
-import axios from 'axios'
 
 interface Zone {
   id: string

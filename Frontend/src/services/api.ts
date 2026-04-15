@@ -2,7 +2,7 @@
 // ============================================================
 // api.ts — Centralized API Service (Final & Correct)
 // ============================================================
-const API_BASE = "http://127.0.0.1:8000";
+import api from '../api';
 
 
 // --- Types ---
@@ -35,32 +35,15 @@ export interface UpdateClassPayload {
   description?: string;
 }
 
-// --- Generic fetch helper ---
+// --- Generic request helper (powered by axios instance) ---
 const request = async <T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> => {
-  const token = localStorage.getItem("access_token");
-
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    headers: {
-      "Content-Type": "application/json",
-      // نرسل التوكن فقط إذا كان موجوداً
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.headers,
-    },
-    ...options,
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    // بنرمي الـ error عشان الـ catch في الـ UI تمسكه
-    throw errorData; 
-  }
-
-  if (res.status === 204) return undefined as T;
-
-  return res.json();
+  const method = (options?.method || 'GET').toLowerCase();
+  const data = options?.body ? JSON.parse(options.body as string) : undefined;
+  const response = await api.request<T>({ url: endpoint, method, data });
+  return response.data;
 };
 
 // ============================================================
@@ -220,7 +203,7 @@ export interface Alert {
 
 export interface ViolationLog {
   id: number;
-  student: number;
+  zone: number;
   student_name: string;
   session: number;
   exam_title: string;
@@ -274,10 +257,15 @@ export const cameraApi = {
   getByHall: (hallId: number): Promise<Camera[]> =>
     request<Camera[]>(`/api/hardware/monitoring/halls/${hallId}/cameras/`),
 
-  create: (hallId: number, payload: Partial<Camera>): Promise<Camera> =>
+ create: (hallId: number, payload: Partial<Camera>): Promise<Camera> =>
     request<Camera>(`/api/hardware/monitoring/halls/${hallId}/cameras/`, {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, hall: hallId }),  // ← أضف hall هنا
+    }),
+
+  delete: (cameraId: number): Promise<void> =>
+    request<void>(`/api/hardware/monitoring/cameras/${cameraId}/`, {
+      method: "DELETE",
     }),
 };
 
@@ -287,6 +275,9 @@ export const cameraApi = {
 export const offlineExamApi = {
   getAll: (): Promise<OfflineExam[]> =>
     request<OfflineExam[]>("/api/hardware/monitoring/exams/"),
+
+  getById: (examId: number): Promise<OfflineExam> =>
+    request<OfflineExam>(`/api/hardware/monitoring/exams/${examId}/`),
 
   create: (payload: Partial<OfflineExam>): Promise<OfflineExam> =>
     request<OfflineExam>("/api/hardware/monitoring/exams/", {
@@ -387,3 +378,35 @@ export const streamApi = {
   getActiveStreams: (): Promise<StreamSession[]> =>
     request<StreamSession[]>("/api/hardware/stream/streams/active/"),
 };
+
+// ============================================================
+// Hall Enrollment API
+// ============================================================
+export interface HallEnrollment {
+  id: number;
+  hall: number;
+  student: number;
+  student_name: string;
+  student_email: string;
+  enrolled_at: string;
+}
+
+export const hallEnrollmentApi = {
+  getByHall: (hallId: number): Promise<HallEnrollment[]> =>
+    request<HallEnrollment[]>(`/api/hardware/monitoring/halls/${hallId}/students/`),
+
+  create: (hallId: number, payload: { student: number }): Promise<HallEnrollment> =>
+    request<HallEnrollment>(`/api/hardware/monitoring/halls/${hallId}/students/`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  delete: (enrollmentId: number): Promise<void> =>
+    request<void>(`/api/hardware/monitoring/halls/students/${enrollmentId}/remove/`, {
+      method: "DELETE",
+    }),
+};
+export const studentListApi = {
+  getAll: (): Promise<{id: number, name: string, email: string}[]> =>
+    request('/api/hardware/monitoring/students/list/'),
+}

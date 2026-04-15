@@ -130,20 +130,18 @@ def generate_violation_report(request, session_id):
 
     alerts = Alert.objects.filter(session=session)
 
-    # جمع الـ alerts لكل طالب
-    students = {}
+    zone_data = {}
     for alert in alerts:
-        student = alert.zone.student
-        if student not in students:
-            students[student] = {'high': 0, 'medium': 0, 'low': 0, 'total': 0}
-        students[student][alert.severity] += 1
-        students[student]['total'] += 1
+        zone = alert.zone
+        if zone.id not in zone_data:
+            zone_data[zone.id] = {'zone': zone, 'high': 0, 'medium': 0, 'low': 0, 'total': 0}
+        zone_data[zone.id][alert.severity] += 1
+        zone_data[zone.id]['total'] += 1
 
-    # إنشاء ViolationLog لكل طالب
-    for student, data in students.items():
+    for zid, data in zone_data.items():
         score = (data['high'] * 3) + (data['medium'] * 2) + (data['low'] * 1)
         ViolationLog.objects.update_or_create(
-            student=student,
+            zone=data['zone'],
             session=session,
             defaults={
                 'total_alerts':    data['total'],
