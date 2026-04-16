@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
-import { LayoutDashboard, Crosshair, Building2, Shield } from "lucide-react";
+import { LayoutDashboard, Crosshair, Building2, Shield, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import Signup from "./pages/Signup";
@@ -35,7 +35,8 @@ import TermsConditions from './pages/TermsConditions';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import FacilitiesPage from './pages/Facilitiespage';
 import DashboardPage from './pages/Dashboardpage';
-import ROIConfigurationPage from './pages/Roi'; // استيراد الصفحة الصحيحة
+import ROIConfigurationPage from './pages/Roi';
+import ExamsPage from './pages/ExamsPage';
 
 function Sidebar() {
   const location = useLocation();
@@ -43,6 +44,7 @@ function Sidebar() {
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { to: "/roi-config", icon: <Crosshair size={18} />, label: "Zone Config" },
     { to: "/facilites", icon: <Building2 size={18} />, label: "Facilities" },
+    { to: "/exams", icon: <FileText size={18} />, label: "Exams" },
   ];
 
   return (
@@ -219,11 +221,16 @@ function App() {
       } />
       
     
- <Route path="/roi-config/*" element={
-  <MainLayout>
-    <ROIConfigurationPage />
-  </MainLayout>
-} />
+      <Route path="/exams" element={
+        <MainLayout>
+          <ExamsPage />
+        </MainLayout>
+      } />
+      <Route path="/roi-config/*" element={
+        <MainLayout>
+          <ROIConfigurationPage />
+        </MainLayout>
+      } />
       
    
     </Routes>

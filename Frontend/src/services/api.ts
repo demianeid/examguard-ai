@@ -98,21 +98,21 @@ export const classesApi = {
 export const authApi = {
   /** 1. ارسال طلب OTP */
   forgotPassword: (email: string): Promise<{ message: string }> =>
-    request<{ message: string }>("/auth/forget-password/", {
+    request<{ message: string }>("/api/auth/forget-password/", {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
 
   /** 2. التحقق من الكود */
   verifyOtp: (email: string, otp: string): Promise<{ message: string }> =>
-    request<{ message: string }>("/auth/verify-otp/", {
+    request<{ message: string }>("/api/auth/verify-otp/", {
       method: "POST",
       body: JSON.stringify({ email, otp }),
     }),
 
   /** 3. تغيير الباسوورد (التحديث الفعلي) ✅ */
   resetPassword: (payload: { email: string; otp: string; new_password: string }): Promise<{ message: string }> =>
-    request<{ message: string }>("/auth/reset-password/", {
+    request<{ message: string }>("/api/auth/reset-password/", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -121,13 +121,13 @@ export const authApi = {
 //machine 
 export const faceApi = {
   register: (payload: { student_id: string; name: string; image: string }) =>
-    request<{ success: boolean; message: string }>("/student/face/register/", {
+    request<{ success: boolean; message: string }>("/api/face/register/", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
   verify: (payload: { student_id: string; image: string }) =>
-    request<{ success: boolean; verified: boolean; message: string; student_name: string; confidence: number }>("/student/face/verify/", {
+    request<{ success: boolean; verified: boolean; message: string; student_name: string; confidence: number }>("/api/face/verify/", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
@@ -385,21 +385,21 @@ export const streamApi = {
 export interface HallEnrollment {
   id: number;
   hall: number;
-  student: number;
-  student_name: string;
-  student_email: string;
-  enrolled_at: string;
+  student_name?: string;
+  student_code?: string;
+  seat_number?: string;
+  enrolled_at?: string;
 }
 
 export const hallEnrollmentApi = {
   getByHall: (hallId: number): Promise<HallEnrollment[]> =>
     request<HallEnrollment[]>(`/api/hardware/monitoring/halls/${hallId}/students/`),
 
-  create: (hallId: number, payload: { student: number }): Promise<HallEnrollment> =>
-    request<HallEnrollment>(`/api/hardware/monitoring/halls/${hallId}/students/`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+  create: (hallId: number, payload: { student_name: string; student_code: string; seat_number?: string ;student?: number; }): Promise<HallEnrollment> =>
+  request<HallEnrollment>(`/api/hardware/monitoring/halls/${hallId}/students/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }),
 
   delete: (enrollmentId: number): Promise<void> =>
     request<void>(`/api/hardware/monitoring/halls/students/${enrollmentId}/remove/`, {

@@ -47,7 +47,7 @@ class Class(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='classes',
-        limit_choices_to={'role': 'PROFESSOR'}
+        limit_choices_to={'role': 'professor'}
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -70,7 +70,7 @@ class ClassEnrollment(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='enrollments',
-        limit_choices_to={'role': 'STUDENT'}
+        limit_choices_to={'role': 'student'}
     )
     class_enrolled = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='enrollments')
     enrolled_at = models.DateTimeField(auto_now_add=True)

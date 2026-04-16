@@ -29,6 +29,7 @@ interface Student {
   name: string
   student_id: string
   seat_number: string
+  enrolled_at?: string
 }
 
 export default function FacilitiesPage() {
@@ -58,9 +59,10 @@ export default function FacilitiesPage() {
 
   // Enroll Student modal
   const [showStudentModal, setShowStudentModal] = useState(false)
-const [studentSaving, setStudentSaving] = useState(false)
-const [availableStudents, setAvailableStudents] = useState<{id: number, name: string}[]>([])
-const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null)
+  const [studentSaving, setStudentSaving] = useState(false)
+  const [newStudentName, setNewStudentName] = useState("")
+  const [newStudentIdCode, setNewStudentIdCode] = useState("")
+  const [newStudentSeat, setNewStudentSeat] = useState("")   // ← NEW
 
   useEffect(() => {
     const load = async () => {
@@ -89,11 +91,11 @@ const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null)
       try {
         const data = await hallEnrollmentApi.getByHall(selectedHall.id)
         setStudents(data.map(e => ({
-          id: e.id,
-          name: e.student_name || 'Unknown',
-          student_id: String(e.student),
-          seat_number: '-',
-        })))
+  id: e.id,
+  name: e.student_name || 'Unknown',
+  student_id: e.student_code || '-',
+  seat_number: e.seat_number || '-',
+})))
       } catch { setStudents([]) }
       finally { setStudentsLoading(false) }
     }
@@ -118,23 +120,23 @@ const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null)
     finally { setHallSaving(false) }
   }
 
-const addCamera = async () => {
-  if (!newCamName.trim() || !selectedHall) return
-  setCamSaving(true)
-  try {
-    const created = await cameraApi.create(selectedHall.id, {
-      name: newCamName,
-      stream_url: newCamUrl,
-    })
-    setCameras((prev) => [...prev, created])
-    setNewCamName(""); setNewCamUrl("")
-    setShowCameraModal(false)
-  } catch (error) {
-    console.error("Failed to add camera:", error)
-    alert("Failed to add camera.")
+  const addCamera = async () => {
+    if (!newCamName.trim() || !selectedHall) return
+    setCamSaving(true)
+    try {
+      const created = await cameraApi.create(selectedHall.id, {
+        name: newCamName,
+        stream_url: newCamUrl,
+      })
+      setCameras((prev) => [...prev, created])
+      setNewCamName(""); setNewCamUrl("")
+      setShowCameraModal(false)
+    } catch (error) {
+      console.error("Failed to add camera:", error)
+      alert("Failed to add camera.")
+    }
+    finally { setCamSaving(false) }
   }
-  finally { setCamSaving(false) }
-}
 
   const deleteCamera = async (id: number) => {
     if (!confirm("Are you sure you want to delete this camera?")) return
@@ -404,14 +406,8 @@ const addCamera = async () => {
                   <h3 className="text-lg font-bold text-gray-900">
                     Enrolled Students
                   </h3>
-                 <button
-  onClick={async () => {
-    setShowStudentModal(true)
-    try {
-      const data = await studentListApi.getAll()
-      setAvailableStudents(data)
-    } catch {}
-  }}
+                  <button
+                    onClick={() => setShowStudentModal(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-all"
                   >
                     <Plus size={14} />
@@ -547,60 +543,80 @@ const addCamera = async () => {
         </Modal>
       )}
 
-  {/* Enroll Student Modal */}
-{showStudentModal && (
-  <Modal
-    title="Enroll Student"
-    onClose={() => { setShowStudentModal(false); setSelectedStudentId(null) }}
-    onSubmit={async () => {
-      if (!selectedStudentId || !selectedHall) return
-      setStudentSaving(true)
-      try {
-        const created = await hallEnrollmentApi.create(selectedHall.id, {
-          student: selectedStudentId,
-        })
-        setStudents(prev => [...prev, {
-          id: created.id,
-          name: created.student_name || 'Unknown',
-          student_id: String(created.student),
-          seat_number: '-',
-        }])
-        setSelectedStudentId(null)
-        setShowStudentModal(false)
-      } catch {
-        alert("Failed to enroll student.")
-      } finally {
-        setStudentSaving(false)
-      }
-    }}
-    saving={studentSaving}
-    disabled={!selectedStudentId}
-    submitLabel="Enroll Student"
-  >
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-        Select Student
-      </label>
-      {availableStudents.length === 0 ? (
-        <div className="flex items-center gap-2 text-gray-400 text-sm py-2">
-          <Loader2 size={14} className="animate-spin" />
-          Loading students...
-        </div>
-      ) : (
-        <select
-          onChange={(e) => setSelectedStudentId(Number(e.target.value))}
-          className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500"
+      {/* Enroll Student Modal */}
+      {showStudentModal && (
+        <Modal
+          title="Enroll Student"
+          onClose={() => {
+            setShowStudentModal(false)
+            setNewStudentName("")
+            setNewStudentIdCode("")
+            setNewStudentSeat("")
+          }}
+            onSubmit={async () => {
+  if (!newStudentIdCode.trim() || !selectedHall) return
+  setStudentSaving(true)
+  try {
+   const created = await hallEnrollmentApi.create(selectedHall.id, {
+  student_name: newStudentName,
+  student_code: newStudentIdCode,
+  seat_number: newStudentSeat.trim() || undefined,
+})
+              setStudents(prev => [...prev, {
+  id: created.id,
+  name: created.student_name || newStudentName,
+  student_id: created.student_code || newStudentIdCode,
+  seat_number: created.seat_number || newStudentSeat.trim() || '-',
+  enrolled_at: created.enrolled_at || new Date().toISOString(),
+}])
+              setNewStudentName("")
+              setNewStudentIdCode("")
+              setNewStudentSeat("")
+              setShowStudentModal(false)
+            } catch {
+              alert("Failed to enroll student.")
+            } finally {
+              setStudentSaving(false)
+            }
+          }}
+          saving={studentSaving}
+          disabled={!newStudentName.trim() || !newStudentIdCode.trim()}
+          submitLabel="Enroll Student"
         >
-          <option value="">-- Select a student --</option>
-          {availableStudents.map(s => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Student Name</label>
+            <input
+              type="text"
+              value={newStudentName}
+              onChange={(e) => setNewStudentName(e.target.value)}
+              placeholder="John Doe"
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Student ID Code</label>
+            <input
+              type="text"
+              value={newStudentIdCode}
+              onChange={(e) => setNewStudentIdCode(e.target.value)}
+              placeholder="STU-2024-001"
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+          {/* ── NEW: Assigned Seat field ── */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Assigned Seat</label>
+            <input
+              type="text"
+              value={newStudentSeat}
+              onChange={(e) => setNewStudentSeat(e.target.value)}
+              placeholder="e.g. A1"
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+        </Modal>
       )}
-    </div>
-  </Modal>
-)}
-   
+
     </div>
   )
 }

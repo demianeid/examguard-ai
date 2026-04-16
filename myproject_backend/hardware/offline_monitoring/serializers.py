@@ -24,21 +24,27 @@ class OfflineExamSerializer(serializers.ModelSerializer):
     class Meta:
         model  = OfflineExam
         fields = '__all__'
+        read_only_fields = ['professor']
 
 
 class StudentZoneSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source='student.get_full_name', read_only=True)
-    camera_name  = serializers.CharField(source='camera.name', read_only=True)
+    camera_name = serializers.CharField(source='camera.name', read_only=True)
 
     class Meta:
         model  = StudentZone
         fields = '__all__'
+        read_only_fields = ['hall']
+        extra_kwargs = {
+            'seat_number': {'required': False, 'allow_null': True},
+        }
 
 
 class HallEnrollmentSerializer(serializers.ModelSerializer):
-    student_name  = serializers.CharField(source='student.get_full_name', read_only=True)
-    student_email = serializers.CharField(source='student.email', read_only=True)
-
     class Meta:
         model  = HallEnrollment
         fields = '__all__'
+        read_only_fields = ['hall']
+        extra_kwargs = {
+            'seat_number': {'required': False, 'allow_null': True},
+            'student':     {'required': False, 'allow_null': True},
+        }

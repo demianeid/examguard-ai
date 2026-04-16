@@ -23,8 +23,10 @@ import {
   examHallApi,
   cameraApi,
   studentZoneApi,
+  hallEnrollmentApi,
   type ExamHall,
   type Camera,
+  type HallEnrollment,
 } from "../services/api"
 
 interface Zone {
@@ -71,6 +73,11 @@ export default function ROIConfigurationPage() {
   const [editStudentId, setEditStudentId] = useState("")
   const [editStudentName, setEditStudentName] = useState("")
 
+  const [hallStudents, setHallStudents] = useState<HallEnrollment[]>([])
+  const [studentQuery, setStudentQuery] = useState("")
+  const [showStudentDropdown, setShowStudentDropdown] = useState(false)
+  const studentInputRef = useRef<HTMLDivElement>(null)
+
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
@@ -107,8 +114,36 @@ export default function ROIConfigurationPage() {
         setCamerasLoading(false)
       }
     }
+    const loadStudents = async () => {
+      try {
+        const data = await hallEnrollmentApi.getByHall(selectedHall.id)
+        setHallStudents(data)
+      } catch {
+        setHallStudents([])
+      }
+    }
     load()
+    loadStudents()
   }, [selectedHall?.id])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (studentInputRef.current && !studentInputRef.current.contains(e.target as Node)) {
+        setShowStudentDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const filteredStudents = hallStudents.filter((s) => {
+    const q = studentQuery.toLowerCase()
+    if (!q) return true
+    return (
+     (s.student_name || "").toLowerCase().includes(q) ||
+      (s.student_code || "").toLowerCase().includes(q)
+    )
+  })
 
   useEffect(() => {
     if (!examIdParam) return
@@ -261,6 +296,7 @@ export default function ROIConfigurationPage() {
     setZones([...zones, newZone])
     setStudentId("")
     setStudentName("")
+    setStudentQuery("")
     setCurrentRect(null)
     setStartPos(null)
   }
@@ -462,17 +498,50 @@ export default function ROIConfigurationPage() {
               <p className="text-red-500 text-xs mb-2.5">{zoneError}</p>
             )}
 
-            <div className="mb-3">
+            <div className="mb-3" ref={studentInputRef}>
               <label className="text-xs font-medium text-gray-700 block mb-1.5">
                 Student ID *
               </label>
-              <input
-                type="text"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-                placeholder="Enter Student ID"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={studentQuery}
+                  onChange={(e) => {
+                    setStudentQuery(e.target.value)
+                    setStudentId("")
+                    setStudentName("")
+                    setShowStudentDropdown(true)
+                  }}
+                  onFocus={() => setShowStudentDropdown(true)}
+                  placeholder="Search by name or ID..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors"
+                />
+                {showStudentDropdown && filteredStudents.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[200px] overflow-y-auto">
+                    {filteredStudents.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                       setStudentId(s.student_code || "")
+                          setStudentName(s.seat_number || s.student_name || "")
+                          setStudentQuery(`${s.student_name || "Unknown"} — ${s.student_code || ""}`)
+                          setShowStudentDropdown(false)
+                        }}
+                        className="block w-full text-left px-3 py-2 text-sm transition-colors hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <div className="font-medium text-gray-900">{s.student_name || "Unknown"}</div>
+                       <div className="text-xs text-gray-400">ID: {s.student_code}{s.seat_number ? ` · Seat: ${s.seat_number}` : ""}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showStudentDropdown && studentQuery && filteredStudents.length === 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 px-3 py-3 text-sm text-gray-400 text-center">
+                    No students found
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="mb-3.5">

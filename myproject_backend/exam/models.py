@@ -14,7 +14,7 @@ class Exam(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='exams',
-        limit_choices_to={'role': 'PROFESSOR'}
+        limit_choices_to={'role': 'professor'}
     )
     class_id          = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='exams', null=True, blank=True)
     title             = models.CharField(max_length=255)

@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -10,6 +11,8 @@ from .serializers import (
     StudentZoneSerializer,
     HallEnrollmentSerializer
 )
+
+User = get_user_model()
 
 
 # ─── ExamHall ─────────────────────────────────────────────────────
@@ -96,8 +99,7 @@ def camera_detail(request, pk):
 @permission_classes([IsAuthenticated])
 def offline_exam_list(request):
     if request.method == 'GET':
-        # ✅ Admin يشوف كل الامتحانات، Professor يشوف بتاعته بس
-        if request.user.role == 'ADMIN':
+        if request.user.is_superuser:
             exams = OfflineExam.objects.all()
         else:
             exams = OfflineExam.objects.filter(professor=request.user)
@@ -116,7 +118,10 @@ def offline_exam_list(request):
 @permission_classes([IsAuthenticated])
 def offline_exam_detail(request, pk):
     try:
-        exam = OfflineExam.objects.get(pk=pk, professor=request.user)
+        if request.user.is_superuser:
+            exam = OfflineExam.objects.get(pk=pk)
+        else:
+            exam = OfflineExam.objects.get(pk=pk, professor=request.user)
     except OfflineExam.DoesNotExist:
         return Response({'error': 'Exam not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -140,29 +145,27 @@ def offline_exam_detail(request, pk):
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-def student_zone_list(request, exam_id):
+def student_zone_list(request, hall_id):
     try:
-        exam = OfflineExam.objects.get(pk=exam_id)
-    except OfflineExam.DoesNotExist:
-        return Response({'error': 'Exam not found'}, status=status.HTTP_404_NOT_FOUND)
+        hall = ExamHall.objects.get(pk=hall_id)
+    except ExamHall.DoesNotExist:
+        return Response({'error': 'Hall not found'}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == 'GET':
-        zones = StudentZone.objects.filter(exam=exam)
+        zones = StudentZone.objects.filter(hall=hall)
         serializer = StudentZoneSerializer(zones, many=True)
         return Response(serializer.data)
 
     elif request.method == 'POST':
-        # ✅ تحقق إن الـ camera من نفس الـ hall بتاع الـ exam
         camera_id = request.data.get('camera')
-        if not Camera.objects.filter(pk=camera_id, hall=exam.hall).exists():
+        if not Camera.objects.filter(pk=camera_id, hall=hall).exists():
             return Response(
-                {'error': 'Camera does not belong to this exam hall'},
+                {'error': 'Camera does not belong to this hall'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
         serializer = StudentZoneSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(exam=exam)
+            serializer.save(hall=hall)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -195,7 +198,6 @@ def hall_enrollment_list(request, hall_id):
         return Response(serializer.data)
 
     elif request.method == 'POST':
-        # ✅ بعت hall في save() بس، مش في الـ data
         serializer = HallEnrollmentSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(hall=hall)
@@ -213,14 +215,12 @@ def hall_enrollment_detail(request, pk):
 
     enrollment.delete()
     return Response({'message': 'Student removed from hall'}, status=status.HTTP_200_OK)
-from django.contrib.auth import get_user_model
 
-User = get_user_model()
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def student_list_view(request):
-    students = User.objects.filter(role='STUDENT').values('id', 'first_name', 'last_name', 'email')
+    students = User.objects.filter(role='student').values('id', 'first_name', 'last_name', 'email')
     data = [
         {
             'id': s['id'],
