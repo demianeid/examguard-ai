@@ -53,9 +53,8 @@ def exam_hall_detail(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == 'DELETE':
-        hall.is_active = False
-        hall.save()
-        return Response({'message': 'Hall deactivated'}, status=status.HTTP_200_OK)
+        hall.delete()
+        return Response({'message': 'Hall deleted'}, status=status.HTTP_200_OK)
 
 
 # ─── Camera ───────────────────────────────────────────────────────
@@ -145,11 +144,14 @@ def offline_exam_detail(request, pk):
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
-def student_zone_list(request, hall_id):
+def student_zone_list(request, exam_id):
+    # Resolve the hall from the offline exam so the URL stays exam-based
     try:
-        hall = ExamHall.objects.get(pk=hall_id)
-    except ExamHall.DoesNotExist:
-        return Response({'error': 'Hall not found'}, status=status.HTTP_404_NOT_FOUND)
+        exam = OfflineExam.objects.get(pk=exam_id)
+    except OfflineExam.DoesNotExist:
+        return Response({'error': 'Exam not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    hall = exam.hall
 
     if request.method == 'GET':
         zones = StudentZone.objects.filter(hall=hall)
@@ -157,13 +159,26 @@ def student_zone_list(request, hall_id):
         return Response(serializer.data)
 
     elif request.method == 'POST':
-        camera_id = request.data.get('camera')
-        if not Camera.objects.filter(pk=camera_id, hall=hall).exists():
+        data = request.data.copy()
+
+        # If a student (enrollment) id was sent, pull name/code from HallEnrollment
+        enrollment_id = data.get('student')
+        if enrollment_id:
+            try:
+                enrollment = HallEnrollment.objects.get(pk=enrollment_id, hall=hall)
+                data['student_name'] = enrollment.student_name
+                data['student_code'] = enrollment.student_code
+            except HallEnrollment.DoesNotExist:
+                pass  # leave name/code as sent by client
+
+        camera_id = data.get('camera')
+        if camera_id and not Camera.objects.filter(pk=camera_id, hall=hall).exists():
             return Response(
                 {'error': 'Camera does not belong to this hall'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        serializer = StudentZoneSerializer(data=request.data)
+
+        serializer = StudentZoneSerializer(data=data)
         if serializer.is_valid():
             serializer.save(hall=hall)
             return Response(serializer.data, status=status.HTTP_201_CREATED)

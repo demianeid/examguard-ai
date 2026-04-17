@@ -166,11 +166,11 @@ export interface OfflineExam {
 
 export interface StudentZone {
   id: number;
-  exam: number;
-  camera: number;
-  student: number;
-  student_name: string;
+  hall: number;
+  camera?: number;
   camera_name: string;
+  student_name: string;
+  student_code: string;
   seat_number: string;
   x1: number;
   y1: number;
@@ -302,7 +302,13 @@ export const studentZoneApi = {
   getByExam: (examId: number): Promise<StudentZone[]> =>
     request<StudentZone[]>(`/api/hardware/monitoring/exams/${examId}/zones/`),
 
-  create: (examId: number, payload: Partial<StudentZone>): Promise<StudentZone> =>
+  create: (examId: number, payload: {
+    student_code?: string;
+    student_name?: string;
+    camera?: number;
+    seat_number?: string;
+    x1: number; y1: number; x2: number; y2: number;
+  }): Promise<StudentZone> =>
     request<StudentZone>(`/api/hardware/monitoring/exams/${examId}/zones/`, {
       method: "POST",
       body: JSON.stringify(payload),

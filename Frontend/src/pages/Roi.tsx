@@ -154,7 +154,7 @@ export default function ROIConfigurationPage() {
         setZones(
           data.map((z, i) => ({
             id: String(z.id),
-            studentId: String(z.student),
+            studentId: z.student_code || String(z.id),
             studentName: z.student_name,
             rect: { x: z.x1, y: z.y1, width: z.x2 - z.x1, height: z.y2 - z.y1 },
             zoneNumber: i + 1,
@@ -261,11 +261,30 @@ export default function ROIConfigurationPage() {
 
   const addZone = async () => {
     if (!studentId.trim() || !currentRect) return
+
+    // Convert canvas display coords → source image coords so the zone is
+    // saved (and later re-drawn) in the correct position.
+    const sourceX = 35
+    const sourceY = 195
+    const sourceWidth = 570
+    const sourceHeight = 385
+    const canvas = canvasRef.current
+    const scaleX = canvas ? canvas.width / sourceWidth : 1
+    const scaleY = canvas ? canvas.height / sourceHeight : 1
+
+    const imgX = currentRect.x / scaleX + sourceX
+    const imgY = currentRect.y / scaleY + sourceY
+    const imgW = currentRect.width / scaleX
+    const imgH = currentRect.height / scaleY
+
+    // Store zone rect in source-image space so drawCanvas can re-scale it correctly
+    const imageSpaceRect = { x: imgX, y: imgY, width: imgW, height: imgH }
+
     const newZone: Zone = {
       id: Date.now().toString(),
       studentId,
       studentName,
-      rect: currentRect,
+      rect: imageSpaceRect,
       zoneNumber: zones.length + 1,
     }
     if (examIdParam) {
@@ -274,13 +293,14 @@ export default function ROIConfigurationPage() {
       try {
         const selectedCam = cameras.find((c) => c.name === activeCamera)
         const created = await studentZoneApi.create(Number(examIdParam), {
-          student: Number(studentId),
+          student_code: studentId,
+          student_name: studentName,
           camera: selectedCam?.id,
           seat_number: `Seat ${zones.length + 1}`,
-          x1: Math.round(currentRect.x),
-          y1: Math.round(currentRect.y),
-          x2: Math.round(currentRect.x + currentRect.width),
-          y2: Math.round(currentRect.y + currentRect.height),
+          x1: Math.round(imgX),
+          y1: Math.round(imgY),
+          x2: Math.round(imgX + imgW),
+          y2: Math.round(imgY + imgH),
         })
         newZone.backendId = created.id
         newZone.id = String(created.id)

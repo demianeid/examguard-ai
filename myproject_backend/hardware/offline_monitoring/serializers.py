@@ -32,10 +32,17 @@ class StudentZoneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = StudentZone
-        fields = '__all__'
+        fields = [
+            'id', 'hall', 'camera', 'camera_name',
+            'student_name', 'student_code', 'seat_number',
+            'x1', 'y1', 'x2', 'y2',
+        ]
         read_only_fields = ['hall']
         extra_kwargs = {
-            'seat_number': {'required': False, 'allow_null': True},
+            'seat_number':   {'required': False, 'allow_null': True},
+            'student_name':  {'required': False, 'default': ''},
+            'student_code':  {'required': False, 'default': ''},
+            'camera':        {'required': False, 'allow_null': True},
         }
 
 

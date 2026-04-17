@@ -42,7 +42,6 @@ function Sidebar() {
   const location = useLocation();
   const links = [
     { to: "/dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
-    { to: "/roi-config", icon: <Crosshair size={18} />, label: "Zone Config" },
     { to: "/facilites", icon: <Building2 size={18} />, label: "Facilities" },
     { to: "/exams", icon: <FileText size={18} />, label: "Exams" },
   ];
@@ -64,22 +63,13 @@ function Sidebar() {
       }}
     >
       <div style={{ padding: "24px 20px 20px", borderBottom: "1px solid #e5e7eb" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              background: "#3b82f6",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Shield size={18} color="#fff" />
-          </div>
-          <span style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>ExamGuard</span>
-        </div>
+        <Link to="/home-instructor" style={{ display: "flex", alignItems: "center", textDecoration: "none" }}>
+          <img 
+            src="/images/logo1.png"
+            alt="ExamGuard" 
+            style={{ height: "36px", width: "auto", objectFit: "contain" }}
+          />
+        </Link>
       </div>
       <nav style={{ flex: 1, padding: "16px 12px" }}>
         {links.map((link) => {

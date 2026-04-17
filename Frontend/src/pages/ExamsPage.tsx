@@ -19,6 +19,65 @@ import {
   type ExamHall,
 } from "../services/api"
 
+function Modal({
+  title, onClose, onSubmit, saving: isSaving, disabled, submitLabel, children,
+}: {
+  title: string
+  onClose: () => void
+  onSubmit: () => void
+  saving: boolean
+  disabled: boolean
+  submitLabel: string
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
+      }}
+    >
+      <div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 440, margin: "0 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0 }}>{title}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af" }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {children}
+          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+            <button
+              onClick={onClose}
+              style={{
+                flex: 1, padding: "10px", border: "1px solid #e5e7eb",
+                borderRadius: 8, background: "#fff", color: "#374151",
+                fontSize: 14, fontWeight: 500, cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onSubmit}
+              disabled={disabled || isSaving}
+              style={{
+                flex: 1, padding: "10px", border: "none", borderRadius: 8,
+                background: disabled || isSaving ? "#d1d5db" : "#3b82f6",
+                color: "#fff", fontSize: 14, fontWeight: 600,
+                cursor: disabled || isSaving ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
+            >
+              {isSaving && <Loader2 size={14} />}
+              {submitLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ExamsPage() {
   const [exams, setExams] = useState<OfflineExam[]>([])
   const [examsLoading, setExamsLoading] = useState(true)
@@ -92,62 +151,6 @@ export default function ExamsPage() {
     }
   }
 
-  const Modal = ({
-    title, onClose, onSubmit, saving: isSaving, disabled, submitLabel, children,
-  }: {
-    title: string
-    onClose: () => void
-    onSubmit: () => void
-    saving: boolean
-    disabled: boolean
-    submitLabel: string
-    children: React.ReactNode
-  }) => (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
-        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
-      }}
-    >
-      <div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 440, margin: "0 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0 }}>{title}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af" }}>
-            <X size={18} />
-          </button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {children}
-          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-            <button
-              onClick={onClose}
-              style={{
-                flex: 1, padding: "10px", border: "1px solid #e5e7eb",
-                borderRadius: 8, background: "#fff", color: "#374151",
-                fontSize: 14, fontWeight: 500, cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onSubmit}
-              disabled={disabled || isSaving}
-              style={{
-                flex: 1, padding: "10px", border: "none", borderRadius: 8,
-                background: disabled || isSaving ? "#d1d5db" : "#3b82f6",
-                color: "#fff", fontSize: 14, fontWeight: 600,
-                cursor: disabled || isSaving ? "not-allowed" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              }}
-            >
-              {isSaving && <Loader2 size={14} />}
-              {submitLabel}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
 
   return (
     <div className="min-h-screen bg-background" style={{ fontFamily: "system-ui, sans-serif" }}>

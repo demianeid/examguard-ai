@@ -24,6 +24,77 @@ import {
   type Camera,
 } from "../services/api"
 
+const fieldStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 14px",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  fontSize: 13,
+  color: "#111827",
+  background: "#fff",
+  outline: "none",
+  boxSizing: "border-box",
+}
+
+function Modal({
+  title, onClose, onSubmit, saving, disabled, submitLabel, children,
+}: {
+  title: string
+  onClose: () => void
+  onSubmit: () => void
+  saving: boolean
+  disabled: boolean
+  submitLabel: string
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
+      }}
+    >
+      <div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 440, margin: "0 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0 }}>{title}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af" }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {children}
+          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+            <button
+              onClick={onClose}
+              style={{
+                flex: 1, padding: "10px", border: "1px solid #e5e7eb",
+                borderRadius: 8, background: "#fff", color: "#374151",
+                fontSize: 14, fontWeight: 500, cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onSubmit}
+              disabled={disabled || saving}
+              style={{
+                flex: 1, padding: "10px", border: "none", borderRadius: 8,
+                background: disabled || saving ? "#d1d5db" : "#3b82f6",
+                color: "#fff", fontSize: 14, fontWeight: 600,
+                cursor: disabled || saving ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}
+            >
+              {saving && <Loader2 size={14} />}
+              {submitLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface Student {
   id: number
   name: string
@@ -50,6 +121,8 @@ export default function FacilitiesPage() {
   const [newHallBuilding, setNewHallBuilding] = useState("")
   const [newHallCapacity, setNewHallCapacity] = useState("")
   const [hallSaving, setHallSaving] = useState(false)
+  const [hallToDelete, setHallToDelete] = useState<number | null>(null)
+  const [hallDeleting, setHallDeleting] = useState(false)
 
   // Add Camera modal
   const [showCameraModal, setShowCameraModal] = useState(false)
@@ -120,6 +193,27 @@ export default function FacilitiesPage() {
     finally { setHallSaving(false) }
   }
 
+  const deleteHall = (id: number) => {
+    setHallToDelete(id)
+  }
+
+  const confirmDeleteHall = async () => {
+    if (hallToDelete === null) return
+    setHallDeleting(true)
+    try {
+      await examHallApi.delete(hallToDelete)
+      setHalls((prev) => prev.filter((h) => h.id !== hallToDelete))
+      if (selectedHall?.id === hallToDelete) {
+        setSelectedHall(null)
+      }
+      setHallToDelete(null)
+    } catch {
+      alert("Failed to delete facility.")
+    } finally {
+      setHallDeleting(false)
+    }
+  }
+
   const addCamera = async () => {
     if (!newCamName.trim() || !selectedHall) return
     setCamSaving(true)
@@ -158,75 +252,6 @@ export default function FacilitiesPage() {
     }
   }
 
-  const fieldStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "10px 14px",
-    border: "1px solid #e5e7eb",
-    borderRadius: 8,
-    fontSize: 13,
-    color: "#111827",
-    background: "#fff",
-    outline: "none",
-    boxSizing: "border-box",
-  }
-
-  const Modal = ({
-    title, onClose, onSubmit, saving, disabled, submitLabel, children,
-  }: {
-    title: string
-    onClose: () => void
-    onSubmit: () => void
-    saving: boolean
-    disabled: boolean
-    submitLabel: string
-    children: React.ReactNode
-  }) => (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
-        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
-      }}
-    >
-      <div style={{ background: "#fff", borderRadius: 14, padding: 28, width: "100%", maxWidth: 440, margin: "0 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h3 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: 0 }}>{title}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af" }}>
-            <X size={18} />
-          </button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {children}
-          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-            <button
-              onClick={onClose}
-              style={{
-                flex: 1, padding: "10px", border: "1px solid #e5e7eb",
-                borderRadius: 8, background: "#fff", color: "#374151",
-                fontSize: 14, fontWeight: 500, cursor: "pointer",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onSubmit}
-              disabled={disabled || saving}
-              style={{
-                flex: 1, padding: "10px", border: "none", borderRadius: 8,
-                background: disabled || saving ? "#d1d5db" : "#3b82f6",
-                color: "#fff", fontSize: 14, fontWeight: 600,
-                cursor: disabled || saving ? "not-allowed" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              }}
-            >
-              {saving && <Loader2 size={14} />}
-              {submitLabel}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-
   return (
     <div className="min-h-screen bg-background" style={{ fontFamily: "system-ui, sans-serif" }}>
       <div className="px-8 py-8">
@@ -264,7 +289,7 @@ export default function FacilitiesPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {halls.map((hall) => (
-                  <button
+                  <div
                     key={hall.id}
                     onClick={() => setSelectedHall(hall)}
                     className="bg-white border border-gray-200 rounded-xl p-5 text-left cursor-pointer transition-all hover:border-blue-500 hover:shadow-md"
@@ -274,11 +299,20 @@ export default function FacilitiesPage() {
                       <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
                         <Building2 size={20} className="text-blue-600" />
                       </div>
-                      {hall.is_active && (
-                        <span className="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full">
-                          ACTIVE
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {hall.is_active && (
+                          <span className="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full">
+                            ACTIVE
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteHall(hall.id); }}
+                          title="Delete facility"
+                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="font-bold text-gray-900 text-lg mb-1">
@@ -298,7 +332,7 @@ export default function FacilitiesPage() {
                         — CAMERAS
                       </span>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -316,8 +350,17 @@ export default function FacilitiesPage() {
             </button>
 
             {/* Hall header card */}
-            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-              <h2 className="text-2xl font-extrabold text-gray-900 mb-1">
+            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6 relative">
+              <div className="absolute top-6 right-6">
+                <button
+                  onClick={() => deleteHall(selectedHall.id)}
+                  title="Delete facility"
+                  className="p-2 text-gray-400 hover:text-red-500 transition-colors bg-white border border-gray-100 rounded-md shadow-sm"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              <h2 className="text-2xl font-extrabold text-gray-900 mb-1 pr-12">
                 {selectedHall.name}
               </h2>
               <p className="text-gray-500 text-sm mb-5">
@@ -614,6 +657,22 @@ export default function FacilitiesPage() {
               className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
             />
           </div>
+        </Modal>
+      )}
+
+      {/* Delete Hall Confirmation Modal */}
+      {hallToDelete !== null && (
+        <Modal
+          title="Delete Facility"
+          onClose={() => setHallToDelete(null)}
+          onSubmit={confirmDeleteHall}
+          saving={hallDeleting}
+          disabled={false}
+          submitLabel="Delete"
+        >
+          <p className="text-gray-600 text-sm">
+            Are you sure you want to delete this facility? This action cannot be undone.
+          </p>
         </Modal>
       )}
 
