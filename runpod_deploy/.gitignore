@@ -1,0 +1,17 @@
+# Model weights — downloaded at Docker build time, never committed to git
+ai_engine/models/*.pt
+ai_engine/models/*.onnx
+ai_engine/models/*.pth
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Logs
+*.log
+
+# Local env files
+.env
+.env.*

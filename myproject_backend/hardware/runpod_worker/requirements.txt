@@ -1,0 +1,34 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ExamGuard AI — RunPod GPU Worker requirements
+#
+# Target environment: CUDA 11.8 · Python 3.10 · Ubuntu 20.04
+# Install with:  pip install --no-cache-dir -r requirements.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── RunPod SDK ────────────────────────────────────────────────────────────────
+runpod==1.7.3                    # Serverless worker SDK (handler entry point)
+
+# ── Object detection (phone, paper, face) ────────────────────────────────────
+ultralytics==8.4.38              # YOLOv8 — tested version (Phase 1-3 verified)
+# PyTorch is pulled in by ultralytics; pin CUDA-specific wheels if needed:
+# torch==2.1.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+# torchvision==0.16.2+cu118
+
+# ── Computer vision utils ─────────────────────────────────────────────────────
+opencv-python-headless==4.9.0.80 # No GUI -- headless is required on server
+numpy==1.26.4                    # NumPy 1.x -- compatible with ultralytics 8.4
+
+# ── Head-pose estimation ──────────────────────────────────────────────────────
+# IMPORTANT: pin to 0.10.9 -- the last release that still exposes
+# mp.solutions.face_mesh (used by head_pose.py for solvePnP).
+# mediapipe >= 0.10.10 removed mp.solutions; upgrading will silently disable
+# looking_away detection. Do not upgrade without updating head_pose.py first.
+mediapipe==0.10.9
+
+# ── HTTP client (alert POST back to Django) ───────────────────────────────────
+requests==2.32.3
+httpx==0.27.0                    # Async alternative; useful if handler goes async
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+Pillow==10.3.0                   # Image helpers used by ultralytics
+python-dotenv==1.0.1             # Load .env for DJANGO_API_URL, etc.

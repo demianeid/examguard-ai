@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ExamGuard AI — RunPod GPU Worker requirements
+# Target env: CUDA 11.8 · Python 3.10 · Ubuntu 22.04
+# Install:    pip install --no-cache-dir -r requirements.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── RunPod SDK ────────────────────────────────────────────────────────────────
+runpod==1.7.3
+
+# ── Object detection ──────────────────────────────────────────────────────────
+ultralytics==8.4.38
+
+# ── Computer vision ───────────────────────────────────────────────────────────
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
+
+# ── Head-pose estimation ──────────────────────────────────────────────────────
+# IMPORTANT: 0.10.9 is the last version exposing mp.solutions.face_mesh.
+# Do NOT upgrade without updating ai_engine/head_pose.py to the Tasks API.
+mediapipe==0.10.9
+
+# ── Django API communication ──────────────────────────────────────────────────
+requests==2.32.3
+httpx==0.27.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+Pillow==10.3.0
+python-dotenv==1.0.1

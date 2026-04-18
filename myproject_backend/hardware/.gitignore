@@ -1,0 +1,16 @@
+# ── Model weight files (binary, gitignored) ───────────────────────────────────
+hardware/ai_engine/models/*.pt
+hardware/ai_engine/models/*.onnx
+hardware/ai_engine/models/*.engine   # TensorRT optimised engines
+
+# ── Python caches ─────────────────────────────────────────────────────────────
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# ── Local .env files ──────────────────────────────────────────────────────────
+hardware/runpod_worker/.env
+
+# ── Ultralytics download cache ────────────────────────────────────────────────
+runs/
+*.pt
