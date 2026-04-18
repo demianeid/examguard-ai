@@ -50,9 +50,12 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ── Thresholds ─────────────────────────────────────────────────────────────────
-YAW_THRESHOLD:      float = float(os.getenv("HEAD_YAW_THRESHOLD",   "30.0"))  # degrees
-PITCH_THRESHOLD:    float = float(os.getenv("HEAD_PITCH_THRESHOLD",  "20.0"))  # degrees
-MOVEMENT_THRESHOLD: float = float(os.getenv("HEAD_MOVE_THRESHOLD",   "15.0"))  # Δ degrees
+# NOTE: solvePnP with focal_length=frame_width produces larger angle values at
+# close webcam distance vs ceiling-mounted exam cameras. Defaults are tuned for
+# real exam setups (1-3m away). Override with env vars for local testing.
+YAW_THRESHOLD:      float = float(os.getenv("HEAD_YAW_THRESHOLD",   "55.0"))  # degrees
+PITCH_THRESHOLD:    float = float(os.getenv("HEAD_PITCH_THRESHOLD",  "40.0"))  # degrees
+MOVEMENT_THRESHOLD: float = float(os.getenv("HEAD_MOVE_THRESHOLD",   "20.0"))  # Δ degrees
 
 # ── 3-D model points (generic face in mm, OpenCV convention) ───────────────────
 # Indices correspond to specific MediaPipe Face Mesh landmark IDs below.
@@ -70,9 +73,14 @@ _LM_INDICES = [1, 152, 33, 263, 61, 291]
 
 
 def _rotation_vector_to_euler(rvec: np.ndarray) -> tuple[float, float, float]:
-    """Convert an OpenCV rotation vector to (pitch, yaw, roll) in degrees."""
+    """
+    Convert an OpenCV rotation vector to (pitch, yaw, roll) in degrees.
+
+    solvePnP can return two equivalent solutions that differ by ~180 deg in
+    pitch. The flipped solution has pitch near +/-180 deg instead of near 0.
+    We detect and correct this so that looking straight ahead gives angles near 0.
+    """
     rmat, _ = cv2.Rodrigues(rvec)
-    # Decompose using solvePnP convention → R_x, R_y, R_z
     sy = math.sqrt(rmat[0, 0] ** 2 + rmat[1, 0] ** 2)
     singular = sy < 1e-6
 
@@ -85,11 +93,18 @@ def _rotation_vector_to_euler(rvec: np.ndarray) -> tuple[float, float, float]:
         yaw   = math.atan2(-rmat[2, 0], sy)
         roll  = 0.0
 
-    return (
-        math.degrees(pitch),
-        math.degrees(yaw),
-        math.degrees(roll),
-    )
+    pitch_d = math.degrees(pitch)
+    yaw_d   = math.degrees(yaw)
+    roll_d  = math.degrees(roll)
+
+    # Normalize flipped solution: when face is frontal, |pitch| should be < 90.
+    # solvePnP sometimes returns the equivalent rotation with pitch near +/-180.
+    if abs(pitch_d) > 90.0:
+        pitch_d = -(math.copysign(180.0, pitch_d) - pitch_d)
+        yaw_d   = -yaw_d
+        roll_d  = -(math.copysign(180.0, roll_d) - roll_d)
+
+    return pitch_d, yaw_d, roll_d
 
 
 class HeadPoseEstimator:
@@ -227,6 +242,11 @@ class HeadPoseEstimator:
         logger.debug(
             "HeadPose: pitch=%.1f°  yaw=%.1f°  roll=%.1f°", pitch, yaw, roll
         )
+        # Also print to stdout so local webcam tests can see raw angles
+        # (helps diagnose threshold calibration)
+        import sys
+        print(f"  [HeadPose] pitch={pitch:+.1f}°  yaw={yaw:+.1f}°  roll={roll:+.1f}°",
+              end="\r", file=sys.stderr, flush=True)
 
         alerts: list[dict[str, Any]] = []
 
