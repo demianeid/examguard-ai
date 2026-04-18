@@ -1,4 +1,0 @@
-
---- POST HIT ---
-Raw request data: {'student_code': '20231555704', 'student_name': 'a1', 'camera': 4, 'seat_number': 'Seat 1', 'x1': 144, 'y1': 235, 'x2': 258, 'y2': 314}
-SUCCESSfully saved.
