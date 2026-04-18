@@ -10,6 +10,7 @@ env/
 .vscode
 .vscode/settings.json
 .vscode/launch.json
+
 # Django specific
 *.log
 *.pot
@@ -17,13 +18,10 @@ env/
 __pycache__/
 db.sqlite3
 media/
-
-
-# .gitignore (at root)
-venv/
-.env
 node_modules/
-__pycache__/
-*.pyc
-media/
-db.sqlite3
+
+# AI model weights -- never commit .pt files to git
+# They are downloaded at Docker build time or manually placed in models/
+*.pt
+*.onnx
+*.pth

@@ -20,7 +20,12 @@ Typical usage in handler.py (Phase 4 will do this automatically):
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
+
+_MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
+_DEFAULT_PHONE_MODEL = os.path.join(_MODELS_DIR, "yolov8n.pt")
+_DEFAULT_FACE_MODEL  = os.path.join(_MODELS_DIR, "yolov10n-face.pt")
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +48,8 @@ class AIDetector:
 
     def load_models(
         self,
-        phone_model_path: str = "models/yolov8n.pt",
-        face_model_path:  str = "models/yolov8n-face.pt",
+        phone_model_path: str = _DEFAULT_PHONE_MODEL,
+        face_model_path:  str = _DEFAULT_FACE_MODEL,
     ) -> None:
         """
         Load all sub-detector singletons into memory.
