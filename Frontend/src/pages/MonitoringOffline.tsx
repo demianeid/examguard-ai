@@ -34,7 +34,7 @@ interface Seat {
   faceMatch: boolean;
   violations: number;
   lastActivity: string;
-  cameraId: number;
+  cameraId?: number;
   streamUrl: string;
   zoneId: number;
 }
@@ -100,8 +100,8 @@ const OfflineMonitoringPage: FC = () => {
 
       return {
         id: i + 1,
-        studentId: String(zone.student),
-        studentName: zone.student_name || `Student ${zone.student}`,
+        studentId: String(zone.student_code || ''),
+        studentName: zone.student_name || `Student ${zone.student_code || 'Unknown'}`,
         seatNumber: zone.seat_number || `Seat ${i + 1}`,
         status,
         faceMatch: faceAlerts.length === 0,
