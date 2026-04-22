@@ -17,6 +17,6 @@ class AlertAdmin(admin.ModelAdmin):
 
 @admin.register(ViolationLog)
 class ViolationLogAdmin(admin.ModelAdmin):
-    list_display  = ['student', 'session', 'total_alerts', 'violation_score']
+    list_display  = ['zone', 'session', 'total_alerts', 'violation_score']
     list_filter   = ['session']
-    search_fields = ['student__first_name', 'student__last_name']
+    search_fields = ['zone__student_name', 'zone__seat_number']

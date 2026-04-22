@@ -21,14 +21,17 @@ User = get_user_model()
 @permission_classes([IsAuthenticated])
 def exam_hall_list(request):
     if request.method == 'GET':
-        halls = ExamHall.objects.filter(is_active=True)
+        if request.user.is_superuser:
+            halls = ExamHall.objects.filter(is_active=True)
+        else:
+            halls = ExamHall.objects.filter(is_active=True, professor=request.user)
         serializer = ExamHallSerializer(halls, many=True)
         return Response(serializer.data)
 
     elif request.method == 'POST':
         serializer = ExamHallSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(professor=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -37,7 +40,10 @@ def exam_hall_list(request):
 @permission_classes([IsAuthenticated])
 def exam_hall_detail(request, pk):
     try:
-        hall = ExamHall.objects.get(pk=pk)
+        if request.user.is_superuser:
+            hall = ExamHall.objects.get(pk=pk)
+        else:
+            hall = ExamHall.objects.get(pk=pk, professor=request.user)
     except ExamHall.DoesNotExist:
         return Response({'error': 'Hall not found'}, status=status.HTTP_404_NOT_FOUND)
 

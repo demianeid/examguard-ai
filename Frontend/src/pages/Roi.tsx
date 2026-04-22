@@ -24,6 +24,7 @@ import {
   cameraApi,
   studentZoneApi,
   hallEnrollmentApi,
+  offlineExamApi,
   type ExamHall,
   type Camera,
   type HallEnrollment,
@@ -89,7 +90,22 @@ export default function ROIConfigurationPage() {
       try {
         const data = await examHallApi.getAll()
         setHalls(data)
-        if (data.length > 0) setSelectedHall(data[0])
+        
+        if (examIdParam) {
+          try {
+            const exam = await offlineExamApi.getById(Number(examIdParam))
+            const examHall = data.find(h => h.id === exam.hall)
+            if (examHall) {
+              setSelectedHall(examHall)
+            } else if (data.length > 0) {
+              setSelectedHall(data[0])
+            }
+          } catch {
+            if (data.length > 0) setSelectedHall(data[0])
+          }
+        } else if (data.length > 0) {
+          setSelectedHall(data[0])
+        }
       } catch {
         setHallsError("Failed to load exam halls.")
       } finally {
@@ -97,7 +113,7 @@ export default function ROIConfigurationPage() {
       }
     }
     load()
-  }, [])
+  }, [examIdParam])
 
   useEffect(() => {
     if (!selectedHall) return

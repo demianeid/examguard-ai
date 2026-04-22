@@ -51,9 +51,8 @@ class StudentProfileAdmin(admin.ModelAdmin):
 class ProfessorProfileAdmin(admin.ModelAdmin):
     list_display  = ('get_id', 'get_full_name', 'get_email', 'is_verified', 'display_id_card')
     list_filter   = ('is_verified',)
-    list_editable = ('is_verified',)
     search_fields = ('user__custom_id', 'user__email', 'user__last_name')
-    actions       = ['activate_professors']
+    actions       = ['activate_professors', 'deactivate_professors']
 
     def get_id(self, obj):        return obj.user.custom_id
     def get_full_name(self, obj):  return f"Dr. {obj.user.get_full_name()}"
@@ -81,3 +80,13 @@ class ProfessorProfileAdmin(admin.ModelAdmin):
             user.is_active = True
             user.save()
         self.message_user(request, f"Successfully activated {queryset.count()} professors.")
+
+    @admin.action(description="Deactivate selected Professors")
+    def deactivate_professors(self, request, queryset):
+        for profile in queryset:
+            profile.is_verified = False
+            profile.save()
+            user = profile.user
+            user.is_active = False
+            user.save()
+        self.message_user(request, f"Successfully deactivated {queryset.count()} professors.")

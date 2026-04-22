@@ -7,6 +7,7 @@ class ExamHall(models.Model):
     building   = models.CharField(max_length=100)
     capacity   = models.PositiveIntegerField(default=0)
     is_active  = models.BooleanField(default=True)
+    professor  = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='exam_halls', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -66,7 +67,7 @@ class OfflineExam(models.Model):
 
 class StudentZone(models.Model):
     hall        = models.ForeignKey(ExamHall, on_delete=models.CASCADE, related_name='zones')
-    camera      = models.ForeignKey(Camera, on_delete=models.CASCADE, related_name='zones')
+    camera      = models.ForeignKey(Camera, on_delete=models.CASCADE, related_name='zones', null=True, blank=True)
     student_name = models.CharField(max_length=255, default='')
     student_code = models.CharField(max_length=100, default='')
     seat_number  = models.CharField(max_length=20, blank=True, null=True)
