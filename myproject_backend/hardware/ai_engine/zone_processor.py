@@ -66,15 +66,15 @@ import numpy as np
 # ── Lazy detector imports (singletons loaded once at worker startup) ───────────
 # Imported here as module-level callables so they can be patched in tests.
 def _get_phone_detector():
-    from hardware.ai_engine.phone_detector import get_phone_detector
+    from .phone_detector import get_phone_detector
     return get_phone_detector()
 
 def _get_face_detector():
-    from hardware.ai_engine.face_detector import get_face_detector
+    from .face_detector import get_face_detector
     return get_face_detector()
 
 def _get_head_pose_estimator():
-    from hardware.ai_engine.head_pose import get_head_pose_estimator
+    from .head_pose import get_head_pose_estimator
     return get_head_pose_estimator()
 
 # Cache references after first use (avoids repeated singleton look-ups)

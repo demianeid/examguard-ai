@@ -71,7 +71,7 @@ class AIDetector:
 
         # Phone / paper detector
         try:
-            from hardware.ai_engine.phone_detector import PhoneDetector
+            from .phone_detector import PhoneDetector
             self._phone_detector = PhoneDetector(model_path=phone_model_path)
             self._phone_detector.load()
             logger.info("✅ PhoneDetector loaded.")
@@ -81,7 +81,7 @@ class AIDetector:
 
         # Face detector (auto-falls back to Haar if face model absent)
         try:
-            from hardware.ai_engine.face_detector import FaceDetector
+            from .face_detector import FaceDetector
             self._face_detector = FaceDetector(model_path=face_model_path)
             self._face_detector.load()
             logger.info("✅ FaceDetector loaded.")
@@ -91,7 +91,7 @@ class AIDetector:
 
         # Head-pose estimator (gracefully degrades if mediapipe absent)
         try:
-            from hardware.ai_engine.head_pose import HeadPoseEstimator
+            from .head_pose import HeadPoseEstimator
             self._head_pose = HeadPoseEstimator()
             self._head_pose.load()
             logger.info("✅ HeadPoseEstimator loaded.")
@@ -147,7 +147,7 @@ class AIDetector:
             logger.warning("AIDetector.run() called before load_models() — auto-loading.")
             self.load_models()
 
-        from hardware.ai_engine.zone_processor import process_frame
+        from .zone_processor import process_frame
         return process_frame(frame_b64, zones)
 
     # ── Status ─────────────────────────────────────────────────────────────────

@@ -52,7 +52,7 @@ FRAME_JPEG_QUALITY:         int   = int(getattr(settings, "FRAME_JPEG_QUALITY", 
 FRAME_SAMPLE_RATE:          float = float(getattr(settings, "FRAME_SAMPLE_RATE", os.getenv("FRAME_SAMPLE_RATE", "2")))
 
 # Timeout for RunPod /runsync calls (seconds)
-RUNPOD_REQUEST_TIMEOUT: int = 30
+RUNPOD_REQUEST_TIMEOUT: int = 120
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -75,19 +75,21 @@ def _fetch_zones(exam_id: int, camera_id: int) -> list[dict[str, Any]]:
     Falls back to an empty list on error so the dispatcher can continue
     (alerts will just not be generated for that cycle).
     """
-    url = f"{DJANGO_API_URL}/student-zones/"
-    params = {"exam": exam_id, "camera": camera_id}
-
     try:
-        resp = requests.get(url, params=params, headers=_auth_headers(), timeout=5)
-        resp.raise_for_status()
-        data = resp.json()
-        # DRF paginated list → unwrap results key if present
-        zones = data.get("results", data) if isinstance(data, dict) else data
+        from hardware.offline_monitoring.models import StudentZone
+        zones_qs = StudentZone.objects.filter(hall__offline_exams__id=exam_id, camera_id=camera_id)
+        zones = [
+            {
+                "id": z.id,
+                "student_name": z.student_name,
+                "student_code": z.student_code,
+                "x1": z.x1, "y1": z.y1, "x2": z.x2, "y2": z.y2
+            } for z in zones_qs
+        ]
         logger.debug("Fetched %d zone(s) for exam=%s camera=%s.", len(zones), exam_id, camera_id)
         return zones
-    except requests.RequestException as exc:
-        logger.error("Failed to fetch zones (exam=%s, cam=%s): %s", exam_id, camera_id, exc)
+    except Exception as exc:
+        logger.error("Failed to fetch zones locally (exam=%s, cam=%s): %s", exam_id, camera_id, exc)
         return []
 
 
@@ -118,10 +120,18 @@ def _post_to_runpod(
         }
     }
 
+    from decouple import config
+    api_key = config('RUNPOD_API_KEY', default='')
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
     try:
         resp = requests.post(
             RUNPOD_ENDPOINT,
             json=payload,
+            headers=headers,
             timeout=RUNPOD_REQUEST_TIMEOUT,
         )
         resp.raise_for_status()
@@ -254,7 +264,20 @@ def dispatch_once(
         return False
 
     # 5. Parse RunPod response, post alerts to Django, push to WebSocket
-    results = response.get("output", {}).get("results", [])
+    if response.get("status") == "FAILED":
+        logger.error("RunPod job FAILED: %s", response.get("error", "Unknown error"))
+        return False
+
+    output = response.get("output")
+    if not isinstance(output, dict):
+        logger.error("RunPod returned unexpected output format: %s", response)
+        return False
+
+    if "error" in output:
+        logger.error("RunPod handler error: %s", output["error"])
+        return False
+
+    results = output.get("results", [])
     logger.info("RunPod returned %d zone result(s).", len(results))
 
     _post_alerts(results, session_id, exam_id=exam_id, ws_push_fn=ws_push_fn)
