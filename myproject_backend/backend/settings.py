@@ -39,6 +39,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 # ─── Apps ─────────────────────────────────────────────────────────
 INSTALLED_APPS = [
+    'daphne',                          # ← must be first for ASGI
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -48,6 +49,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'channels',                        # Django Channels
     # My Apps
     'authentication',
     'instructors',
@@ -57,6 +59,7 @@ INSTALLED_APPS = [
     'hardware.offline_monitoring',
     'hardware.ai_detection',
     'hardware.camera_stream',
+    'hardware.frame_dispatcher',
     'face',
 ]
 
@@ -151,3 +154,40 @@ EMAIL_USE_TLS       = config('EMAIL_USE_TLS',       default=True, cast=bool)
 EMAIL_HOST_USER     = config('EMAIL_HOST_USER',     default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL  = config('DEFAULT_FROM_EMAIL',  default='ExamGuard <noreply@examguard.com>')
+
+# ─── Celery & Redis ───────────────────────────────────────────────
+CELERY_BROKER_URL      = config('CELERY_BROKER_URL',      default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND  = config('CELERY_RESULT_BACKEND',  default='redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT  = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE        = TIME_ZONE
+
+# Phase 5 — Beat Schedule
+CELERY_BEAT_SCHEDULE = {
+    'dispatch-frames-every-2-seconds': {
+        'task': 'hardware.frame_dispatcher.tasks.dispatch_active_sessions',
+        'schedule': 2.0,  # Run every 2 seconds
+    },
+}
+
+# ─── RunPod & Dispatcher Config ───────────────────────────────────
+RUNPOD_ENDPOINT             = config('RUNPOD_ENDPOINT',             default='')
+DJANGO_API_URL              = config('DJANGO_API_URL',              default='http://localhost:8000/api')
+DJANGO_API_TOKEN            = config('DJANGO_API_TOKEN',            default='')
+ALERT_CONFIDENCE_THRESHOLD  = config('ALERT_CONFIDENCE_THRESHOLD',  default=0.6, cast=float)
+FRAME_JPEG_QUALITY          = config('FRAME_JPEG_QUALITY',          default=85,  cast=int)
+FRAME_SAMPLE_RATE           = config('FRAME_SAMPLE_RATE',           default=2,   cast=int)
+
+# ─── Django Channels (Phase 6) ────────────────────────────────────
+ASGI_APPLICATION = 'backend.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [config('REDIS_URL', default='redis://localhost:6379/1')],
+        },
+    },
+}
+

@@ -37,19 +37,19 @@ import time
 from typing import Any, Optional
 
 import requests
-
-from myproject_backend.hardware.ai_engine.zone_processor import encode_frame, crop_zones
-from myproject_backend.hardware.frame_dispatcher.rtsp_reader import RtspReader, RtspReaderError
+from django.conf import settings
+from hardware.ai_engine.zone_processor import encode_frame, crop_zones
+from .rtsp_reader import RtspReader, RtspReaderError
 
 logger = logging.getLogger(__name__)
 
 # ── Config (overridden by env vars or Django settings) ────────────────────────
-RUNPOD_ENDPOINT:            str   = os.getenv("RUNPOD_ENDPOINT", "")
-DJANGO_API_URL:             str   = os.getenv("DJANGO_API_URL", "http://localhost:8000/api")
-DJANGO_API_TOKEN:           str   = os.getenv("DJANGO_API_TOKEN", "")
-ALERT_CONFIDENCE_THRESHOLD: float = float(os.getenv("ALERT_CONFIDENCE_THRESHOLD", "0.6"))
-FRAME_JPEG_QUALITY:         int   = int(os.getenv("FRAME_JPEG_QUALITY", "85"))
-FRAME_SAMPLE_RATE:          float = float(os.getenv("FRAME_SAMPLE_RATE", "2"))
+RUNPOD_ENDPOINT:            str   = getattr(settings, "RUNPOD_ENDPOINT", os.getenv("RUNPOD_ENDPOINT", ""))
+DJANGO_API_URL:             str   = getattr(settings, "DJANGO_API_URL", os.getenv("DJANGO_API_URL", "http://localhost:8000/api"))
+DJANGO_API_TOKEN:           str   = getattr(settings, "DJANGO_API_TOKEN", os.getenv("DJANGO_API_TOKEN", ""))
+ALERT_CONFIDENCE_THRESHOLD: float = float(getattr(settings, "ALERT_CONFIDENCE_THRESHOLD", os.getenv("ALERT_CONFIDENCE_THRESHOLD", "0.6")))
+FRAME_JPEG_QUALITY:         int   = int(getattr(settings, "FRAME_JPEG_QUALITY", os.getenv("FRAME_JPEG_QUALITY", "85")))
+FRAME_SAMPLE_RATE:          float = float(getattr(settings, "FRAME_SAMPLE_RATE", os.getenv("FRAME_SAMPLE_RATE", "2")))
 
 # Timeout for RunPod /runsync calls (seconds)
 RUNPOD_REQUEST_TIMEOUT: int = 30
@@ -133,13 +133,25 @@ def _post_to_runpod(
     return None
 
 
-def _post_alerts(results: list[dict], session_id: int) -> None:
+def _post_alerts(
+    results:    list[dict],
+    session_id: int,
+    exam_id:    Optional[int] = None,
+    ws_push_fn: Optional[Any] = None,
+) -> list[dict]:
     """
     For each alert in *results*, POST to Django's ``/api/alerts/`` endpoint.
 
     Filters out alerts below ``ALERT_CONFIDENCE_THRESHOLD``.
+
+    If *ws_push_fn* is provided it is called with (exam_id, alert_payload)
+    for every successfully created alert, allowing the Celery task to push
+    the alert to the WebSocket channel layer in real time.
+
+    Returns a list of the payloads that were successfully posted.
     """
-    url = f"{DJANGO_API_URL}/alerts/"
+    url    = f"{DJANGO_API_URL}/alerts/"
+    posted = []
 
     for zone_result in results:
         zone_id = zone_result.get("zone_id")
@@ -158,17 +170,25 @@ def _post_alerts(results: list[dict], session_id: int) -> None:
                 "alert_type": alert.get("type"),
                 "severity":   alert.get("severity", "medium"),
                 "confidence": confidence,
-                # snapshot (base64 crop) will be attached in Phase 3
             }
             try:
                 resp = requests.post(url, json=payload, headers=_auth_headers(), timeout=5)
                 resp.raise_for_status()
+                created = resp.json()   # full Alert object from DRF
                 logger.info(
                     "Alert posted: zone=%s type=%s confidence=%.2f",
                     zone_id, alert.get("type"), confidence,
                 )
+                posted.append(created)
+
+                # Push to WebSocket in real time
+                if ws_push_fn and exam_id is not None:
+                    ws_push_fn(exam_id, created)
+
             except requests.RequestException as exc:
                 logger.error("Failed to post alert for zone %s: %s", zone_id, exc)
+
+    return posted
 
 
 # ── Core dispatch function ────────────────────────────────────────────────────
@@ -179,17 +199,20 @@ def dispatch_once(
     camera_id:  int,
     session_id: int,
     fps:        float = FRAME_SAMPLE_RATE,
+    ws_push_fn: Optional[Any] = None,
 ) -> bool:
     """
     Capture **one** frame from *stream_url*, run zone inference on RunPod,
     and post any alerts to Django.
 
+    Parameters
+    ----------
+    ws_push_fn : Optional callable(exam_id, alert_payload) — when provided,
+                 each created alert is immediately pushed to the WebSocket
+                 channel group for real-time delivery to the frontend.
+
     Returns True if the full cycle succeeded (frame captured + RunPod call
     returned), False otherwise.
-
-    Use this function in:
-    - Local integration tests (call directly from a script).
-    - The Celery Beat task (Phase 5) which calls it in a loop.
     """
     logger.info(
         "dispatch_once | exam=%s cam=%s session=%s stream=%s",
@@ -230,11 +253,11 @@ def dispatch_once(
     if response is None:
         return False
 
-    # 5. Parse RunPod response and post alerts to Django
+    # 5. Parse RunPod response, post alerts to Django, push to WebSocket
     results = response.get("output", {}).get("results", [])
     logger.info("RunPod returned %d zone result(s).", len(results))
 
-    _post_alerts(results, session_id)
+    _post_alerts(results, session_id, exam_id=exam_id, ws_push_fn=ws_push_fn)
     return True
 
 

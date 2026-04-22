@@ -79,6 +79,7 @@ const OfflineMonitoringPage: FC = () => {
   const [time, setTime] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [wsConnected, setWsConnected] = useState(false);
 
   const currentHall = halls.find(h => h.id === selectedHallId);
 
@@ -204,17 +205,52 @@ const OfflineMonitoringPage: FC = () => {
     loadSession();
   }, [examIdParam]);
 
-  // Poll alerts every 5 seconds while monitoring
+  // WebSocket — real-time alert feed (Phase 6)
   useEffect(() => {
-    if (!isMonitoring || !session?.id) return;
+    if (!isMonitoring || !session?.id || !examIdParam) return;
+
+    const WS_BASE = (import.meta.env.VITE_WS_URL || 'ws://localhost:8000').replace(/\/$/, '');
+    const wsUrl   = `${WS_BASE}/ws/exam/${examIdParam}/alerts/`;
+    const ws      = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      setWsConnected(true);
+      console.log('[WS] Connected to', wsUrl);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const alert = JSON.parse(event.data) as HwAlert;
+        setAlerts(prev => [alert, ...prev]);
+      } catch (e) {
+        console.warn('[WS] Could not parse message:', event.data);
+      }
+    };
+
+    ws.onerror = (err) => console.error('[WS] Error:', err);
+
+    ws.onclose = () => {
+      setWsConnected(false);
+      console.log('[WS] Disconnected');
+    };
+
+    return () => {
+      ws.close();
+      setWsConnected(false);
+    };
+  }, [isMonitoring, session?.id, examIdParam]);
+
+  // Fallback polling every 15 s (catches any alerts that missed the WS push)
+  useEffect(() => {
+    if (!isMonitoring || !session?.id || wsConnected) return;
     const interval = setInterval(async () => {
       try {
         const a = await monitoringApi.getAlerts(session.id);
         setAlerts(a);
       } catch { /* ignore */ }
-    }, 5_000);
+    }, 15_000);
     return () => clearInterval(interval);
-  }, [isMonitoring, session?.id]);
+  }, [isMonitoring, session?.id, wsConnected]);
 
   // Timer ticks while monitoring
   useEffect(() => {
@@ -361,6 +397,17 @@ const OfflineMonitoringPage: FC = () => {
               <div>
                 <p className="text-xs opacity-75">Exam Duration</p>
                 <p className="font-bold text-lg">{formatTime(time)}</p>
+              </div>
+            </div>
+
+            <div className="h-10 w-px bg-blue-600"></div>
+
+            {/* WebSocket status badge */}
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${wsConnected ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
+              <div>
+                <p className="text-xs opacity-75">Alerts Channel</p>
+                <p className="font-bold text-sm">{wsConnected ? 'WS LIVE' : 'POLLING'}</p>
               </div>
             </div>
 
