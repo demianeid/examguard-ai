@@ -71,7 +71,7 @@ class AIDetector:
 
         # Phone / paper detector
         try:
-            from hardware.ai_engine.phone_detector import PhoneDetector
+            from .phone_detector import PhoneDetector
             self._phone_detector = PhoneDetector(model_path=phone_model_path)
             self._phone_detector.load()
             logger.info("✅ PhoneDetector loaded.")
@@ -81,7 +81,7 @@ class AIDetector:
 
         # Face detector (auto-falls back to Haar if face model absent)
         try:
-            from hardware.ai_engine.face_detector import FaceDetector
+            from .face_detector import FaceDetector
             self._face_detector = FaceDetector(model_path=face_model_path)
             self._face_detector.load()
             logger.info("✅ FaceDetector loaded.")
@@ -91,20 +91,17 @@ class AIDetector:
 
         # Head-pose estimator (gracefully degrades if mediapipe absent)
         try:
-            from hardware.ai_engine.head_pose import HeadPoseEstimator
+            from .head_pose import HeadPoseEstimator
             self._head_pose = HeadPoseEstimator()
             self._head_pose.load()
             logger.info("✅ HeadPoseEstimator loaded.")
         except Exception as exc:         # noqa: BLE001
             errors.append(f"HeadPoseEstimator: {exc}")
             logger.error("❌ HeadPoseEstimator failed to load: %s", exc)
-
+        
         self._loaded = True
-
         if errors:
-            logger.warning(
-                "AIDetector loaded with %d error(s): %s", len(errors), errors
-            )
+            logger.warning("AIDetector loaded with %d error(s): %s", len(errors), errors)
         else:
             logger.info("AIDetector: all models loaded successfully.")
 
@@ -130,24 +127,12 @@ class AIDetector:
     ) -> list[dict[str, Any]]:
         """
         Full inference pipeline: decode → crop → detect → return alerts.
-
-        Delegates to ``zone_processor.process_frame()`` which calls the
-        module-level detector singletons (same objects loaded by this class).
-
-        Parameters
-        ----------
-        frame_b64 : Base64-encoded JPEG/PNG camera frame.
-        zones     : List of StudentZone dicts (id, student_code, x1, y1, x2, y2).
-
-        Returns
-        -------
-        List of per-zone result dicts — same schema as ``process_frame()``.
         """
         if not self._loaded:
             logger.warning("AIDetector.run() called before load_models() — auto-loading.")
             self.load_models()
 
-        from hardware.ai_engine.zone_processor import process_frame
+        from .zone_processor import process_frame
         return process_frame(frame_b64, zones)
 
     # ── Status ─────────────────────────────────────────────────────────────────
