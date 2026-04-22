@@ -1,9 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # ExamGuard AI — RunPod Serverless Worker
 # Build context : runpod_deploy/          (repo root subdirectory)
-# Target env    : CUDA 11.8 · Python 3.10 · Ubuntu 20.04
+# Target env    : CUDA 11.8 · Python 3.10 · Ubuntu 22.04
 # ─────────────────────────────────────────────────────────────────────────────
-FROM runpod/pytorch:2.1.1-py3.10-cuda11.8.0-devel-ubuntu22.04
+FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel
 
 # Suppress interactive prompts during apt installs
 ENV DEBIAN_FRONTEND=noninteractive
