@@ -6,7 +6,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── RunPod SDK ────────────────────────────────────────────────────────────────
-runpod==1.7.3                    # Serverless worker SDK (handler entry point)
+runpod==1.7.3
+Brotli==1.1.0                    # Serverless worker SDK (handler entry point)
 
 # ── Object detection (phone, paper, face) ────────────────────────────────────
 ultralytics==8.4.38              # YOLOv8 — tested version (Phase 1-3 verified)
