@@ -161,6 +161,9 @@ def student_zone_list(request, exam_id):
 
     if request.method == 'GET':
         zones = StudentZone.objects.filter(hall=hall)
+        camera_id = request.query_params.get('camera')
+        if camera_id:
+            zones = zones.filter(camera=camera_id)
         serializer = StudentZoneSerializer(zones, many=True)
         return Response(serializer.data)
 

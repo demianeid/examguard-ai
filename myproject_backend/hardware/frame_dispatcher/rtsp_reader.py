@@ -142,16 +142,32 @@ class RtspReader:
         """
         for attempt in range(1, self.max_retries + 1):
             logger.info(
-                "[cam %s] Opening RTSP stream (attempt %d/%d): %s",
+                "[cam %s] Opening stream (attempt %d/%d): %s",
                 self.camera_id, attempt, self.max_retries, self.stream_url,
             )
 
-            cap = cv2.VideoCapture(self.stream_url, cv2.CAP_FFMPEG)
+            # Convert "0" to 0 for webcam support
+            source = int(self.stream_url) if str(self.stream_url).isdigit() else self.stream_url
+            
+            # Let OpenCV auto-detect backend, but force DSHOW on Windows for fast webcam init
+            if isinstance(source, int):
+                cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+            else:
+                cap = cv2.VideoCapture(source)
 
-            # Force TCP transport — more reliable than UDP over LAN/WAN
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            # Force TCP transport if it's an RTSP string
+            if isinstance(source, str) and source.startswith("rtsp://"):
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
             if cap.isOpened():
+                # Warm-up: discard initial bad frames for local webcams
+                # Webcams need actual time to adjust auto-exposure
+                if isinstance(source, int):
+                    import time
+                    time.sleep(1.5)  # Let auto-exposure settle
+                    for _ in range(5):
+                        cap.read()
+
                 w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 native_fps = cap.get(cv2.CAP_PROP_FPS)

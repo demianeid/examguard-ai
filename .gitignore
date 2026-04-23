@@ -11,6 +11,11 @@ env/
 .vscode/settings.json
 .vscode/launch.json
 
+# Celery stuff
+celerybeat-schedule
+celerybeat-schedule.*
+celerybeat.pid
+
 # Django specific
 *.log
 *.pot

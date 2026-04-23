@@ -763,6 +763,7 @@ const OfflineMonitoringPage: FC = () => {
     );
   };
 
+
   const FeaturesPanel: FC = () => {
     const features: Feature[] = [
       { icon: <User size={18} />, label: 'Face Recognition', status: true },

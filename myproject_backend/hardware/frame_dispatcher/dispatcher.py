@@ -51,6 +51,12 @@ ALERT_CONFIDENCE_THRESHOLD: float = float(getattr(settings, "ALERT_CONFIDENCE_TH
 FRAME_JPEG_QUALITY:         int   = int(getattr(settings, "FRAME_JPEG_QUALITY", os.getenv("FRAME_JPEG_QUALITY", "85")))
 FRAME_SAMPLE_RATE:          float = float(getattr(settings, "FRAME_SAMPLE_RATE", os.getenv("FRAME_SAMPLE_RATE", "2")))
 
+# Alert types to suppress at the dispatcher level (comma-separated env var).
+# Use this to block noisy false-positive alert types without redeploying RunPod.
+# Example: SUPPRESSED_ALERT_TYPES=no_face,head_movement
+_suppressed_env = os.getenv("SUPPRESSED_ALERT_TYPES", "")
+SUPPRESSED_ALERT_TYPES: set = {t.strip() for t in _suppressed_env.split(",") if t.strip()}
+
 # Timeout for RunPod /runsync calls (seconds)
 RUNPOD_REQUEST_TIMEOUT: int = 120
 
@@ -83,7 +89,7 @@ def _fetch_zones(exam_id: int, camera_id: int) -> list[dict[str, Any]]:
                 "id": z.id,
                 "student_name": z.student_name,
                 "student_code": z.student_code,
-                "x1": z.x1, "y1": z.y1, "x2": z.x2, "y2": z.y2
+                "x1": 0, "y1": 0, "x2": 1920, "y2": 1080  # FORCING FULL FRAME
             } for z in zones_qs
         ]
         logger.debug("Fetched %d zone(s) for exam=%s camera=%s.", len(zones), exam_id, camera_id)
@@ -160,33 +166,57 @@ def _post_alerts(
 
     Returns a list of the payloads that were successfully posted.
     """
-    url    = f"{DJANGO_API_URL}/alerts/"
     posted = []
+
+    # Import locally to avoid circular imports if any
+    from hardware.ai_detection.models import Alert
+    from hardware.ai_detection.serializers import AlertSerializer
 
     for zone_result in results:
         zone_id = zone_result.get("zone_id")
-        for alert in zone_result.get("alerts", []):
-            confidence = float(alert.get("confidence", 1.0))
+        zone_alerts = zone_result.get("alerts", [])
+        
+        # 🔥 DEBUG LOG: Print what RunPod actually saw for this zone!
+        if zone_alerts:
+            logger.info("🔥 [RAW RUNPOD ALERTS for zone %s]: %s", zone_id, zone_alerts)
+        else:
+            logger.info("🔥 [RAW RUNPOD ALERTS for zone %s]: No alerts returned by AI.", zone_id)
+
+        for alert in zone_alerts:
+            alert_type = alert.get("type", "")
+            confidence  = float(alert.get("confidence", 1.0))
+
+            # Skip suppressed alert types (configurable via SUPPRESSED_ALERT_TYPES env var)
+            if alert_type in SUPPRESSED_ALERT_TYPES:
+                logger.debug("Alert type '%s' suppressed by SUPPRESSED_ALERT_TYPES — skipped.", alert_type)
+                continue
+
             if confidence < ALERT_CONFIDENCE_THRESHOLD:
                 logger.debug(
                     "Alert %s confidence %.2f below threshold — skipped.",
-                    alert.get("type"), confidence,
+                    alert_type, confidence,
                 )
                 continue
 
-            payload = {
-                "session":    session_id,
-                "zone":       zone_id,
-                "alert_type": alert.get("type"),
-                "severity":   alert.get("severity", "medium"),
-                "confidence": confidence,
-            }
             try:
-                resp = requests.post(url, json=payload, headers=_auth_headers(), timeout=5)
-                resp.raise_for_status()
-                created = resp.json()   # full Alert object from DRF
+                # 1. Save directly to DB via ORM
+                alert_obj = Alert.objects.create(
+                    session_id=session_id,
+                    zone_id=zone_id,
+                    alert_type=alert.get("type"),
+                    severity=alert.get("severity", "medium")
+                )
+                
+                # 2. Serialize so the payload structure matches what the frontend expects
+                serializer = AlertSerializer(alert_obj)
+                created = dict(serializer.data)
+                
+                # We inject confidence into the dictionary because it's not a DB field, 
+                # but the frontend might want it for UI display.
+                created["confidence"] = confidence
+
                 logger.info(
-                    "Alert posted: zone=%s type=%s confidence=%.2f",
+                    "Alert saved to DB: zone=%s type=%s conf=%.2f",
                     zone_id, alert.get("type"), confidence,
                 )
                 posted.append(created)
@@ -195,8 +225,8 @@ def _post_alerts(
                 if ws_push_fn and exam_id is not None:
                     ws_push_fn(exam_id, created)
 
-            except requests.RequestException as exc:
-                logger.error("Failed to post alert for zone %s: %s", zone_id, exc)
+            except Exception as exc:
+                logger.error("Failed to save alert to DB for zone %s: %s", zone_id, exc)
 
     return posted
 
@@ -245,6 +275,14 @@ def dispatch_once(
         logger.error("No frame received from stream within timeout.")
         return False
 
+    # 🔥 DEBUG: Save the exact frame being sent to RunPod to disk!
+    import cv2
+    import os
+    from django.conf import settings
+    debug_path = os.path.join(settings.BASE_DIR, "scratch", "debug_frame.jpg")
+    cv2.imwrite(debug_path, frame)
+    logger.info("🔥 [DEBUG] Saved frame to %s before sending to RunPod.", debug_path)
+
     # 2. Encode frame to base64 JPEG
     try:
         frame_b64 = encode_frame(frame, quality=FRAME_JPEG_QUALITY)
@@ -262,6 +300,29 @@ def dispatch_once(
     response = _post_to_runpod(frame_b64, zones, exam_id, session_id)
     if response is None:
         return False
+
+    # 🔥 LOCAL FALLBACK FOR NO_FACE 🔥
+    # Since RunPod's current Docker image suppresses no_face and we cannot easily 
+    # rebuild it locally, we do a quick local check for faces using OpenCV.
+    try:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        local_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        if len(local_faces) == 0:
+            logger.info("🔥 [LOCAL AI] 0 faces detected in frame. Injecting 'no_face' alert.")
+            # Inject a no_face alert into every zone result
+            results_list = response.get("output", {}).get("results", [])
+            for z_res in results_list:
+                if "alerts" not in z_res:
+                    z_res["alerts"] = []
+                z_res["alerts"].append({
+                    "type": "no_face",
+                    "severity": "medium",
+                    "confidence": 1.0,
+                    "detector": "local_haar"
+                })
+    except Exception as exc:
+        logger.error("Local face detection fallback failed: %s", exc)
 
     # 5. Parse RunPod response, post alerts to Django, push to WebSocket
     if response.get("status") == "FAILED":
