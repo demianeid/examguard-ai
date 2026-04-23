@@ -74,7 +74,7 @@ for _p in (_HARDWARE_DIR, _BACKEND_DIR):
 
 import runpod
 
-from hardware.ai_engine.zone_processor import process_frame  # type: ignore[import]
+from ai_engine.zone_processor import process_frame  # type: ignore[import]
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(
