@@ -253,8 +253,12 @@ class FaceDetector:
     def _make_alerts(self, faces: list[dict]) -> list[dict]:
         n = len(faces)
         if n == 0:
-            logger.info("FaceDetector → no_face (0 faces detected).")
-            return [self._no_face_alert(face_count=0, faces=[])]
+            # NOTE: no_face alerts disabled to prevent false positives.
+            # The Haar fallback fires too often when ROI zones are small or
+            # the face occupies only part of the cropped region.
+            # Re-enable once zones are calibrated and YOLO-face model is confirmed loaded.
+            logger.debug("FaceDetector → 0 faces detected (no_face alert suppressed).")
+            return []
         if n == 1:
             logger.debug("FaceDetector → clean (1 face detected).")
             return []   # normal — one student
