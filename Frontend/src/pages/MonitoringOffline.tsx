@@ -2,7 +2,7 @@ import React, { useState, useEffect, type FC } from 'react';
 import {
   Video, Camera, Users, AlertCircle, Shield,
   MapPin, Activity, Eye, Mic, Clock,
-  Download, Grid,
+  Download,
   User, Phone, FileText, Volume2, Radio, WifiOff,
   CheckCircle, XCircle, AlertTriangle,
   Save, Loader2, Play
@@ -23,7 +23,6 @@ import {
 } from '../services/api';
 
 type SeatStatus = 'normal' | 'warning' | 'alert';
-type ViewMode = 'heatmap' | 'grid';
 
 interface Seat {
   id: number;
@@ -74,7 +73,7 @@ const OfflineMonitoringPage: FC = () => {
   const [alertsLoading, setAlertsLoading] = useState(false);
 
   const [isMonitoring, setIsMonitoring] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('heatmap');
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
   const [time, setTime] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
@@ -276,14 +275,20 @@ const OfflineMonitoringPage: FC = () => {
     }
   };
 
-  const handleEndMonitoring = async () => {
+  const handleEndMonitoringClick = () => {
+    setShowEndConfirm(true);
+  };
+
+  const executeEndMonitoring = async () => {
     if (!session?.id) return;
+
     setActionLoading(true);
     setActionError('');
     try {
       await monitoringApi.endMonitoring(session.id);
       setIsMonitoring(false);
       setSession(prev => prev ? { ...prev, status: 'ended' } : null);
+      setShowEndConfirm(false);
     } catch {
       setActionError('Failed to end monitoring.');
     } finally {
@@ -435,7 +440,7 @@ const OfflineMonitoringPage: FC = () => {
             )}
             {isMonitoring && (
               <button
-                onClick={handleEndMonitoring}
+                onClick={handleEndMonitoringClick}
                 disabled={actionLoading}
                 className="bg-red-500 hover:bg-red-600 disabled:opacity-50 px-6 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
               >
@@ -454,11 +459,6 @@ const OfflineMonitoringPage: FC = () => {
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-gray-800">Select Exam Hall</h3>
-        <Link to="/Roi">
-          <button className="text-blue-600 hover:text-blue-700 font-semibold text-sm">
-            + Add New Hall
-          </button>
-        </Link>
       </div>
 
       {hallsLoading ? (
@@ -546,7 +546,7 @@ const OfflineMonitoringPage: FC = () => {
     </div>
   );
 
-  const HeatmapView: FC = () => (
+  const SeatingMapView: FC = () => (
     <div className="bg-white rounded-lg shadow-md p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -555,24 +555,6 @@ const OfflineMonitoringPage: FC = () => {
             <h3 className="font-semibold text-gray-800">Hall Seating Map</h3>
             <p className="text-sm text-gray-600">Monitoring {currentHall?.name ?? exam?.hall_name ?? 'N/A'}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode('heatmap')}
-            className={`px-3 py-2 rounded-lg font-semibold text-sm transition-colors ${
-              viewMode === 'heatmap' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
-            }`}
-          >
-            <MapPin size={16} className="inline mr-1" />Heatmap
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`px-3 py-2 rounded-lg font-semibold text-sm transition-colors ${
-              viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
-            }`}
-          >
-            <Grid size={16} className="inline mr-1" />Grid
-          </button>
         </div>
       </div>
 
@@ -766,10 +748,8 @@ const OfflineMonitoringPage: FC = () => {
 
   const FeaturesPanel: FC = () => {
     const features: Feature[] = [
-      { icon: <User size={18} />, label: 'Face Recognition', status: true },
       { icon: <Eye size={18} />, label: 'Behavior Analysis', status: true },
       { icon: <Phone size={18} />, label: 'Object Detection', status: true },
-      { icon: <Mic size={18} />, label: 'Audio Analysis', status: true },
       { icon: <Camera size={18} />, label: 'Multi-Camera Tracking', status: true },
       { icon: <Activity size={18} />, label: 'Movement Detection', status: true },
     ];
@@ -790,6 +770,55 @@ const OfflineMonitoringPage: FC = () => {
               <CheckCircle className="text-green-600" size={18} />
             </div>
           ))}
+        </div>
+      </div>
+    );
+  };
+
+  const EndExamModal: FC = () => {
+    if (!showEndConfirm) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle className="text-red-600" size={24} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">End Exam Session</h3>
+              <p className="text-sm text-gray-500">This action requires confirmation</p>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+            <p className="text-gray-700 text-sm">
+              Are you sure you want to end the monitoring session for <strong>{currentHall?.name ?? exam?.title ?? 'this exam'}</strong>? 
+            </p>
+            <ul className="mt-3 text-sm text-gray-600 list-disc list-inside space-y-1">
+              <li>All active camera feeds will be disconnected.</li>
+              <li>AI analysis and alerting will stop immediately.</li>
+              <li>A final violation report will be generated.</li>
+            </ul>
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={() => setShowEndConfirm(false)}
+              disabled={actionLoading}
+              className="px-4 py-2 text-gray-700 hover:bg-gray-100 font-semibold rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={executeEndMonitoring}
+              disabled={actionLoading}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              {actionLoading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              Confirm End Exam
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -829,7 +858,7 @@ const OfflineMonitoringPage: FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <HeatmapView />
+            <SeatingMapView />
             <FeaturesPanel />
           </div>
           <div className="space-y-6">
@@ -838,6 +867,7 @@ const OfflineMonitoringPage: FC = () => {
           </div>
         </div>
       </div>
+      <EndExamModal />
     </div>
   );
 };

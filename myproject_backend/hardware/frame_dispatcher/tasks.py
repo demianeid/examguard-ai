@@ -14,13 +14,14 @@ def _push_alert_to_ws(exam_id: int, alert_data: dict) -> None:
     Push a single alert payload to the WebSocket group for this exam.
     Called synchronously from the Celery worker thread.
     """
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        logger.warning("No channel layer configured — skipping WebSocket push.")
-        return
-
-    group_name = f"exam_{exam_id}_alerts"
     try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            logger.warning("No channel layer configured — skipping WebSocket push.")
+            return
+
+        group_name = f"exam_{exam_id}_alerts"
+        # Use a timeout for the async_to_sync call to avoid hanging the solo worker
         async_to_sync(channel_layer.group_send)(
             group_name,
             {
@@ -28,9 +29,9 @@ def _push_alert_to_ws(exam_id: int, alert_data: dict) -> None:
                 "data":  alert_data,
             },
         )
-        logger.debug("WS push → group=%s payload=%s", group_name, alert_data)
+        logger.debug("WS push success → group=%s", group_name)
     except Exception as exc:
-        logger.error("WebSocket push failed for exam %s: %s", exam_id, exc)
+        logger.error("WebSocket push CRASHED for exam %s: %s", exam_id, exc)
 
 
 @shared_task

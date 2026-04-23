@@ -60,6 +60,22 @@ SUPPRESSED_ALERT_TYPES: set = {t.strip() for t in _suppressed_env.split(",") if 
 # Timeout for RunPod /runsync calls (seconds)
 RUNPOD_REQUEST_TIMEOUT: int = 120
 
+# ── Local AI Fallback (Singleton) ───────────────────────────────────────────
+_LOCAL_FACE_CASCADE = None
+
+def _get_local_face_cascade():
+    global _LOCAL_FACE_CASCADE
+    if _LOCAL_FACE_CASCADE is None:
+        try:
+            import cv2
+            path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            _LOCAL_FACE_CASCADE = cv2.CascadeClassifier(path)
+            if _LOCAL_FACE_CASCADE.empty():
+                logger.warning("Local Haar cascade is empty at %s", path)
+        except Exception as exc:
+            logger.error("Failed to load local face cascade: %s", exc)
+    return _LOCAL_FACE_CASCADE
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _auth_headers() -> dict[str, str]:
@@ -277,13 +293,21 @@ def dispatch_once(
 
     # 🔥 DEBUG: Save the exact frame being sent to RunPod to disk!
     import cv2
-    import os
     from django.conf import settings
-    debug_path = os.path.join(settings.BASE_DIR, "scratch", "debug_frame.jpg")
-    cv2.imwrite(debug_path, frame)
-    logger.info("🔥 [DEBUG] Saved frame to %s before sending to RunPod.", debug_path)
+    
+    scratch_dir = os.path.join(settings.BASE_DIR, "scratch")
+    if not os.path.exists(scratch_dir):
+        os.makedirs(scratch_dir, exist_ok=True)
+        
+    debug_path = os.path.join(scratch_dir, "debug_frame.jpg")
+    try:
+        cv2.imwrite(debug_path, frame)
+        logger.info("🔥 [DEBUG] Saved frame to %s", debug_path)
+    except Exception as exc:
+        logger.warning("Failed to save debug frame: %s", exc)
 
     # 2. Encode frame to base64 JPEG
+    t_start_pod = time.perf_counter()
     try:
         frame_b64 = encode_frame(frame, quality=FRAME_JPEG_QUALITY)
     except RuntimeError as exc:
@@ -302,25 +326,28 @@ def dispatch_once(
         return False
 
     # 🔥 LOCAL FALLBACK FOR NO_FACE 🔥
-    # Since RunPod's current Docker image suppresses no_face and we cannot easily 
-    # rebuild it locally, we do a quick local check for faces using OpenCV.
+    # Since RunPod's current Docker image may suppress no_face, we do a quick local check.
+    t_pod_elapsed = (time.perf_counter() - t_start_pod) * 1000
+    logger.info("RunPod responded in %.1f ms", t_pod_elapsed)
+
     try:
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        local_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-        if len(local_faces) == 0:
-            logger.info("🔥 [LOCAL AI] 0 faces detected in frame. Injecting 'no_face' alert.")
-            # Inject a no_face alert into every zone result
-            results_list = response.get("output", {}).get("results", [])
-            for z_res in results_list:
-                if "alerts" not in z_res:
-                    z_res["alerts"] = []
-                z_res["alerts"].append({
-                    "type": "no_face",
-                    "severity": "medium",
-                    "confidence": 1.0,
-                    "detector": "local_haar"
-                })
+        cascade = _get_local_face_cascade()
+        if cascade:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            local_faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+            if len(local_faces) == 0:
+                logger.info("🔥 [LOCAL AI] 0 faces detected in frame. Injecting 'no_face' alert.")
+                # Inject a no_face alert into every zone result
+                results_list = response.get("output", {}).get("results", [])
+                for z_res in results_list:
+                    if "alerts" not in z_res:
+                        z_res["alerts"] = []
+                    z_res["alerts"].append({
+                        "type": "no_face",
+                        "severity": "medium",
+                        "confidence": 1.0,
+                        "detector": "local_haar"
+                    })
     except Exception as exc:
         logger.error("Local face detection fallback failed: %s", exc)
 
