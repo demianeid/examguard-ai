@@ -20,6 +20,7 @@ class ExamHallSerializer(serializers.ModelSerializer):
 class OfflineExamSerializer(serializers.ModelSerializer):
     hall_name      = serializers.CharField(source='hall.name', read_only=True)
     professor_name = serializers.CharField(source='professor.get_full_name', read_only=True)
+    computed_status = serializers.CharField(read_only=True)
 
     class Meta:
         model  = OfflineExam

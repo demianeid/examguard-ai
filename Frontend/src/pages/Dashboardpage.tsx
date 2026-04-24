@@ -13,6 +13,7 @@ import {
   Clock,
   MapPin,
   Calendar,
+  Crosshair,
 } from "lucide-react"
 import { Link } from "react-router-dom"
 import { offlineExamApi, type OfflineExam } from "../services/api"
@@ -32,6 +33,34 @@ export default function DashboardPage() {
     }
     load()
   }, [])
+
+  const [now, setNow] = useState(new Date())
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const getMinutesToStart = (exam: OfflineExam) => {
+    const [y, m, d] = exam.date.split('-').map(Number)
+    const [h, min] = exam.start_time.split(':').map(Number)
+    const examDate = new Date(y, m - 1, d, h, min)
+    return Math.floor((examDate.getTime() - now.getTime()) / 60000)
+  }
+
+  const isStartAllowed = (exam: OfflineExam) => {
+    if (exam.computed_status === 'active') return true
+    if (exam.computed_status !== 'upcoming') return false
+    
+    const diffMins = getMinutesToStart(exam)
+    return diffMins <= 10 && diffMins > -100
+  }
+
+  const isZoneConfigured = (exam: OfflineExam) => {
+    return localStorage.getItem(`zoneConfigured_${exam.id}`) === 'true'
+  }
+
+  const dashboardExams = exams.filter(e => e.computed_status === 'active' || e.computed_status === 'upcoming')
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,13 +87,33 @@ export default function DashboardPage() {
 
           {/* CTA Buttons */}
           <div className="flex gap-4 justify-center flex-wrap">
-            <Link to={exams.length > 0 ? `/MonitoringOffline?examId=${exams[0].id}` : "/roi-config"}>
-              <button className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg">
-                <Play size={16} />
-                Start Session
-                <ChevronRight size={16} />
+            {dashboardExams.length > 0 && !isZoneConfigured(dashboardExams[0]) ? (
+              <button 
+                disabled
+                title="Please configure zones first"
+                className="flex items-center gap-2 px-6 py-3 bg-gray-200 text-gray-500 font-semibold rounded-xl cursor-not-allowed shadow-none">
+                <Crosshair size={16} />
+                Config Zone First
               </button>
-            </Link>
+            ) : dashboardExams.length > 0 && !isStartAllowed(dashboardExams[0]) ? (
+              <button 
+                disabled
+                title="Available 10 minutes before start"
+                className="flex items-center gap-2 px-6 py-3 bg-gray-200 text-gray-500 font-semibold rounded-xl cursor-not-allowed shadow-none">
+                <Play size={16} />
+                Opens 10 mins before
+              </button>
+            ) : (
+              <Link 
+                to={dashboardExams.length > 0 ? `/MonitoringOffline?examId=${dashboardExams[0].id}` : "/roi-config"}
+              >
+                <button className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg">
+                  <Play size={16} />
+                  Start Session
+                  <ChevronRight size={16} />
+                </button>
+              </Link>
+            )}
             <Link to="/facilites">
               <button className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-all duration-300">
                 <Building2 size={16} />
@@ -83,14 +132,14 @@ export default function DashboardPage() {
             <Loader2 size={20} className="animate-spin" />
             Loading exams...
           </div>
-        ) : exams.length === 0 ? (
+        ) : dashboardExams.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
             <Calendar size={40} className="text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No exams created yet. Set up an exam from Facilities.</p>
+            <p className="text-gray-500">No active or upcoming exams right now.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {exams.map((exam) => (
+            {dashboardExams.map((exam) => (
               <div
                 key={exam.id}
                 className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow"
@@ -98,13 +147,15 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold text-gray-900 text-lg">{exam.title}</h3>
                   <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                    exam.status === 'active'
+                    exam.computed_status === 'active'
                       ? 'bg-green-100 text-green-700'
-                      : exam.status === 'completed'
+                      : exam.computed_status === 'completed'
                       ? 'bg-gray-100 text-gray-600'
+                      : exam.computed_status === 'missed'
+                      ? 'bg-red-100 text-red-700'
                       : 'bg-blue-100 text-blue-700'
                   }`}>
-                    {exam.status?.toUpperCase() || 'PENDING'}
+                    {exam.computed_status?.toUpperCase() || 'UPCOMING'}
                   </span>
                 </div>
                 <div className="space-y-1.5 text-sm text-gray-600 mb-4">
@@ -122,12 +173,37 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Link to={`/MonitoringOffline?examId=${exam.id}`} className="flex-1">
-                    <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors text-sm">
-                      <Play size={14} />
-                      Start Session
-                    </button>
-                  </Link>
+                  {!isZoneConfigured(exam) ? (
+                    <div className="flex-1">
+                      <button 
+                        disabled
+                        title="Please configure zones first"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 border border-gray-200 text-gray-500 font-medium rounded-lg text-sm cursor-not-allowed">
+                        <Crosshair size={14} />
+                        Config Zone First
+                      </button>
+                    </div>
+                  ) : isStartAllowed(exam) ? (
+                    <Link 
+                      to={`/MonitoringOffline?examId=${exam.id}`} 
+                      className="flex-1"
+                    >
+                      <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors text-sm">
+                        <Play size={14} />
+                        Start Session
+                      </button>
+                    </Link>
+                  ) : (
+                    <div className="flex-1">
+                      <button 
+                        disabled
+                        title="Available 10 minutes before start"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 border border-gray-200 text-gray-500 font-medium rounded-lg text-sm cursor-not-allowed">
+                        <Play size={14} />
+                        Opens 10 mins before
+                      </button>
+                    </div>
+                  )}
                   <Link to={`/roi-config?examId=${exam.id}`}>
                     <button className="px-4 py-2.5 border border-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm">
                       Zone Config

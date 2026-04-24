@@ -37,6 +37,7 @@ import FacilitiesPage from './pages/Facilitiespage';
 import DashboardPage from './pages/Dashboardpage';
 import ROIConfigurationPage from './pages/Roi';
 import ExamsPage from './pages/ExamsPage';
+import ReportPage from './pages/ReportPage';
 
 function Sidebar() {
   const location = useLocation();
@@ -221,8 +222,12 @@ function App() {
           <ROIConfigurationPage />
         </MainLayout>
       } />
+      <Route path="/report" element={
+        <MainLayout>
+          <ReportPage />
+        </MainLayout>
+      } />
       
-   
     </Routes>
   );
 }

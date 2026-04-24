@@ -162,6 +162,7 @@ export interface OfflineExam {
   start_time: string;
   end_time: string;
   status: string;
+  computed_status: string;
 }
 
 export interface StudentZone {

@@ -42,6 +42,7 @@ class OfflineExam(models.Model):
         ('upcoming',  'Upcoming'),
         ('active',    'Active'),
         ('completed', 'Completed'),
+        ('missed',    'Missed'),
     ]
 
     hall      = models.ForeignKey(ExamHall, on_delete=models.CASCADE, related_name='offline_exams')
@@ -60,6 +61,42 @@ class OfflineExam(models.Model):
 
     class Meta:
         db_table = 'H_offline_exams'
+
+    @property
+    def computed_status(self):
+        """
+        Auto-determine the real exam status based on date/time:
+        - completed: instructor ended it manually (stays completed)
+        - active:    right now is between start_time and end_time on exam date
+        - missed:    exam date+end_time has passed without being completed
+        - upcoming:  exam hasn't started yet
+        """
+        from django.utils import timezone
+        import datetime
+
+        # If the instructor already marked it completed, keep it
+        if self.status == 'completed':
+            return 'completed'
+
+        now = timezone.localtime()
+        today = now.date()
+        current_time = now.time()
+
+        exam_date = self.date
+
+        if exam_date > today:
+            return 'upcoming'
+
+        if exam_date == today:
+            if current_time < self.start_time:
+                return 'upcoming'
+            if current_time <= self.end_time:
+                return 'active'
+            # Past end_time today
+            return 'missed'
+
+        # exam_date < today
+        return 'missed'
 
     def __str__(self):
         return f"{self.title} - {self.hall.name}"

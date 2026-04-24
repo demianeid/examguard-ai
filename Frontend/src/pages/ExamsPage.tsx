@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
   FileText,
   Plus,
@@ -11,6 +11,9 @@ import {
   Clock,
   Calendar,
   User,
+  AlertTriangle,
+  Play,
+  Crosshair,
 } from "lucide-react"
 import {
   offlineExamApi,
@@ -93,6 +96,95 @@ export default function ExamsPage() {
   const [newEndTime, setNewEndTime] = useState("")
   const [saving, setSaving] = useState(false)
 
+  // ── Live clock for time validation (refreshes every 30s) ──
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const todayStr = useMemo(() => {
+    return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0")
+  }, [now])
+
+  const isToday = newDate === todayStr
+
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(":").map(Number)
+    return h * 60 + m
+  }
+
+  const nowMins = now.getHours() * 60 + now.getMinutes()
+
+  const fmtTime = (totalMins: number) => {
+    const h = Math.floor(totalMins / 60) % 24
+    const m = totalMins % 60
+    return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0")
+  }
+
+  // Minimum allowed start = now + 5 min (only on today)
+  const minStartMins = nowMins + 5
+  const minStartTime = isToday ? fmtTime(minStartMins) : undefined
+
+  // Minimum allowed end = start time (or now+1 if no start yet, only on today)
+  const minEndTime = newStartTime
+    ? fmtTime(toMinutes(newStartTime) + 1)
+    : isToday ? fmtTime(nowMins + 1) : undefined
+
+  // ── onChange handlers that reject invalid picks ──
+  const handleStartTimeChange = (val: string) => {
+    if (!val) { setNewStartTime(""); return }
+    if (isToday && toMinutes(val) < minStartMins) {
+      // Reject — snap to the minimum allowed time
+      setNewStartTime(fmtTime(minStartMins))
+      return
+    }
+    setNewStartTime(val)
+  }
+
+  const handleEndTimeChange = (val: string) => {
+    if (!val) { setNewEndTime(""); return }
+    if (isToday && toMinutes(val) <= nowMins) {
+      // Reject past end times
+      setNewEndTime(fmtTime(nowMins + 1))
+      return
+    }
+    if (newStartTime && toMinutes(val) <= toMinutes(newStartTime)) {
+      // Reject end <= start
+      setNewEndTime(fmtTime(toMinutes(newStartTime) + 1))
+      return
+    }
+    setNewEndTime(val)
+  }
+
+  // ── Validation messages for display ──
+  const timeValidation = useMemo(() => {
+    const errors: string[] = []
+
+    if (isToday && newStartTime) {
+      const startMins = toMinutes(newStartTime)
+      if (startMins < nowMins) {
+        errors.push("Start time cannot be in the past.")
+      } else if (startMins < nowMins + 5) {
+        errors.push("Start time must be at least 5 minutes from now so all setup processes can finish.")
+      }
+    }
+
+    if (isToday && newEndTime) {
+      if (toMinutes(newEndTime) <= nowMins) {
+        errors.push("End time cannot be in the past.")
+      }
+    }
+
+    if (newStartTime && newEndTime) {
+      if (toMinutes(newEndTime) <= toMinutes(newStartTime)) {
+        errors.push("End time must be after start time.")
+      }
+    }
+
+    return { errors, hasErrors: errors.length > 0 }
+  }, [newDate, newStartTime, newEndTime, isToday, nowMins])
+
   useEffect(() => {
     const load = async () => {
       setExamsLoading(true)
@@ -104,6 +196,32 @@ export default function ExamsPage() {
     }
     load()
   }, [])
+
+  const [currentNow, setCurrentNow] = useState(new Date())
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentNow(new Date()), 30000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const getMinutesToStart = (exam: OfflineExam) => {
+    const [y, m, d] = exam.date.split('-').map(Number)
+    const [h, min] = exam.start_time.split(':').map(Number)
+    const examDate = new Date(y, m - 1, d, h, min)
+    return Math.floor((examDate.getTime() - currentNow.getTime()) / 60000)
+  }
+
+  const isStartAllowed = (exam: OfflineExam) => {
+    if (exam.computed_status === 'active') return true
+    if (exam.computed_status !== 'upcoming') return false
+    
+    const diffMins = getMinutesToStart(exam)
+    return diffMins <= 10 && diffMins > -100
+  }
+
+  const isZoneConfigured = (exam: OfflineExam) => {
+    return localStorage.getItem(`zoneConfigured_${exam.id}`) === 'true'
+  }
 
   const openModal = async () => {
     setShowModal(true)
@@ -117,6 +235,7 @@ export default function ExamsPage() {
 
   const createExam = async () => {
     if (!newTitle.trim() || !newHall || !newDate || !newStartTime || !newEndTime) return
+    if (timeValidation.hasErrors) return
     setSaving(true)
     try {
       const created = await offlineExamApi.create({
@@ -147,6 +266,7 @@ export default function ExamsPage() {
     switch (status) {
       case "active": return "bg-green-100 text-green-700"
       case "completed": return "bg-gray-100 text-gray-600"
+      case "missed": return "bg-red-100 text-red-700"
       default: return "bg-blue-100 text-blue-700"
     }
   }
@@ -193,8 +313,8 @@ export default function ExamsPage() {
                     <FileText size={20} className="text-blue-600" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${getStatusStyle(exam.status)}`}>
-                      {exam.status?.toUpperCase() || "UPCOMING"}
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${getStatusStyle(exam.computed_status)}`}>
+                      {exam.computed_status?.toUpperCase() || "UPCOMING"}
                     </span>
                     <button
                       onClick={() => deleteExam(exam.id)}
@@ -232,18 +352,64 @@ export default function ExamsPage() {
                 <div className="h-px bg-gray-100 mb-4" />
 
                 <div className="flex gap-2">
-                  <a
-                    href={`/MonitoringOffline?examId=${exam.id}`}
-                    className="bg-gray-50 border border-gray-200 rounded-full px-3 py-1 text-xs text-blue-600 font-medium hover:bg-blue-50 transition-colors"
-                  >
-                    Monitor
-                  </a>
-                  <a
-                    href={`/roi-config?examId=${exam.id}`}
-                    className="bg-gray-50 border border-gray-200 rounded-full px-3 py-1 text-xs text-gray-700 font-medium hover:bg-gray-100 transition-colors"
-                  >
-                    Zone Config
-                  </a>
+                  {exam.computed_status === 'completed' ? (
+                    <a
+                      href={`/report?examId=${exam.id}`}
+                      className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-green-50 hover:bg-green-100 border border-green-200 text-green-700 text-xs font-bold rounded-md shadow-sm transition-all"
+                    >
+                      <FileText size={14} />
+                      View Report
+                    </a>
+                  ) : exam.computed_status === 'missed' ? (
+                    <>
+                      <button
+                        onClick={() => deleteExam(exam.id)}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold rounded-md shadow-sm transition-all"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={openModal}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-blue-200 hover:bg-blue-50 text-blue-600 text-xs font-semibold rounded-md shadow-sm transition-all"
+                      >
+                        Reschedule
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {!isZoneConfigured(exam) ? (
+                        <button
+                          disabled
+                          title="Please configure zones first"
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 border border-gray-200 text-gray-400 text-xs font-semibold rounded-md shadow-sm cursor-not-allowed transition-all"
+                        >
+                          <Crosshair size={14} /> Config Zone First
+                        </button>
+                      ) : isStartAllowed(exam) ? (
+                        <a
+                          href={`/MonitoringOffline?examId=${exam.id}`}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 border border-blue-700 text-white text-xs font-semibold rounded-md shadow-sm transition-all"
+                        >
+                          <Play size={14} /> Monitor
+                        </a>
+                      ) : (
+                        <button
+                          disabled
+                          title="Available 10 minutes before start"
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 border border-gray-200 text-gray-500 text-xs font-semibold rounded-md shadow-sm cursor-not-allowed transition-all"
+                        >
+                          <Play size={14} /> Opens 10 mins before
+                        </button>
+                      )}
+                      
+                      <a
+                        href={`/roi-config?examId=${exam.id}`}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-semibold rounded-md shadow-sm transition-all"
+                      >
+                        Zone Config
+                      </a>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -257,7 +423,7 @@ export default function ExamsPage() {
           onClose={() => setShowModal(false)}
           onSubmit={createExam}
           saving={saving}
-          disabled={!newTitle.trim() || !newHall || !newDate || !newStartTime || !newEndTime}
+          disabled={!newTitle.trim() || !newHall || !newDate || !newStartTime || !newEndTime || timeValidation.hasErrors}
           submitLabel="Create Exam"
         >
           <div>
@@ -303,6 +469,7 @@ export default function ExamsPage() {
             <input
               type="date"
               value={newDate}
+              min={todayStr}
               onChange={(e) => setNewDate(e.target.value)}
               className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
             />
@@ -315,8 +482,11 @@ export default function ExamsPage() {
               <input
                 type="time"
                 value={newStartTime}
-                onChange={(e) => setNewStartTime(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
+                min={minStartTime}
+                onChange={(e) => handleStartTimeChange(e.target.value)}
+                className={`w-full px-3.5 py-2.5 border rounded-lg text-sm text-gray-900 outline-none transition-colors ${
+                  timeValidation.errors.some(e => e.includes("Start")) ? "border-red-400 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
+                }`}
               />
             </div>
             <div>
@@ -326,11 +496,24 @@ export default function ExamsPage() {
               <input
                 type="time"
                 value={newEndTime}
-                onChange={(e) => setNewEndTime(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
+                min={minEndTime}
+                onChange={(e) => handleEndTimeChange(e.target.value)}
+                className={`w-full px-3.5 py-2.5 border rounded-lg text-sm text-gray-900 outline-none transition-colors ${
+                  timeValidation.errors.some(e => e.includes("End")) ? "border-red-400 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
+                }`}
               />
             </div>
           </div>
+
+          {timeValidation.errors.map((msg, i) => (
+            <div
+              key={`err-${i}`}
+              className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2"
+            >
+              <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+              <span>{msg}</span>
+            </div>
+          ))}
         </Modal>
       )}
     </div>

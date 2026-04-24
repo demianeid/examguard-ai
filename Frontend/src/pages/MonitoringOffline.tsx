@@ -74,6 +74,8 @@ const OfflineMonitoringPage: FC = () => {
 
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showEarlyStartWarning, setShowEarlyStartWarning] = useState(false);
+  const [earlyMins, setEarlyMins] = useState(0);
   const [selectedSeat, setSelectedSeat] = useState<Seat | null>(null);
   const [time, setTime] = useState(0);
   const [actionLoading, setActionLoading] = useState(false);
@@ -259,8 +261,27 @@ const OfflineMonitoringPage: FC = () => {
   }, [isMonitoring]);
 
   // --- Actions ---
-  const handleStartMonitoring = async () => {
+  const onStartMonitoringClick = () => {
+    if (!examIdParam || !exam) return;
+    
+    // Time check
+    const [y, m, d] = exam.date.split('-').map(Number);
+    const [h, min] = exam.start_time.split(':').map(Number);
+    const examDate = new Date(y, m - 1, d, h, min);
+    const now = new Date();
+    const diffMins = Math.floor((examDate.getTime() - now.getTime()) / 60000);
+    
+    if (exam.computed_status === 'upcoming' && diffMins > 0) {
+      setEarlyMins(diffMins);
+      setShowEarlyStartWarning(true);
+    } else {
+      executeStartMonitoring();
+    }
+  };
+
+  const executeStartMonitoring = async () => {
     if (!examIdParam) return;
+    setShowEarlyStartWarning(false);
     setActionLoading(true);
     setActionError('');
     try {
@@ -430,7 +451,7 @@ const OfflineMonitoringPage: FC = () => {
           <div className="flex items-center gap-3">
             {!isMonitoring && examIdParam && (
               <button
-                onClick={handleStartMonitoring}
+                onClick={onStartMonitoringClick}
                 disabled={actionLoading}
                 className="bg-green-500 hover:bg-green-600 disabled:opacity-50 px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
               >
@@ -824,6 +845,50 @@ const OfflineMonitoringPage: FC = () => {
     );
   };
 
+  const EarlyStartModal: FC = () => {
+    if (!showEarlyStartWarning) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle className="text-yellow-600" size={24} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">Start Early?</h3>
+              <p className="text-sm text-gray-500">The exam hasn't started yet</p>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+            <p className="text-gray-700 text-sm">
+              The exam is scheduled to start in <strong>{earlyMins} minute{earlyMins !== 1 ? 's' : ''}</strong>.
+            </p>
+            <p className="text-gray-700 text-sm mt-2">
+              You can start the monitoring session early, but this is at your own risk. Do you want to proceed?
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowEarlyStartWarning(false)}
+              className="flex-1 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={executeStartMonitoring}
+              className="flex-1 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold transition-colors"
+            >
+              Proceed Anyway
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ============================
   // Main render
   // ============================
@@ -868,6 +933,7 @@ const OfflineMonitoringPage: FC = () => {
         </div>
       </div>
       <EndExamModal />
+      <EarlyStartModal />
     </div>
   );
 };

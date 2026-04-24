@@ -133,7 +133,7 @@ SIMPLE_JWT = {
 
 # ─── Internationalization ─────────────────────────────────────────
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE     = 'UTC'
+TIME_ZONE     = 'Africa/Cairo'
 USE_I18N      = True
 USE_TZ        = True
 
@@ -190,4 +190,4 @@ CHANNEL_LAYERS = {
         },
     },
 }
-
+

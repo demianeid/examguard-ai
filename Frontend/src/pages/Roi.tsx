@@ -167,8 +167,7 @@ export default function ROIConfigurationPage() {
       setZonesLoading(true)
       try {
         const data = await studentZoneApi.getByExam(Number(examIdParam))
-        setZones(
-          data.map((z, i) => ({
+        const mappedZones = data.map((z, i) => ({
             id: String(z.id),
             studentId: z.student_code || String(z.id),
             studentName: z.student_name,
@@ -176,7 +175,10 @@ export default function ROIConfigurationPage() {
             zoneNumber: i + 1,
             backendId: z.id,
           }))
-        )
+        setZones(mappedZones)
+        if (mappedZones.length > 0) {
+          localStorage.setItem(`zoneConfigured_${examIdParam}`, 'true')
+        }
       } catch {
         setZones([])
       } finally {
@@ -321,6 +323,7 @@ export default function ROIConfigurationPage() {
         newZone.backendId = created.id
         newZone.id = String(created.id)
         newZone.studentName = created.student_name || studentName
+        localStorage.setItem(`zoneConfigured_${examIdParam}`, 'true')
       } catch {
         setZoneError("Failed to save zone to server.")
         setZoneSaving(false)
