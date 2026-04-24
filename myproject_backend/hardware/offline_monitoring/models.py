@@ -116,8 +116,28 @@ class StudentZone(models.Model):
     class Meta:
         db_table = 'H_student_zones'
 
+    def get_enrollment(self):
+        """
+        Dynamically lookup the enrollment for this student/hall.
+        """
+        from .models import HallEnrollment
+        # Use student_code as the primary link since it's unique per hall
+        if not self.student_code:
+            return None
+        return HallEnrollment.objects.filter(hall=self.hall, student_code=self.student_code).first()
+
+    @property
+    def dynamic_student_name(self):
+        enrollment = self.get_enrollment()
+        return enrollment.student_name if enrollment else self.student_name
+
+    @property
+    def dynamic_seat_number(self):
+        enrollment = self.get_enrollment()
+        return enrollment.seat_number if enrollment else self.seat_number
+
     def __str__(self):
-        return f"{self.student_name} - {self.seat_number}"
+        return f"{self.dynamic_student_name} - {self.dynamic_seat_number}"
 
 
 class HallEnrollment(models.Model):

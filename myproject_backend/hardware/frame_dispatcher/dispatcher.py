@@ -103,8 +103,9 @@ def _fetch_zones(exam_id: int, camera_id: int) -> list[dict[str, Any]]:
         zones = [
             {
                 "id": z.id,
-                "student_name": z.student_name,
+                "student_name": z.dynamic_student_name,
                 "student_code": z.student_code,
+                "seat_number":  z.dynamic_seat_number,
                 "x1": 0, "y1": 0, "x2": 1920, "y2": 1080  # FORCING FULL FRAME
             } for z in zones_qs
         ]

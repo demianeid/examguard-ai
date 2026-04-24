@@ -36,6 +36,7 @@ class StudentZoneSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'hall', 'camera', 'camera_name',
             'student_name', 'student_code', 'seat_number',
+            'dynamic_student_name', 'dynamic_seat_number',
             'x1', 'y1', 'x2', 'y2',
         ]
         read_only_fields = ['hall']
