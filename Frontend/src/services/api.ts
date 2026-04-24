@@ -206,6 +206,8 @@ export interface ViolationLog {
   id: number;
   zone: number;
   student_name: string;
+  student_code: string;
+  seat_number: string;
   session: number;
   exam_title: string;
   total_alerts: number;

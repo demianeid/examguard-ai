@@ -7,7 +7,7 @@ import {
   CheckCircle, XCircle, AlertTriangle,
   Save, Loader2, Play
 } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   examHallApi,
   monitoringApi,
@@ -56,6 +56,7 @@ interface Feature {
 
 const OfflineMonitoringPage: FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const examIdParam = searchParams.get('examId');
 
   const [halls, setHalls] = useState<ExamHall[]>([]);
@@ -307,9 +308,18 @@ const OfflineMonitoringPage: FC = () => {
     setActionError('');
     try {
       await monitoringApi.endMonitoring(session.id);
+      
+      // Auto-generate the report to connect AI detection alerts for the ReportPage
+      try {
+        await monitoringApi.generateReport(session.id);
+      } catch (err) {
+        console.error("Failed to auto-generate report:", err);
+      }
+
       setIsMonitoring(false);
       setSession(prev => prev ? { ...prev, status: 'ended' } : null);
       setShowEndConfirm(false);
+      navigate('/exams');
     } catch {
       setActionError('Failed to end monitoring.');
     } finally {

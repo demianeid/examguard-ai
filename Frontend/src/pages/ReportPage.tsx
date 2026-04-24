@@ -19,6 +19,7 @@ import {
   type OfflineExam,
   type MonitoringSession,
   type ViolationLog,
+  type Alert,
 } from "../services/api";
 
 export default function ReportPage() {
@@ -29,8 +30,10 @@ export default function ReportPage() {
   const [exam, setExam] = useState<OfflineExam | null>(null);
   const [session, setSession] = useState<MonitoringSession | null>(null);
   const [violations, setViolations] = useState<ViolationLog[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     if (!examId) {
@@ -55,6 +58,9 @@ export default function ReportPage() {
               sessionData.id
             );
             setViolations(violationsData);
+
+            const alertsData = await monitoringApi.getAlerts(sessionData.id);
+            setAlerts(alertsData);
           }
         } catch (sessionErr) {
           // It's possible there is no session created yet if they never started it
@@ -70,6 +76,21 @@ export default function ReportPage() {
 
     loadData();
   }, [examId]);
+
+  const handleGenerateReport = async () => {
+    if (!session?.id) return;
+    setRegenerating(true);
+    try {
+      await monitoringApi.generateReport(session.id);
+      const violationsData = await monitoringApi.getViolations(session.id);
+      setViolations(violationsData);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate report analysis.");
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -107,13 +128,13 @@ export default function ReportPage() {
   );
 
   const getStudentStatus = (score: number) => {
-    if (score >= 60) {
+    if (score >= 20) {
       return {
         label: "Cheated",
         color: "bg-red-100 text-red-700 border-red-200",
         icon: <AlertTriangle size={16} className="text-red-500" />,
       };
-    } else if (score >= 30) {
+    } else if (score >= 8) {
       return {
         label: "Suspicious",
         color: "bg-orange-100 text-orange-700 border-orange-200",
@@ -263,17 +284,23 @@ export default function ReportPage() {
             {violations.length === 0 ? (
               <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
                 <CheckCircle2 size={40} className="text-green-400 mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-gray-900 mb-1">
-                  All Clear
-                </h3>
-                <p className="text-gray-500">
-                  No students or violations were recorded during this session.
+                <p className="text-gray-500 mb-6">
+                  No automated analysis has been generated for this session yet. 
+                  Click the button below to process the AI detection alerts.
                 </p>
+                <button
+                  onClick={handleGenerateReport}
+                  disabled={regenerating}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto disabled:opacity-50"
+                >
+                  {regenerating ? <Loader2 size={18} className="animate-spin" /> : <ShieldAlert size={18} />}
+                  Generate Analysis Report
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {violations.map((student) => {
-                  const status = getStudentStatus(student.violation_score);
+                  const status = getStudentStatus(Number(student.violation_score));
                   return (
                     <div
                       key={student.id}
@@ -282,9 +309,9 @@ export default function ReportPage() {
                       {/* Top Bar Status Indicator */}
                       <div
                         className={`absolute top-0 left-0 w-full h-1 ${
-                          student.violation_score >= 60
+                          Number(student.violation_score) >= 20
                             ? "bg-red-500"
-                            : student.violation_score >= 30
+                            : Number(student.violation_score) >= 8
                             ? "bg-orange-500"
                             : "bg-green-500"
                         }`}
@@ -297,9 +324,15 @@ export default function ReportPage() {
                           </h3>
                           <p className="text-sm text-gray-500 flex items-center gap-1.5">
                             <span className="font-medium text-gray-700">
-                              Zone ID:
+                              Student ID:
                             </span>{" "}
-                            {student.zone}
+                            {student.student_code}
+                          </p>
+                          <p className="text-sm text-gray-500 flex items-center gap-1.5">
+                            <span className="font-medium text-gray-700">
+                              Seat:
+                            </span>{" "}
+                            {student.seat_number}
                           </p>
                         </div>
                         <div
@@ -337,20 +370,42 @@ export default function ReportPage() {
                         </div>
                       </div>
 
-                      <div className="bg-gray-50 rounded-xl p-4 flex items-center justify-between border border-gray-100">
+
+                      {/* Alert Types Breakdown */}
+                      <div className="mb-6">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
+                          AI Detection Details
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.from(new Set(alerts.filter(a => a.zone === student.zone).map(a => a.alert_type))).length > 0 ? (
+                            Array.from(new Set(alerts.filter(a => a.zone === student.zone).map(a => a.alert_type))).map(type => {
+                              const count = alerts.filter(a => a.zone === student.zone && a.alert_type === type).length;
+                              return (
+                                <div key={type} className="px-2 py-1 bg-gray-100 rounded text-[10px] font-bold text-gray-600 border border-gray-200">
+                                  {type.replace(/_/g, ' ').toUpperCase()}: {count}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">No specific AI alerts recorded</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-50 rounded-xl p-4 flex items-center justify-between border border-gray-100 mt-auto">
                         <span className="text-sm font-semibold text-gray-600">
                           Violation Score
                         </span>
                         <span
                           className={`font-extrabold text-lg ${
-                            student.violation_score >= 60
+                            Number(student.violation_score) >= 20
                               ? "text-red-600"
-                              : student.violation_score >= 30
+                              : Number(student.violation_score) >= 8
                               ? "text-orange-600"
                               : "text-green-600"
                           }`}
                         >
-                          {student.violation_score.toFixed(1)} / 100
+                          {Number(student.violation_score).toFixed(1)} / 100
                         </span>
                       </div>
                     </div>
