@@ -47,6 +47,15 @@ function Sidebar() {
     { to: "/exams", icon: <FileText size={18} />, label: "Exams" },
   ];
 
+  const userName = localStorage.getItem("userName") || "Admin User";
+  const userRole = localStorage.getItem("role") || "System Administrator";
+  const userInitials = userName
+    .split(" ")
+    .map(word => word[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase();
+
   return (
     <aside
       style={{
@@ -122,11 +131,11 @@ function Sidebar() {
             color: "#fff",
           }}
         >
-          AD
+          {userInitials}
         </div>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>Admin User</div>
-          <div style={{ fontSize: 11, color: "#9ca3af" }}>System Administrator</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", textTransform: 'capitalize' }}>{userName}</div>
+          <div style={{ fontSize: 11, color: "#9ca3af", textTransform: 'capitalize' }}>{userRole}</div>
         </div>
       </div>
     </aside>
