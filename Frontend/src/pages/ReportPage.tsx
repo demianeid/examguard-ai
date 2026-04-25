@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   FileText,
@@ -11,15 +11,20 @@ import {
   Clock,
   Loader2,
   ArrowLeft,
+  Download,
   ShieldAlert,
+  Search,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   offlineExamApi,
   monitoringApi,
+  studentZoneApi,
   type OfflineExam,
   type MonitoringSession,
   type ViolationLog,
   type Alert,
+  type StudentZone,
 } from "../services/api";
 
 export default function ReportPage() {
@@ -31,9 +36,15 @@ export default function ReportPage() {
   const [session, setSession] = useState<MonitoringSession | null>(null);
   const [violations, setViolations] = useState<ViolationLog[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [zones, setZones] = useState<StudentZone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
+
+  // Filters & Sorting
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [sortBy, setSortBy] = useState("score_desc");
 
   useEffect(() => {
     if (!examId) {
@@ -46,20 +57,23 @@ export default function ReportPage() {
       setLoading(true);
       setError(null);
       try {
-        const examData = await offlineExamApi.getById(examId);
+        const [examData, zonesData] = await Promise.all([
+          offlineExamApi.getById(examId),
+          studentZoneApi.getByExam(examId).catch(() => [] as StudentZone[]),
+        ]);
         setExam(examData);
+        setZones(zonesData);
 
         try {
           const sessionData = await monitoringApi.getSession(examId);
           setSession(sessionData);
 
           if (sessionData && sessionData.id) {
-            const violationsData = await monitoringApi.getViolations(
-              sessionData.id
-            );
+            const [violationsData, alertsData] = await Promise.all([
+              monitoringApi.getViolations(sessionData.id),
+              monitoringApi.getAlerts(sessionData.id),
+            ]);
             setViolations(violationsData);
-
-            const alertsData = await monitoringApi.getAlerts(sessionData.id);
             setAlerts(alertsData);
           }
         } catch (sessionErr) {
@@ -77,20 +91,171 @@ export default function ReportPage() {
     loadData();
   }, [examId]);
 
-  const handleGenerateReport = async () => {
-    if (!session?.id) return;
-    setRegenerating(true);
-    try {
-      await monitoringApi.generateReport(session.id);
-      const violationsData = await monitoringApi.getViolations(session.id);
-      setViolations(violationsData);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to generate report analysis.");
-    } finally {
-      setRegenerating(false);
+  // Re-analyze functionality replaced by Excel Export
+
+  /**
+   * Build a lookup: student_code → StudentZone to pull dynamic_student_name /
+   * dynamic_seat_number per card. MUST be before any early returns (Rules of Hooks).
+   */
+  const zoneByCode = useMemo(() => {
+    const map = new Map<string, typeof zones[0]>();
+    zones.forEach(z => {
+      if (z.student_code) map.set(z.student_code, z);
+    });
+    return map;
+  }, [zones]);
+
+  const getStudentStatus = (score: number, hasViolation: boolean = false) => {
+    if (score >= 20) {
+      return {
+        label: "Cheated",
+        color: "bg-red-100 text-red-700 border-red-200",
+        icon: <AlertTriangle size={14} className="text-red-500" />,
+      };
+    } else if (score >= 8 || hasViolation) {
+      return {
+        label: "Suspicious",
+        color: "bg-orange-100 text-orange-700 border-orange-200",
+        icon: <AlertCircle size={14} className="text-orange-500" />,
+      };
+    } else {
+      return {
+        label: "Clear",
+        color: "bg-green-100 text-green-700 border-green-200",
+        icon: <CheckCircle2 size={14} className="text-green-500" />,
+      };
     }
   };
+
+  /** Match alerts to a violation record by zone id first, then by student_code/name fallback */
+  const getAlertsForStudent = (student_code: string, student_name: string, seat_number: string, zone_id?: number) => {
+    if (zone_id) {
+      const byZone = alerts.filter(a => a.zone === zone_id);
+      if (byZone.length > 0) return byZone;
+    }
+    return alerts.filter(
+      a =>
+        (student_code && a.student_name === student_name) ||
+        (seat_number && a.seat_number === seat_number)
+    );
+  };
+
+  // Build unified student data combining zones and violations to show ALL students
+  const allStudentsData = useMemo(() => {
+    if (zones.length > 0) {
+      return zones.map((zone) => {
+        const violation = violations.find(
+          (v) => v.zone === zone.id || (v.student_code && v.student_code === zone.student_code)
+        );
+        const score = violation ? Number(violation.violation_score) : 0;
+        const studentAlerts = getAlertsForStudent(zone.student_code, zone.student_name, zone.seat_number, zone.id);
+
+        return {
+          id: `zone-${zone.id}`,
+          zoneId: zone.id,
+          student_code: zone.student_code || "",
+          displayName: zone.dynamic_student_name || zone.student_name || "Unknown Student",
+          displaySeat: zone.dynamic_seat_number || zone.seat_number || "",
+          score: score,
+          status: getStudentStatus(score, !!violation || studentAlerts.length > 0),
+          alerts: studentAlerts,
+          high_severity: violation?.high_severity || 0,
+          medium_severity: violation?.medium_severity || 0,
+          low_severity: violation?.low_severity || 0,
+        };
+      });
+    } else {
+      return violations.map((v) => {
+        const score = Number(v.violation_score);
+        const studentAlerts = getAlertsForStudent(v.student_code, v.student_name, v.seat_number, v.zone);
+
+        return {
+          id: `violation-${v.id}`,
+          zoneId: v.zone,
+          student_code: v.student_code || "",
+          displayName: v.student_name || "Unknown Student",
+          displaySeat: v.seat_number || "",
+          score: score,
+          status: getStudentStatus(score, true),
+          alerts: studentAlerts,
+          high_severity: v.high_severity || 0,
+          medium_severity: v.medium_severity || 0,
+          low_severity: v.low_severity || 0,
+        };
+      });
+    }
+  }, [zones, violations, alerts]);
+
+  // Apply filters and sorting
+  const filteredStudents = useMemo(() => {
+    let result = [...allStudentsData];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.displayName.toLowerCase().includes(q) ||
+          s.student_code.toLowerCase().includes(q)
+      );
+    }
+
+    if (statusFilter !== "All") {
+      result = result.filter((s) => s.status.label === statusFilter);
+    }
+
+    result.sort((a, b) => {
+      if (sortBy === "score_desc") return b.score - a.score;
+      if (sortBy === "score_asc") return a.score - b.score;
+      if (sortBy === "name_asc") return a.displayName.localeCompare(b.displayName);
+      return 0;
+    });
+
+    return result;
+  }, [allStudentsData, searchQuery, statusFilter, sortBy]);
+
+  const handleExportExcel = () => {
+    const headers = [
+      "Student Name", 
+      "Student ID", 
+      "Seat Number", 
+      "Status", 
+      "Violation Score", 
+      "Critical Alerts", 
+      "Medium Alerts", 
+      "Low Alerts"
+    ];
+    
+    const rows = filteredStudents.map(s => [
+      `"${s.displayName}"`,
+      `"${s.student_code}"`,
+      `"${s.displaySeat}"`,
+      `"${s.status.label}"`,
+      s.score.toFixed(1),
+      s.high_severity,
+      s.medium_severity,
+      s.low_severity
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `ExamGuard_Report_${exam?.title || "Exam"}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Summary Metrics
+  const totalStudents = zones.length > 0 ? zones.length : violations.length;
+  const totalViolatingStudents = allStudentsData.filter(s => s.status.label !== "Clear").length;
+  const totalClear = allStudentsData.filter(s => s.status.label === "Clear").length;
+  const highSeverityAlerts = violations.reduce((sum, v) => sum + v.high_severity, 0);
 
   if (loading) {
     return (
@@ -118,36 +283,6 @@ export default function ReportPage() {
       </div>
     );
   }
-
-  // Summary Metrics
-  const totalStudents = violations.length;
-  const totalAlerts = violations.reduce((sum, v) => sum + v.total_alerts, 0);
-  const highSeverityAlerts = violations.reduce(
-    (sum, v) => sum + v.high_severity,
-    0
-  );
-
-  const getStudentStatus = (score: number) => {
-    if (score >= 20) {
-      return {
-        label: "Cheated",
-        color: "bg-red-100 text-red-700 border-red-200",
-        icon: <AlertTriangle size={16} className="text-red-500" />,
-      };
-    } else if (score >= 8) {
-      return {
-        label: "Suspicious",
-        color: "bg-orange-100 text-orange-700 border-orange-200",
-        icon: <AlertCircle size={16} className="text-orange-500" />,
-      };
-    } else {
-      return {
-        label: "Clear",
-        color: "bg-green-100 text-green-700 border-green-200",
-        icon: <CheckCircle2 size={16} className="text-green-500" />,
-      };
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-20">
@@ -240,10 +375,10 @@ export default function ReportPage() {
                   <AlertCircle size={24} />
                 </div>
                 <div className="text-3xl font-extrabold text-gray-900 mb-1">
-                  {totalAlerts}
+                  {totalViolatingStudents}
                 </div>
                 <div className="text-xs font-semibold tracking-wider text-gray-500 uppercase">
-                  Total Violations
+                  Flagged Students
                 </div>
               </div>
 
@@ -264,11 +399,7 @@ export default function ReportPage() {
                   <CheckCircle2 size={24} />
                 </div>
                 <div className="text-3xl font-extrabold text-gray-900 mb-1">
-                  {Math.max(
-                    0,
-                    totalStudents -
-                      violations.filter((v) => v.violation_score >= 30).length
-                  )}
+                  {totalClear}
                 </div>
                 <div className="text-xs font-semibold tracking-wider text-gray-500 uppercase">
                   Clear Students
@@ -276,143 +407,240 @@ export default function ReportPage() {
               </div>
             </div>
 
-            {/* Students List */}
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">
-              Student Integrity Breakdown
-            </h2>
-
-            {violations.length === 0 ? (
-              <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
-                <CheckCircle2 size={40} className="text-green-400 mx-auto mb-3" />
-                <p className="text-gray-500 mb-6">
-                  No automated analysis has been generated for this session yet. 
-                  Click the button below to process the AI detection alerts.
-                </p>
-                <button
-                  onClick={handleGenerateReport}
-                  disabled={regenerating}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors mx-auto disabled:opacity-50"
-                >
-                  {regenerating ? <Loader2 size={18} className="animate-spin" /> : <ShieldAlert size={18} />}
-                  Generate Analysis Report
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {violations.map((student) => {
-                  const status = getStudentStatus(Number(student.violation_score));
-                  return (
-                    <div
-                      key={student.id}
-                      className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col"
-                    >
-                      {/* Top Bar Status Indicator */}
-                      <div
-                        className={`absolute top-0 left-0 w-full h-1 ${
-                          Number(student.violation_score) >= 20
-                            ? "bg-red-500"
-                            : Number(student.violation_score) >= 8
-                            ? "bg-orange-500"
-                            : "bg-green-500"
-                        }`}
+            {/* Dashboard Layout with Sidebar */}
+            <div className="flex flex-col lg:flex-row gap-8">
+              
+              {/* Sidebar Filters */}
+              <div className="lg:w-1/4 flex-shrink-0">
+                <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm sticky top-28">
+                  <div className="flex items-center gap-2 mb-6 pb-4 border-b border-gray-100">
+                    <SlidersHorizontal size={20} className="text-gray-700" />
+                    <h3 className="text-lg font-bold text-gray-900">Filters & Sort</h3>
+                  </div>
+                  
+                  {/* Search */}
+                  <div className="mb-6">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Search Student</label>
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input 
+                        type="text" 
+                        placeholder="Name or ID..." 
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow placeholder:text-gray-400"
                       />
-
-                      <div className="flex justify-between items-start mb-6">
-                        <div>
-                          <h3 className="font-bold text-lg text-gray-900 mb-1">
-                            {student.student_name || "Unknown Student"}
-                          </h3>
-                          <p className="text-sm text-gray-500 flex items-center gap-1.5">
-                            <span className="font-medium text-gray-700">
-                              Student ID:
-                            </span>{" "}
-                            {student.student_code}
-                          </p>
-                          <p className="text-sm text-gray-500 flex items-center gap-1.5">
-                            <span className="font-medium text-gray-700">
-                              Seat:
-                            </span>{" "}
-                            {student.seat_number}
-                          </p>
-                        </div>
-                        <div
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold uppercase tracking-wider ${status.color}`}
-                        >
-                          {status.icon}
-                          {status.label}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-3 mb-6 flex-1">
-                        <div className="bg-red-50 rounded-xl p-3 text-center border border-red-100">
-                          <div className="text-xs text-red-600 font-semibold mb-1 uppercase">
-                            High
-                          </div>
-                          <div className="text-xl font-bold text-red-700">
-                            {student.high_severity}
-                          </div>
-                        </div>
-                        <div className="bg-orange-50 rounded-xl p-3 text-center border border-orange-100">
-                          <div className="text-xs text-orange-600 font-semibold mb-1 uppercase">
-                            Medium
-                          </div>
-                          <div className="text-xl font-bold text-orange-700">
-                            {student.medium_severity}
-                          </div>
-                        </div>
-                        <div className="bg-yellow-50 rounded-xl p-3 text-center border border-yellow-100">
-                          <div className="text-xs text-yellow-600 font-semibold mb-1 uppercase">
-                            Low
-                          </div>
-                          <div className="text-xl font-bold text-yellow-700">
-                            {student.low_severity}
-                          </div>
-                        </div>
-                      </div>
-
-
-                      {/* Alert Types Breakdown */}
-                      <div className="mb-6">
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
-                          AI Detection Details
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {Array.from(new Set(alerts.filter(a => a.zone === student.zone).map(a => a.alert_type))).length > 0 ? (
-                            Array.from(new Set(alerts.filter(a => a.zone === student.zone).map(a => a.alert_type))).map(type => {
-                              const count = alerts.filter(a => a.zone === student.zone && a.alert_type === type).length;
-                              return (
-                                <div key={type} className="px-2 py-1 bg-gray-100 rounded text-[10px] font-bold text-gray-600 border border-gray-200">
-                                  {type.replace(/_/g, ' ').toUpperCase()}: {count}
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <span className="text-xs text-gray-400 italic">No specific AI alerts recorded</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="bg-gray-50 rounded-xl p-4 flex items-center justify-between border border-gray-100 mt-auto">
-                        <span className="text-sm font-semibold text-gray-600">
-                          Violation Score
-                        </span>
-                        <span
-                          className={`font-extrabold text-lg ${
-                            Number(student.violation_score) >= 20
-                              ? "text-red-600"
-                              : Number(student.violation_score) >= 8
-                              ? "text-orange-600"
-                              : "text-green-600"
-                          }`}
-                        >
-                          {Number(student.violation_score).toFixed(1)} / 100
-                        </span>
-                      </div>
                     </div>
-                  );
-                })}
+                  </div>
+
+                  {/* Status Filter */}
+                  <div className="mb-6">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Integrity Status</label>
+                    <div className="space-y-1">
+                      {['All', 'Cheated', 'Suspicious', 'Clear'].map(status => (
+                        <label key={status} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors group">
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="radio" 
+                              name="status" 
+                              value={status}
+                              checked={statusFilter === status}
+                              onChange={() => setStatusFilter(status)}
+                              className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 transition-shadow"
+                            />
+                            <span className={`text-sm font-semibold ${statusFilter === status ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'}`}>{status}</span>
+                          </div>
+                          {status !== 'All' && (
+                            <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">
+                              {allStudentsData.filter(s => s.status.label === status).length}
+                            </span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sort */}
+                  <div>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Sort By</label>
+                    <select 
+                      value={sortBy}
+                      onChange={e => setSortBy(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-shadow appearance-none cursor-pointer"
+                    >
+                      <option value="score_desc">Highest Score First</option>
+                      <option value="score_asc">Lowest Score First</option>
+                      <option value="name_asc">Name (A-Z)</option>
+                    </select>
+                  </div>
+                  
+                  {/* Export Report Button */}
+                  <div className="mt-8 pt-6 border-t border-gray-100">
+                    <button
+                      onClick={handleExportExcel}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-xl font-bold shadow-md shadow-green-600/20 hover:bg-green-700 transition-all"
+                    >
+                      <Download size={18} />
+                      Export to Excel
+                    </button>
+                    <p className="text-center text-[10px] text-gray-400 mt-3 font-medium">
+                      Download current view as Excel/CSV spreadsheet
+                    </p>
+                  </div>
+                </div>
               </div>
-            )}
+
+              {/* Main Content Area (Cards) */}
+              <div className="lg:w-3/4">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Student Details
+                  </h2>
+                  <div className="text-sm font-semibold text-gray-500 bg-white px-4 py-1.5 rounded-full border border-gray-200 shadow-sm">
+                    Showing {filteredStudents.length} of {allStudentsData.length} students
+                  </div>
+                </div>
+
+                {filteredStudents.length === 0 ? (
+                  <div className="bg-white border border-gray-200 rounded-2xl p-16 text-center shadow-sm">
+                    <Search size={48} className="text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-700 mb-2">No students found</h3>
+                    <p className="text-gray-500 max-w-sm mx-auto">
+                      No students match your current filters. Try adjusting your search or status filter.
+                    </p>
+                    <button 
+                      onClick={() => { setSearchQuery(""); setStatusFilter("All"); }}
+                      className="mt-6 px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition-colors"
+                    >
+                      Clear Filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                      {filteredStudents.map((student) => {
+                        const { displayName, student_code: displayCode, displaySeat, status, score, alerts: studentAlerts, high_severity, medium_severity, low_severity } = student;
+                        const alertTypes = Array.from(new Set(studentAlerts.map(a => a.alert_type)));
+                        
+                        return (
+                          <div
+                            key={student.id}
+                            className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden flex flex-col group"
+                          >
+                            {/* Top Bar Status Indicator */}
+                            <div
+                              className={`absolute top-0 left-0 w-full h-1.5 ${
+                                score >= 20
+                                  ? "bg-red-500"
+                                  : score >= 8
+                                  ? "bg-orange-500"
+                                  : "bg-green-500"
+                              }`}
+                            />
+
+                            <div className="flex justify-between items-start mb-4">
+                              <div className="flex items-start gap-3">
+                                {/* Avatar */}
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200 flex items-center justify-center text-gray-600 font-bold text-sm flex-shrink-0 shadow-sm">
+                                  {displaySeat || "?"}
+                                </div>
+                                <div className="min-w-0">
+                                  <h3 className="font-bold text-base text-gray-900 leading-tight truncate" title={displayName}>
+                                    {displayName}
+                                  </h3>
+                                  <div className="flex flex-col gap-1 mt-1">
+                                    <span className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate">
+                                      <User size={10} className="text-blue-400 flex-shrink-0" />
+                                      <span className="font-mono">{displayCode || "—"}</span>
+                                    </span>
+                                    <span className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate">
+                                      <MapPin size={10} className="text-blue-400 flex-shrink-0" />
+                                      <span className="font-mono">Seat {displaySeat || "—"}</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Status Badge */}
+                            <div className="mb-4">
+                              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-bold uppercase tracking-wider ${status.color}`}>
+                                {status.icon}
+                                {status.label}
+                              </div>
+                            </div>
+
+                            {/* Severities Grid (Compact) */}
+                            <div className="grid grid-cols-3 gap-2 mb-4">
+                              <div className={`rounded-lg p-2 text-center border ${high_severity > 0 ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+                                <div className={`text-[9px] font-bold uppercase ${high_severity > 0 ? 'text-red-600' : 'text-gray-400'}`}>High</div>
+                                <div className={`text-sm font-black mt-0.5 ${high_severity > 0 ? 'text-red-700' : 'text-gray-600'}`}>{high_severity}</div>
+                              </div>
+                              <div className={`rounded-lg p-2 text-center border ${medium_severity > 0 ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-100'}`}>
+                                <div className={`text-[9px] font-bold uppercase ${medium_severity > 0 ? 'text-orange-600' : 'text-gray-400'}`}>Med</div>
+                                <div className={`text-sm font-black mt-0.5 ${medium_severity > 0 ? 'text-orange-700' : 'text-gray-600'}`}>{medium_severity}</div>
+                              </div>
+                              <div className={`rounded-lg p-2 text-center border ${low_severity > 0 ? 'bg-yellow-50 border-yellow-100' : 'bg-gray-50 border-gray-100'}`}>
+                                <div className={`text-[9px] font-bold uppercase ${low_severity > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>Low</div>
+                                <div className={`text-sm font-black mt-0.5 ${low_severity > 0 ? 'text-yellow-700' : 'text-gray-600'}`}>{low_severity}</div>
+                              </div>
+                            </div>
+
+                            {/* Alert Types Breakdown */}
+                            <div className="mb-4 flex-1">
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                                <span className="flex items-center gap-1"><ShieldAlert size={10} /> AI Alerts</span>
+                                {studentAlerts.length > 0 && (
+                                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-md text-[9px]">{studentAlerts.length} total</span>
+                                )}
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {alertTypes.length > 0 ? (
+                                  alertTypes.map(type => {
+                                    const count = studentAlerts.filter(a => a.alert_type === type).length;
+                                    const isCritical = studentAlerts.some(a => a.alert_type === type && a.severity === 'high');
+                                    return (
+                                      <div
+                                        key={type}
+                                        className={`px-2 py-0.5 rounded text-[9px] font-bold border ${
+                                          isCritical
+                                            ? 'bg-red-50 text-red-700 border-red-200'
+                                            : 'bg-gray-50 text-gray-600 border-gray-200'
+                                        }`}
+                                      >
+                                        {type.replace(/_/g, ' ').toUpperCase()}: {count}
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <span className="text-[10px] text-gray-400 italic bg-gray-50 px-2 py-1 rounded w-full border border-gray-100 border-dashed">No alerts recorded</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Footer / Score */}
+                            <div className="bg-gray-50/50 rounded-xl p-3 flex items-center justify-between border border-gray-100 mt-auto">
+                              <span className="text-xs font-bold text-gray-500">
+                                Violation Score
+                              </span>
+                              <span
+                                className={`font-black text-base ${
+                                  score >= 20
+                                    ? "text-red-600"
+                                    : score >= 8
+                                    ? "text-orange-600"
+                                    : "text-green-600"
+                                }`}
+                              >
+                                {score.toFixed(1)} <span className="text-[10px] text-gray-400 font-bold">/ 100</span>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
           </>
         )}
       </div>

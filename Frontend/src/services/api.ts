@@ -170,9 +170,11 @@ export interface StudentZone {
   hall: number;
   camera?: number;
   camera_name: string;
-  student_name: string;
+  student_name: string;          // static field stored at zone creation
   student_code: string;
   seat_number: string;
+  dynamic_student_name: string;  // resolved from HallEnrollment (current name)
+  dynamic_seat_number: string;   // resolved from HallEnrollment (current seat)
   x1: number;
   y1: number;
   x2: number;
@@ -215,6 +217,8 @@ export interface ViolationLog {
   medium_severity: number;
   low_severity: number;
   violation_score: number;
+  // populated client-side for display
+  student_id?: string;
 }
 
 export interface StreamSession {

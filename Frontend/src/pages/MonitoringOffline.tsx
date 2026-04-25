@@ -660,36 +660,56 @@ const OfflineMonitoringPage: FC = () => {
         <p className="text-gray-500 text-center py-8 text-sm">No alerts yet.</p>
       ) : (
         <div className="space-y-2 max-h-96 overflow-y-auto">
-          {alerts.map(a => (
-            <div
-              key={a.id}
-              className={`p-3 rounded-lg border-l-4 ${
-                a.severity === 'high' ? 'border-red-500 bg-red-50' :
-                a.severity === 'medium' ? 'border-orange-500 bg-orange-50' :
-                'border-yellow-500 bg-yellow-50'
-              } ${a.is_reviewed ? 'opacity-60' : ''}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3 flex-1">
-                  <div className={`p-2 rounded-lg ${getSeverityColor(a.severity)}`}>
-                    {getAlertIcon(a.alert_type)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-gray-800">{a.seat_number || `Zone ${a.zone}`}</span>
-                      <span className="text-xs text-gray-500">{new Date(a.timestamp).toLocaleTimeString()}</span>
+          {alerts.map(a => {
+            // Resolve student identity info from alert fields
+            const matchedZone = zones.find(z => z.id === a.zone);
+            const displayName = a.student_name || matchedZone?.student_name || `Zone ${a.zone}`;
+            const displaySeat = a.seat_number || matchedZone?.seat_number || '';
+            const displayId   = matchedZone?.student_code || '';
+            return (
+              <div
+                key={a.id}
+                className={`p-3 rounded-lg border-l-4 ${
+                  a.severity === 'high' ? 'border-red-500 bg-red-50' :
+                  a.severity === 'medium' ? 'border-orange-500 bg-orange-50' :
+                  'border-yellow-500 bg-yellow-50'
+                } ${a.is_reviewed ? 'opacity-60' : ''}`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className={`p-2 rounded-lg ${getSeverityColor(a.severity)}`}>
+                      {getAlertIcon(a.alert_type)}
                     </div>
-                    <p className="text-sm text-gray-600">{a.student_name} — {a.alert_type.replace(/_/g, ' ')}</p>
+                    <div className="flex-1 min-w-0">
+                      {/* Name + Seat row */}
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-semibold text-gray-800 truncate">{displayName}</span>
+                        {displaySeat && (
+                          <span className="text-[10px] font-bold bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded shrink-0">
+                            Seat {displaySeat}
+                          </span>
+                        )}
+                      </div>
+                      {/* Student ID row */}
+                      {displayId && (
+                        <p className="text-[10px] text-gray-400 font-mono mb-0.5">ID: {displayId}</p>
+                      )}
+                      {/* Alert type + timestamp */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-600">{a.alert_type.replace(/_/g, ' ')}</span>
+                        <span className="text-[10px] text-gray-400">{new Date(a.timestamp).toLocaleTimeString()}</span>
+                      </div>
+                    </div>
                   </div>
+                  {!a.is_reviewed && (
+                    <button onClick={() => handleReviewAlert(a.id)} title="Mark reviewed" className="text-gray-400 hover:text-green-600 shrink-0">
+                      <Eye size={18} />
+                    </button>
+                  )}
                 </div>
-                {!a.is_reviewed && (
-                  <button onClick={() => handleReviewAlert(a.id)} title="Mark reviewed" className="text-gray-400 hover:text-green-600">
-                    <Eye size={18} />
-                  </button>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
