@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'hardware.camera_stream',
     'hardware.frame_dispatcher',
     'face',
+    'violation_Exam',              # Phase 1 — violation tracking
 ]
 
 # ─── Middleware ───────────────────────────────────────────────────

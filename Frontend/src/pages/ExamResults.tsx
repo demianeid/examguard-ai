@@ -13,7 +13,7 @@ interface StudentResult {
   percentage: number;
   submitted_at: string;
   is_terminated: boolean;
-  violation_score: number;
+  risk_score: number;
 }
 
 interface ExamResultData {
@@ -89,6 +89,41 @@ const handleViewProfile = (student: StudentResult) => {
     a.href = url;
     a.download = `${examData.exam_title}_results.csv`;
     a.click();
+  };
+
+  const handleExportAuditTrail = async () => {
+    if (!examData) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/violations/exam/${examId}/export-audit/`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch audit trail');
+      const data = await res.json();
+      
+      const csv = [
+        ['Time', 'Student Name', 'Student ID', 'Event Type', 'Severity', 'Description', 'Details', 'Score Impact'],
+        ...data.events.map((e: any) => [
+          e.time,
+          `"${e.student_name}"`,
+          `"${e.student_id}"`,
+          e.event_type,
+          e.severity,
+          `"${e.description}"`,
+          `"${e.details}"`,
+          e.score_impact
+        ])
+      ].map(row => row.join(',')).join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${examData.exam_title}_audit_trail.csv`;
+      a.click();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to export audit trail.');
+    }
   };
 
   // --- Derived stats ---
@@ -207,13 +242,22 @@ const handleViewProfile = (student: StudentResult) => {
                   Showing {examData.results.length} of {examData.total_students} students
                 </p>
               </div>
-              <button
-                onClick={handleExportResults}
-                className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
-              >
-                <Download size={18} />
-                Export Results
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleExportResults}
+                  className="bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 font-medium"
+                >
+                  <Download size={18} />
+                  Export Grades
+                </button>
+                <button
+                  onClick={handleExportAuditTrail}
+                  className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium shadow-sm"
+                >
+                  <Download size={18} />
+                  Export Audit Trail
+                </button>
+              </div>
             </div>
 
             {/* Table */}
@@ -234,7 +278,7 @@ const handleViewProfile = (student: StudentResult) => {
                         <th className="py-3 px-4 text-left">Score</th>
                         <th className="py-3 px-4 text-left">Status</th>
                         <th className="py-3 px-4 text-left">Submitted</th>
-                        <th className="py-3 px-4 text-left">Violations</th>
+                        <th className="py-3 px-4 text-left">Risk Score</th>
                         <th className="py-3 px-4 text-left rounded-r-lg">Actions</th>
                       </tr>
                     </thead>
@@ -296,11 +340,13 @@ const handleViewProfile = (student: StudentResult) => {
                             {new Date(student.submitted_at).toLocaleDateString()}
                           </td>
                           <td className="py-4 px-4">
-                            <span className={`text-sm font-medium ${
-                              student.violation_score >= 7 ? 'text-red-600' :
-                              student.violation_score >= 4 ? 'text-orange-500' : 'text-gray-500'
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                              student.risk_score >= 80 ? 'bg-red-100 text-red-700' :
+                              student.risk_score >= 50 ? 'bg-orange-100 text-orange-700' :
+                              student.risk_score >= 20 ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-green-100 text-green-700'
                             }`}>
-                              {student.violation_score}/10
+                              {student.risk_score.toFixed(1)}
                             </span>
                           </td>
                           <td className="py-4 px-4">

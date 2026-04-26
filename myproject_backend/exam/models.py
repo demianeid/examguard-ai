@@ -128,6 +128,10 @@ class ExamResult(models.Model):
     submitted_at         = models.DateTimeField(auto_now_add=True)
     is_terminated        = models.BooleanField(default=False)
     violation_score      = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    risk_score           = models.DecimalField(
+        max_digits=5, decimal_places=1, default=0,
+        help_text='Normalised risk score 0-100 computed by RiskEngine at submit time'
+    )
 
     class Meta:
         unique_together = ['student', 'exam']

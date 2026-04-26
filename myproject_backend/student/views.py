@@ -5,6 +5,7 @@ from instructors.models import Class, ClassEnrollment
 from exam.models import Exam, StudentAnswer, ExamResult, Choice, ExamSession
 from django.utils import timezone
 from django.db.models import Q
+from violation_Exam.risk_engine import compute_risk_score  # Phase 3
 
 
 # ─── Helper ───────────────────────────────────────────────────────
@@ -435,6 +436,9 @@ class StudentExamSubmitView(APIView):
 
         percentage = (total_marks_obtained / exam.total_marks * 100) if exam.total_marks > 0 else 0
 
+        # Phase 3 — Compute risk score before saving
+        computed_risk = compute_risk_score(request.user, exam)
+
         ExamResult.objects.create(
             student=request.user,
             exam=exam,
@@ -443,6 +447,7 @@ class StudentExamSubmitView(APIView):
             percentage=round(percentage, 2),
             is_terminated=is_terminated,
             violation_score=violation_score,
+            risk_score=computed_risk,
         )
 
         # أغلق الـ session بعد الـ submit

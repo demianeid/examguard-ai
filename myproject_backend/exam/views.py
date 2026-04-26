@@ -159,7 +159,7 @@ class ExamResultsView(APIView):
                 'percentage': r.percentage,
                 'submitted_at': r.submitted_at,
                 'is_terminated': r.is_terminated,
-                'violation_score': r.violation_score,
+                'risk_score': r.risk_score if hasattr(r, 'risk_score') and r.risk_score is not None else r.violation_score,
             })
 
         return Response({

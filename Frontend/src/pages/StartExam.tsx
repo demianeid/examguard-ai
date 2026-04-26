@@ -78,6 +78,10 @@ const ExamInterface: React.FC = () => {
   });
   const [checkingComplete, setCheckingComplete] = useState(false);
 
+  // --- AI Proctoring State ---
+  const [aiStatus, setAiStatus] = useState<'idle' | 'connected' | 'error'>('idle');
+  const [lastAiAlert, setLastAiAlert] = useState<string | null>(null);
+
   // --- Refs ---
   const videoRef = useRef<HTMLVideoElement>(null);
   const examContainerRef = useRef<HTMLDivElement>(null);
@@ -85,6 +89,10 @@ const ExamInterface: React.FC = () => {
   const faceCanvasRef = useRef<HTMLCanvasElement>(null);
   const faceStreamRef = useRef<MediaStream | null>(null);
   const isTerminatedRef = useRef(false); // sync ref — event listeners always see latest value
+  const aiWsRef = useRef<WebSocket | null>(null);          // AI service WebSocket
+  const aiCanvasRef = useRef<HTMLCanvasElement | null>(null); // off-screen canvas for frame capture
+  const aiIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null); // frame-send interval
+  const violationScoreRef = useRef(0);  // sync mirror of violationScore for WS closure
 
   // ============================================================
   // Fetch exam data from backend
@@ -162,6 +170,7 @@ const ExamInterface: React.FC = () => {
     const handler = (e: MouseEvent) => {
       if (currentView === 'exam' && !examTerminated) {
         e.preventDefault();
+        addViolation(0.2, 'Right-click attempt', 'right_click');
       }
     };
     document.addEventListener('contextmenu', handler);
@@ -173,7 +182,7 @@ const ExamInterface: React.FC = () => {
       if (currentView === 'exam' && !examTerminated) {
         e.preventDefault();
         setCopyAttempts(prev => prev + 1);
-        addViolation(0.5, 'Copy/Paste attempt detected');
+        addViolation(0.5, 'Copy/Paste attempt detected', 'copy_paste');
       }
     };
     document.addEventListener('copy', handler);
@@ -200,7 +209,7 @@ const ExamInterface: React.FC = () => {
       if (blocked.includes(true)) {
         e.preventDefault();
         e.stopPropagation();
-        addViolation(1, 'Blocked keyboard shortcut');
+        addViolation(1, 'Blocked keyboard shortcut', 'keyboard_shortcut');
       }
     };
     window.addEventListener('keydown', handler, true);
@@ -211,7 +220,7 @@ const ExamInterface: React.FC = () => {
     const detect = () => {
       if (currentView !== 'exam' || examTerminated) return;
       const detected = window.outerWidth - window.innerWidth > 160 || window.outerHeight - window.innerHeight > 160;
-      if (detected && !devToolsOpen) { setDevToolsOpen(true); addViolation(2, 'Developer tools opened'); }
+      if (detected && !devToolsOpen) { setDevToolsOpen(true); addViolation(2, 'Developer tools opened', 'devtools'); }
       else if (!detected && devToolsOpen) setDevToolsOpen(false);
     };
     const interval = setInterval(detect, 1000);
@@ -226,7 +235,7 @@ const ExamInterface: React.FC = () => {
         const isFS = document.fullscreenElement !== null;
         setFullScreenActive(isFS);
         if (!isFS) {
-          addViolation(1, 'Exited full-screen mode');
+          addViolation(1, 'Exited full-screen mode', 'fullscreen_exit');
           setTimeout(() => {
             if (!document.fullscreenElement && !isTerminatedRef.current) requestFullScreen();
           }, 2000);
@@ -242,7 +251,7 @@ const ExamInterface: React.FC = () => {
       if (currentView === 'exam' && !examTerminated) {
         const focused = document.visibilityState === 'visible';
         setTabFocus(focused);
-        if (!focused) addViolation(2, 'Tab switching detected');
+        if (!focused) addViolation(2, 'Tab switching detected', 'tab_switch');
       }
     };
     document.addEventListener('visibilitychange', handler);
@@ -257,18 +266,81 @@ const ExamInterface: React.FC = () => {
   }, [currentView, examTerminated]);
 
   // ============================================================
+  // Violation Persistence Helpers
+  // ============================================================
+  const DJANGO_BASE = 'http://127.0.0.1:8000';
+
+  /** POST a browser-side behavior event to Django */
+  const postBehaviorViolation = useCallback((
+    eventType: string,
+    scorePoints: number,
+    cumulativeScore: number,
+    details: string,
+  ) => {
+    if (!examId) return;
+    fetch(`${DJANGO_BASE}/api/violations/behavior/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        exam_id:          parseInt(examId),
+        event_type:       eventType,
+        score_points:     scorePoints,
+        cumulative_score: cumulativeScore,
+        details,
+      }),
+    }).catch(err => console.warn('postBehaviorViolation failed:', err));
+  }, [examId, token]);
+
+  /** POST an AI-detected cheating event to Django */
+  const postAIViolation = useCallback((result: {
+    cheating_reason:   string | null;
+    head_direction:    string;
+    head_suspicious:   boolean;
+    yolo_suspicious:   boolean;
+    yolo_labels:       string[];
+    h_ratio:           number;
+    v_ratio:           number;
+  }) => {
+    if (!examId) return;
+    fetch(`${DJANGO_BASE}/api/violations/ai/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        exam_id:           parseInt(examId),
+        cheating_detected: true,
+        cheating_reason:   result.cheating_reason ?? '',
+        head_direction:    result.head_direction,
+        head_suspicious:   result.head_suspicious,
+        yolo_suspicious:   result.yolo_suspicious,
+        yolo_labels:       result.yolo_labels,
+        h_ratio:           result.h_ratio,
+        v_ratio:           result.v_ratio,
+      }),
+    }).catch(err => console.warn('postAIViolation failed:', err));
+  }, [examId, token]);
+
+  // ============================================================
   // Violation & Termination
   // ============================================================
-  const addViolation = (points: number, reason: string) => {
+  const addViolation = useCallback((points: number, reason: string, eventType = 'other') => {
     setViolationScore(prev => {
       const newScore = prev + points;
+      violationScoreRef.current = newScore;
       setProctorAlerts(prevAlerts => [reason, ...prevAlerts].slice(0, 3));
+      // Persist to Django asynchronously
+      postBehaviorViolation(eventType, points, newScore, reason);
       if (newScore >= 10 && !examTerminated && currentView === 'exam') {
         terminateExam(`Excessive violations: ${reason}`, newScore);
       }
       return newScore;
     });
-  };
+  }, [examTerminated, currentView, postBehaviorViolation]);
 
   const terminateExam = (reason: string, score?: number) => {
     isTerminatedRef.current = true; // set sync ref FIRST so fullscreenchange handler sees it immediately
@@ -276,9 +348,120 @@ const ExamInterface: React.FC = () => {
     setTerminationReason(reason);
     setCurrentView('terminated');
     exitFullScreen();
+    stopAIProctoring();           // close WebSocket
     // Auto-submit on termination
     submitExam(true, score ?? violationScore);
   };
+
+  // ============================================================
+  // AI WebSocket Proctoring
+  // ============================================================
+
+  /** Start sending frames to the AI service via WebSocket */
+  const startAIProctoring = useCallback(() => {
+    if (aiWsRef.current) return; // already connected
+
+    let studentId = "unknown";
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        studentId = payload.user_id || "unknown";
+      } catch(e) {}
+    }
+
+    const ws = new WebSocket(`ws://127.0.0.1:8001/ws/analyze/${examId}/${studentId}`);
+    ws.binaryType = 'arraybuffer';
+    aiWsRef.current = ws;
+
+    // Off-screen canvas for frame capture
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    aiCanvasRef.current = canvas;
+
+    ws.onopen = () => {
+      console.log('[AI] WebSocket connected');
+      setAiStatus('connected');
+
+      // Send one frame every 800ms while exam is active
+      aiIntervalRef.current = setInterval(() => {
+        if (!videoRef.current || ws.readyState !== WebSocket.OPEN) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(videoRef.current, 0, 0, 640, 480);
+        canvas.toBlob(blob => {
+          if (blob && ws.readyState === WebSocket.OPEN) {
+            blob.arrayBuffer().then(buf => ws.send(buf));
+          }
+        }, 'image/jpeg', 0.75);
+      }, 800);
+    };
+
+    ws.onmessage = (event) => {
+      if (isTerminatedRef.current) return;
+      try {
+        const result = JSON.parse(event.data as string);
+        if (result.error) return;
+
+        if (result.cheating_detected) {
+          const reason = result.cheating_reason ?? 'AI: suspicious behaviour';
+          setLastAiAlert(reason);
+
+          // Map AI reason → violation type string for the DB
+          const eventType = result.yolo_suspicious ? 'ai_object_detected' : 'ai_head_pose';
+          addViolation(1.5, `⚠ AI: ${reason}`, eventType);
+
+          // Persist full AI event details
+          postAIViolation({
+            cheating_reason:  result.cheating_reason,
+            head_direction:   result.head_direction  ?? '',
+            head_suspicious:  result.head_suspicious ?? false,
+            yolo_suspicious:  result.yolo_suspicious ?? false,
+            yolo_labels:      (result.detections ?? []).map((d: {label: string}) => d.label),
+            h_ratio:          result.h_ratio ?? 0,
+            v_ratio:          result.v_ratio ?? 0,
+          });
+        } else {
+          // Clear the AI alert if now clean
+          setLastAiAlert(null);
+        }
+      } catch (e) {
+        console.warn('[AI] Failed to parse message', e);
+      }
+    };
+
+    ws.onerror = () => {
+      console.warn('[AI] WebSocket error — AI proctoring unavailable');
+      setAiStatus('error');
+    };
+
+    ws.onclose = () => {
+      console.log('[AI] WebSocket closed');
+      setAiStatus('idle');
+      aiWsRef.current = null;
+    };
+  }, [addViolation, postAIViolation]);
+
+  /** Stop sending frames and close the WebSocket */
+  const stopAIProctoring = useCallback(() => {
+    if (aiIntervalRef.current) {
+      clearInterval(aiIntervalRef.current);
+      aiIntervalRef.current = null;
+    }
+    if (aiWsRef.current) {
+      aiWsRef.current.close();
+      aiWsRef.current = null;
+    }
+    setAiStatus('idle');
+  }, []);
+
+  // Stop AI proctoring when exam ends for any reason
+  useEffect(() => {
+    if (examTerminated || currentView === 'time-up') stopAIProctoring();
+  }, [examTerminated, currentView, stopAIProctoring]);
+
+  // Clean up on unmount
+  useEffect(() => () => stopAIProctoring(), [stopAIProctoring]);
 
   // ============================================================
   // Timer
@@ -415,6 +598,9 @@ const ExamInterface: React.FC = () => {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
       if (videoRef.current) videoRef.current.srcObject = stream;
     } catch { console.error('Camera access denied'); }
+
+    // Connect to AI proctoring service
+    startAIProctoring();
   };
 
   // ============================================================
@@ -892,6 +1078,19 @@ const response = await fetch('http://localhost:8000/api/student/face/verify/', {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              {/* AI Proctoring status badge */}
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                aiStatus === 'connected' ? 'bg-green-500/30 text-green-200'
+                : aiStatus === 'error'   ? 'bg-yellow-500/30 text-yellow-200'
+                : 'bg-white/10 text-white/50'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  aiStatus === 'connected' ? 'bg-green-300 animate-pulse'
+                  : aiStatus === 'error'   ? 'bg-yellow-300'
+                  : 'bg-white/30'
+                }`} />
+                AI {aiStatus === 'connected' ? 'Monitoring' : aiStatus === 'error' ? 'Unavailable' : 'Connecting...'}
+              </div>
               <button onClick={toggleFullScreen} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg flex items-center gap-2">
                 {fullScreenActive ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 <span className="text-sm">{fullScreenActive ? 'Exit' : 'Enter'} Fullscreen</span>
@@ -902,6 +1101,14 @@ const response = await fetch('http://localhost:8000/api/student/face/verify/', {
               </div>
             </div>
           </div>
+
+          {/* AI Alert Banner — shown when AI detects suspicious behaviour */}
+          {lastAiAlert && (
+            <div className="bg-orange-500 text-white px-6 py-2 flex items-center gap-2 text-sm border-x border-orange-600 animate-pulse">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span><strong>AI Alert:</strong> {lastAiAlert}</span>
+            </div>
+          )}
 
           {/* Exam Header */}
           <div className="bg-white border-x border-t border-gray-200 p-6 flex flex-wrap justify-between items-center">
