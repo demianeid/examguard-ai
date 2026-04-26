@@ -595,6 +595,43 @@ const ClassesInstructor = () => {
     );
   };
 
+  // ── Types for real API data ──────────────────────────────────────────────────
+  interface LiveStudent {
+    student_id: string;
+    db_id: number;
+    name: string;
+    email: string;
+    profile_image: string | null;
+    is_active: boolean;
+    violation_score: number;
+    ai_event_count: number;
+    status: 'online' | 'warning' | 'flagged';
+    progress: number;
+    started_at: string;
+    risk_score: number;
+    risk_band: string;
+    risk_color: string;
+  }
+
+  interface IncidentItem {
+    id: string | number;
+    type: string;
+    student_id: string;
+    student_name: string;
+    event: string;
+    event_type: string;
+    score_points: number;
+    time: string;
+    occurred_at: string;
+    count?: number;
+  }
+
+  interface IncidentBuckets {
+    high: IncidentItem[];
+    medium: IncidentItem[];
+    low: IncidentItem[];
+  }
+
   const DashboardTab = () => {
     const activeExams = exams.filter(e => e.status === "active");
     const upcomingExams = exams.filter(e => e.status === "upcoming");
@@ -602,34 +639,60 @@ const ClassesInstructor = () => {
     const [expandedExam, setExpandedExam] = useState<number | null>(null);
     const [proctoringView, setProctoringView] = useState<"monitor" | "activity" | "settings">("monitor");
 
-    const suspiciousActivity = {
-      high: [
-        { id: 1, student: "Ahmed Hassan", event: "Multiple tab switches detected", time: "10:23 AM", count: 4 },
-        { id: 2, student: "Sara Mohamed", event: "Face not visible in camera", time: "10:31 AM", count: 2 },
-      ],
-      medium: [
-        { id: 3, student: "Omar Khaled", event: "Looking away from screen", time: "10:18 AM", count: 6 },
-        { id: 4, student: "Nour Ali", event: "Unusual mouse movement pattern", time: "10:40 AM", count: 3 },
-        { id: 5, student: "Youssef Tarek", event: "Copy-paste attempt blocked", time: "10:45 AM", count: 1 },
-      ],
-      low: [
-        { id: 6, student: "Mona Samir", event: "Window minimized briefly", time: "10:15 AM", count: 1 },
-        { id: 7, student: "Karim Adel", event: "Keyboard shortcut attempt", time: "10:52 AM", count: 2 },
-      ],
+    // ── Real data from API ─────────────────────────────────────────────────────
+    const [liveDataByExam, setLiveDataByExam] = useState<Record<number, { students: LiveStudent[]; flagged: number; warning: number; online: number }>>({});
+    const [incidentsByExam, setIncidentsByExam] = useState<Record<number, IncidentBuckets>>({});
+    const [dashLoading, setDashLoading] = useState<boolean>(false);
+
+    const fetchLiveData = async (examId: number) => {
+      try {
+        const [liveRes, incRes] = await Promise.all([
+          apiRequest(`http://127.0.0.1:8000/api/violations/exam/${examId}/live-status/`),
+          apiRequest(`http://127.0.0.1:8000/api/violations/exam/${examId}/incidents/`),
+        ]);
+        setLiveDataByExam(prev => ({
+          ...prev,
+          [examId]: {
+            students: liveRes.students ?? [],
+            flagged: liveRes.flagged ?? 0,
+            warning: liveRes.warning ?? 0,
+            online: liveRes.online ?? 0,
+          },
+        }));
+        setIncidentsByExam(prev => ({
+          ...prev,
+          [examId]: {
+            high:   incRes.high   ?? [],
+            medium: incRes.medium ?? [],
+            low:    incRes.low    ?? [],
+          },
+        }));
+      } catch {
+        // silently fail — exam may not have started yet
+      }
     };
 
-    const totalIncidents = suspiciousActivity.high.length + suspiciousActivity.medium.length + suspiciousActivity.low.length;
+    useEffect(() => {
+      const allRelevantExams = [...activeExams, ...completedExams];
+      if (allRelevantExams.length === 0) return;
+      setDashLoading(true);
+      Promise.all(allRelevantExams.map(e => fetchLiveData(e.id))).finally(() => setDashLoading(false));
 
-    const liveStudents = [
-      { id: 1, name: "Ahmed Hassan", status: "flagged", progress: 65, avatar: null },
-      { id: 2, name: "Sara Mohamed", status: "flagged", progress: 40, avatar: null },
-      { id: 3, name: "Omar Khaled", status: "warning", progress: 80, avatar: null },
-      { id: 4, name: "Nour Ali", status: "warning", progress: 55, avatar: null },
-      { id: 5, name: "Youssef Tarek", status: "online", progress: 90, avatar: null },
-      { id: 6, name: "Mona Samir", status: "online", progress: 70, avatar: null },
-      { id: 7, name: "Karim Adel", status: "online", progress: 45, avatar: null },
-      { id: 8, name: "Layla Hassan", status: "online", progress: 85, avatar: null },
-    ];
+      // Auto-refresh every 10 s for active exams
+      if (activeExams.length === 0) return;
+      const interval = setInterval(() => {
+        activeExams.forEach(e => fetchLiveData(e.id));
+      }, 10000);
+      return () => clearInterval(interval);
+    }, [exams]);
+
+    // Per-exam helpers
+    const getLiveStudents = (examId: number): LiveStudent[] => liveDataByExam[examId]?.students ?? [];
+    const getIncidents = (examId: number): IncidentBuckets => incidentsByExam[examId] ?? { high: [], medium: [], low: [] };
+    const getTotalIncidents = (examId: number) => {
+      const i = getIncidents(examId);
+      return i.high.length + i.medium.length + i.low.length;
+    };
 
     const getStudentStatusColor = (status: string) => {
       switch (status) {
@@ -646,128 +709,96 @@ const ClassesInstructor = () => {
       }
     };
 
-    const SuspiciousActivitySection = ({ examId }: { examId: number }) => (
-      <div className="space-y-4">
-        <div className="bg-white rounded-xl border border-red-200 overflow-hidden shadow-sm">
-          <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-red-600 to-red-700">
-            <AlertCircle size={18} className="text-white" />
-            <span className="font-semibold text-white text-sm">High Severity</span>
-            <span className="ml-auto bg-white text-red-600 text-xs font-bold px-2.5 py-1 rounded-full">{suspiciousActivity.high.length}</span>
-          </div>
-          {suspiciousActivity.high.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-gray-500 italic">No high severity incidents</p>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {suspiciousActivity.high.map(item => (
-                <div key={item.id} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-red-50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
-                      {item.student.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-800 text-sm">{item.student}</p>
-                      <p className="text-red-600 text-xs mt-0.5 flex items-center gap-1"><AlertCircle size={11} />{item.event}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                    <span className="text-xs text-gray-400">{item.time}</span>
-                    <span className="inline-block bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">×{item.count} times</span>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/footage/${item.id}`); }}
-                      className="flex items-center gap-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
-                    >
-                      <Eye size={12} /> View Footage
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+    const SuspiciousActivitySection = ({ examId }: { examId: number }) => {
+      const incidents = getIncidents(examId);
 
-        <div className="bg-white rounded-xl border border-orange-200 overflow-hidden shadow-sm">
-          <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-orange-500 to-orange-600">
-            <AlertCircle size={18} className="text-white" />
-            <span className="font-semibold text-white text-sm">Medium Severity</span>
-            <span className="ml-auto bg-white text-orange-600 text-xs font-bold px-2.5 py-1 rounded-full">{suspiciousActivity.medium.length}</span>
-          </div>
-          {suspiciousActivity.medium.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-gray-500 italic">No medium severity incidents</p>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {suspiciousActivity.medium.map(item => (
-                <div key={item.id} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-orange-50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-orange-400 to-orange-500 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
-                      {item.student.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-800 text-sm">{item.student}</p>
-                      <p className="text-orange-600 text-xs mt-0.5 flex items-center gap-1"><AlertCircle size={11} />{item.event}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                    <span className="text-xs text-gray-400">{item.time}</span>
-                    <span className="inline-block bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-full">×{item.count} times</span>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/footage/${item.id}`); }}
-                      className="flex items-center gap-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
-                    >
-                      <Eye size={12} /> View Footage
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      // Group items by student + event_type so repeated events show a count badge
+      const groupItems = (items: IncidentItem[]) => {
+        const map = new Map<string, IncidentItem & { count: number }>();
+        for (const item of items) {
+          const key = `${item.student_id}||${item.event_type}`;
+          if (map.has(key)) {
+            map.get(key)!.count += 1;
+            // Keep the most recent time
+            map.get(key)!.time = item.time;
+          } else {
+            map.set(key, { ...item, count: 1 });
+          }
+        }
+        return Array.from(map.values());
+      };
 
-        <div className="bg-white rounded-xl border border-yellow-200 overflow-hidden shadow-sm">
-          <div className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600">
-            <Info size={18} className="text-white" />
-            <span className="font-semibold text-white text-sm">Low Severity</span>
-            <span className="ml-auto bg-white text-yellow-600 text-xs font-bold px-2.5 py-1 rounded-full">{suspiciousActivity.low.length}</span>
-          </div>
-          {suspiciousActivity.low.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-gray-500 italic">No low severity incidents</p>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {suspiciousActivity.low.map(item => (
-                <div key={item.id} className="px-5 py-4 flex items-center justify-between gap-4 hover:bg-yellow-50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-500 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
-                      {item.student.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-800 text-sm">{item.student}</p>
-                      <p className="text-yellow-700 text-xs mt-0.5 flex items-center gap-1"><Info size={11} />{item.event}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                    <span className="text-xs text-gray-400">{item.time}</span>
-                    <span className="inline-block bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-0.5 rounded-full">×{item.count} times</span>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/footage/${item.id}`); }}
-                      className="flex items-center gap-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md"
-                    >
-                      <Eye size={12} /> View Footage
-                    </button>
-                  </div>
-                </div>
-              ))}
+      const renderBucket = (
+        items: IncidentItem[],
+        color: string,
+        label: string,
+        textColor: string,
+        hoverBg: string,
+        avatarGrad: string,
+      ) => {
+        const grouped = groupItems(items);
+        return (
+          <div className={`bg-white rounded-xl border border-${color}-200 overflow-hidden shadow-sm`}>
+            <div className={`flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-${color}-600 to-${color}-700`}>
+              <AlertCircle size={18} className="text-white" />
+              <span className="font-semibold text-white text-sm">{label}</span>
+              {/* Badge shows unique event types, not raw count */}
+              <span className={`ml-auto bg-white text-${color}-600 text-xs font-bold px-2.5 py-1 rounded-full`}>
+                {grouped.length}
+              </span>
             </div>
-          )}
+            {grouped.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-gray-500 italic">No {label.toLowerCase()} incidents</p>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {grouped.map(item => (
+                  <div key={`${item.student_id}-${item.event_type}`} className={`px-5 py-4 flex items-center justify-between gap-4 hover:${hoverBg} transition-colors`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full ${avatarGrad} flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0`}>
+                        {item.student_name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-800 text-sm">{item.student_name}</p>
+                        <p className={`${textColor} text-xs mt-0.5 flex items-center gap-1`}>
+                          <AlertCircle size={11} />{item.event}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      <span className="text-xs text-gray-400">{item.time}</span>
+                      {/* Repeat count badge — only shown when event happened more than once */}
+                      {item.count > 1 && (
+                        <span className={`inline-block bg-${color}-100 text-${color}-700 text-xs font-bold px-2 py-0.5 rounded-full`}>
+                          ×{item.count} times
+                        </span>
+                      )}
+                      <span className={`inline-block bg-${color}-50 text-${color}-600 text-xs px-2 py-0.5 rounded-full border border-${color}-200`}>
+                        +{item.score_points} pts
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      return (
+        <div className="space-y-4">
+          {renderBucket(incidents.high,   'red',    'High Severity',   'text-red-600',    'bg-red-50',    'bg-gradient-to-r from-red-500 to-red-600')}
+          {renderBucket(incidents.medium, 'orange', 'Medium Severity', 'text-orange-600', 'bg-orange-50', 'bg-gradient-to-r from-orange-400 to-orange-500')}
+          {renderBucket(incidents.low,    'yellow', 'Low Severity',    'text-yellow-700', 'bg-yellow-50', 'bg-gradient-to-r from-yellow-400 to-yellow-500')}
         </div>
-      </div>
-    );
+      );
+    };
+
 
     const LiveMonitorSection = ({ exam }: { exam: Exam }) => {
-      const flagged = liveStudents.filter(s => s.status === "flagged").length;
-      const warning = liveStudents.filter(s => s.status === "warning").length;
-      const online = liveStudents.filter(s => s.status === "online").length;
+      const students = getLiveStudents(exam.id);
+      const flagged  = liveDataByExam[exam.id]?.flagged  ?? 0;
+      const warning  = liveDataByExam[exam.id]?.warning  ?? 0;
+      const online   = liveDataByExam[exam.id]?.online   ?? 0;
 
       const getCameraRingColor = (status: string) => {
         switch (status) {
@@ -837,33 +868,37 @@ const ClassesInstructor = () => {
           <div>
             <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
               <Eye size={14} className="text-[#1A80F6]" />
-              Camera feeds — {liveStudents.length} students
+              Camera feeds — {students.length} students
             </h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {liveStudents.map(student => (
-                <div key={student.id} className={`relative rounded-xl overflow-hidden border bg-gray-900 ${getCameraRingColor(student.status)}`} style={{ aspectRatio: '4/3' }}>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
-                    {getCameraIcon(student.status)}
-                    <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold text-base border-2 border-gray-500">
-                      {student.name.charAt(0)}
-                    </div>
-                  </div>
-                  {getStatusBadge(student.status)}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
-                    <p className="text-white text-[11px] font-semibold truncate">{student.name}</p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <div className="flex-1 bg-white/20 rounded-full h-1">
-                        <div className="h-1 rounded-full bg-white" style={{ width: `${student.progress}%` }} />
+            {students.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">No students have started this exam yet.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {students.map(student => (
+                  <div key={student.db_id} className={`relative rounded-xl overflow-hidden border bg-gray-900 ${getCameraRingColor(student.status)}`} style={{ aspectRatio: '4/3' }}>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+                      {getCameraIcon(student.status)}
+                      <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold text-base border-2 border-gray-500">
+                        {student.name.charAt(0)}
                       </div>
-                      <span className="text-white text-[10px] font-bold">{student.progress}%</span>
                     </div>
+                    {getStatusBadge(student.status)}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
+                      <p className="text-white text-[11px] font-semibold truncate">{student.name}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <div className="flex-1 bg-white/20 rounded-full h-1">
+                          <div className="h-1 rounded-full bg-white" style={{ width: `${student.progress}%` }} />
+                        </div>
+                        <span className="text-white text-[10px] font-bold">{student.progress}%</span>
+                      </div>
+                    </div>
+                    {student.status === "flagged" && (
+                      <div className="absolute inset-0 border-2 border-red-500 rounded-xl animate-pulse pointer-events-none" />
+                    )}
                   </div>
-                  {student.status === "flagged" && (
-                    <div className="absolute inset-0 border-2 border-red-500 rounded-xl animate-pulse pointer-events-none" />
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       );
@@ -933,9 +968,9 @@ const ClassesInstructor = () => {
                   )}
                   {isUpcoming && <span className="px-2.5 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-xs font-semibold">Upcoming</span>}
                   {isCompleted && <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-semibold">Completed</span>}
-                  {isActive && totalIncidents > 0 && (
+                  {isActive && getTotalIncidents(exam.id) > 0 && (
                     <span className="px-2.5 py-1 bg-red-100 text-red-600 rounded-full text-xs font-semibold flex items-center gap-1">
-                      <AlertCircle size={11} />{totalIncidents} incidents
+                      <AlertCircle size={11} />{getTotalIncidents(exam.id)} incidents
                     </span>
                   )}
                 </div>
@@ -963,15 +998,15 @@ const ClassesInstructor = () => {
             {isActive && !isExpanded && (
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <div className="bg-green-50 border border-green-100 rounded-lg p-2.5 text-center">
-                  <p className="text-lg font-bold text-green-700">{liveStudents.filter(s => s.status === "online").length}</p>
+                  <p className="text-lg font-bold text-green-700">{liveDataByExam[exam.id]?.online ?? 0}</p>
                   <p className="text-[10px] text-green-600">Online</p>
                 </div>
                 <div className="bg-red-50 border border-red-100 rounded-lg p-2.5 text-center">
-                  <p className="text-lg font-bold text-red-600">{suspiciousActivity.high.length}</p>
+                  <p className="text-lg font-bold text-red-600">{liveDataByExam[exam.id]?.flagged ?? 0}</p>
                   <p className="text-[10px] text-red-500">Flagged</p>
                 </div>
                 <div className="bg-orange-50 border border-orange-100 rounded-lg p-2.5 text-center">
-                  <p className="text-lg font-bold text-orange-600">{suspiciousActivity.medium.length}</p>
+                  <p className="text-lg font-bold text-orange-600">{liveDataByExam[exam.id]?.warning ?? 0}</p>
                   <p className="text-[10px] text-orange-500">Warnings</p>
                 </div>
               </div>
@@ -980,11 +1015,11 @@ const ClassesInstructor = () => {
             {isCompleted && !isExpanded && (
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-center">
-                  <p className="text-lg font-bold text-[#1A80F6]">{totalIncidents}</p>
+                  <p className="text-lg font-bold text-[#1A80F6]">{getTotalIncidents(exam.id)}</p>
                   <p className="text-[10px] text-blue-500">Total Incidents</p>
                 </div>
                 <div className="bg-red-50 border border-red-100 rounded-lg p-2.5 text-center">
-                  <p className="text-lg font-bold text-red-600">{suspiciousActivity.high.length}</p>
+                  <p className="text-lg font-bold text-red-600">{getIncidents(exam.id).high.length}</p>
                   <p className="text-[10px] text-red-500">High Severity</p>
                 </div>
               </div>
@@ -1024,7 +1059,7 @@ const ClassesInstructor = () => {
                   <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleViewResults(exam.id); }} className="flex-1 bg-gradient-to-r from-[#1A80F6] to-[#4A90E2] hover:from-[#0E6AD0] hover:to-[#3A80D2] text-white py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg">
                     <BarChart3 size={16} /> View Results
                   </button>
-                  <button type="button" onClick={() => { setExpandedExam(isExpanded && proctoringView === "activity" ? null : exam.id); setProctoringView("activity"); }} className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2 border ${isExpanded && proctoringView === "activity" ? 'bg-orange-600 text-white border-orange-600' : 'bg-orange-50 hover:bg-orange-100 text-orange-600 border-orange-200'}`}>
+                  <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/exam-review/${exam.id}`); }} className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg">
                     <Eye size={16} /> Review
                   </button>
                 </>
@@ -1059,7 +1094,7 @@ const ClassesInstructor = () => {
           </div>
           <div className="bg-gradient-to-br from-red-50 to-orange-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0"><AlertCircle className="text-red-600" size={20} /></div>
-            <div><p className="text-2xl font-bold text-red-600">{totalIncidents}</p><p className="text-xs text-red-500 font-medium">Incidents</p></div>
+            <div><p className="text-2xl font-bold text-red-600">{[...activeExams, ...completedExams].reduce((sum, e) => sum + getTotalIncidents(e.id), 0)}</p><p className="text-xs text-red-500 font-medium">Incidents</p></div>
           </div>
         </div>
 

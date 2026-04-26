@@ -38,6 +38,7 @@ import DashboardPage from './pages/Dashboardpage';
 import ROIConfigurationPage from './pages/Roi';
 import ExamsPage from './pages/ExamsPage';
 import ReportPage from './pages/ReportPage';
+import ExamReviewPage from './pages/ExamReviewPage';
 
 function Sidebar() {
   const location = useLocation();
@@ -198,6 +199,7 @@ function App() {
       <Route path="/review-incidents" element={<ReviewIncidents />} />
       <Route path="/live-proctoring" element={<LiveProctoring />} />
       <Route path="/proctor/:examId" element={<ProctoringPage />} />
+      <Route path="/exam-review/:examId" element={<ExamReviewPage />} />
 
       {/* Other Tools (without Sidebar) */}
       <Route path="/settings" element={<Settings />} />

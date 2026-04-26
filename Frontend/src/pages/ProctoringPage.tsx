@@ -4,7 +4,8 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Eye, AlertCircle, Info, Clock, Users, FileText,
-  Calendar, BarChart3, ChevronLeft, CheckCircle, RefreshCw, ShieldAlert
+  Calendar, BarChart3, ChevronLeft, CheckCircle, RefreshCw, ShieldAlert,
+  Search, SlidersHorizontal, AlertTriangle, CheckCircle2, TrendingUp, X,
 } from 'lucide-react';
 
 const DJANGO = 'http://127.0.0.1:8000';
@@ -366,8 +367,25 @@ const ProctoringPage = () => {
     </div>
   );
 
-  // ── Incident row component ───────────────────────────────────────────────
-  const IncidentRow = ({ item, color }: { item: Incident; color: string }) => (
+  // ── Group incidents by student+event_type ──────────────────────────────────
+  type GroupedIncident = Incident & { count: number };
+
+  const groupIncidents = (items: Incident[]): GroupedIncident[] => {
+    const map = new Map<string, GroupedIncident>();
+    for (const item of items) {
+      const key = `${item.student_id}||${item.event_type}`;
+      if (map.has(key)) {
+        map.get(key)!.count += 1;
+        map.get(key)!.time = item.time; // keep most recent
+      } else {
+        map.set(key, { ...item, count: 1 });
+      }
+    }
+    return Array.from(map.values());
+  };
+
+  // ── Incident row (grouped) ──────────────────────────────────────────────────
+  const IncidentRow = ({ item, color }: { item: GroupedIncident; color: string }) => (
     <div className={`px-5 py-4 flex items-center justify-between gap-4 hover:bg-${color}-50 transition-colors`}>
       <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-full bg-gradient-to-r from-${color}-500 to-${color}-600 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0`}>
@@ -385,22 +403,24 @@ const ProctoringPage = () => {
       </div>
       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
         <span className="text-xs text-gray-400">{item.time}</span>
-        <span className={`inline-block bg-${color}-100 text-${color}-700 text-xs font-bold px-2 py-0.5 rounded-full`}>
+        {item.count > 1 && (
+          <span className={`inline-block bg-${color}-100 text-${color}-700 text-xs font-bold px-2 py-0.5 rounded-full`}>
+            ×{item.count} times
+          </span>
+        )}
+        <span className={`inline-block bg-${color}-50 border border-${color}-200 text-${color}-600 text-xs px-2 py-0.5 rounded-full`}>
           +{item.score_points}pt
         </span>
-        <button
-          type="button"
-          onClick={() => navigate(`/footage/${item.student_id}`)}
-          className={`flex items-center gap-1 bg-gradient-to-r from-${color}-600 to-${color}-700 hover:from-${color}-700 hover:to-${color}-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm`}
-        >
-          <Eye size={12} /> View Footage
-        </button>
       </div>
     </div>
   );
 
-  // ── Suspicious Activity tab ──────────────────────────────────────────────
+  // ── Activity Tab — sidebar + cards layout ────────────────────────────────────
   const ActivityTab = () => {
+    const [actSearch, setActSearch] = React.useState('');
+    const [actStatus, setActStatus] = React.useState<'All' | 'flagged' | 'warning' | 'online'>('All');
+    const [actSeverity, setActSeverity] = React.useState<'All' | 'high' | 'medium' | 'low'>('All');
+
     if (dataLoading) {
       return (
         <div className="space-y-3">
@@ -411,44 +431,258 @@ const ProctoringPage = () => {
       );
     }
 
-    const buckets: Array<{ key: 'high' | 'medium' | 'low'; label: string; color: string; Icon: any }> = [
-      { key: 'high',   label: 'High Severity',   color: 'red',    Icon: AlertCircle },
-      { key: 'medium', label: 'Medium Severity',  color: 'orange', Icon: AlertCircle },
-      { key: 'low',    label: 'Low Severity',     color: 'yellow', Icon: Info        },
+    // ── Grouped buckets ──────────────────────────────────────────────────────
+    const groupedHigh   = groupIncidents(incidents?.high   ?? []);
+    const groupedMedium = groupIncidents(incidents?.medium ?? []);
+    const groupedLow    = groupIncidents(incidents?.low    ?? []);
+    const allGrouped    = [...groupedHigh, ...groupedMedium, ...groupedLow];
+
+    // ── Per-student summary for cards ───────────────────────────────────────
+    interface StudentSummary {
+      student_id: string;
+      student_name: string;
+      high: GroupedIncident[];
+      medium: GroupedIncident[];
+      low: GroupedIncident[];
+      status: 'flagged' | 'warning' | 'online';
+      score: number;
+    }
+    const studentMap = new Map<string, StudentSummary>();
+    const addToMap = (items: GroupedIncident[], bucket: 'high' | 'medium' | 'low') => {
+      for (const item of items) {
+        if (!studentMap.has(item.student_id)) {
+          const live = students.find(s => s.student_id === item.student_id);
+          studentMap.set(item.student_id, {
+            student_id: item.student_id,
+            student_name: item.student_name,
+            high: [], medium: [], low: [],
+            status: live?.status ?? 'online',
+            score: live?.violation_score ?? 0,
+          });
+        }
+        studentMap.get(item.student_id)![bucket].push(item);
+      }
+    };
+    addToMap(groupedHigh, 'high');
+    addToMap(groupedMedium, 'medium');
+    addToMap(groupedLow, 'low');
+    let studentList = Array.from(studentMap.values()).sort((a, b) => b.score - a.score);
+
+    // ── Apply filters ─────────────────────────────────────────────────────
+    if (actSearch.trim()) {
+      const q = actSearch.toLowerCase();
+      studentList = studentList.filter(s => s.student_name.toLowerCase().includes(q) || s.student_id.toLowerCase().includes(q));
+    }
+    if (actStatus !== 'All') studentList = studentList.filter(s => s.status === actStatus);
+    if (actSeverity !== 'All') studentList = studentList.filter(s => s[actSeverity].length > 0);
+
+    const statusCfg = {
+      flagged: { label: 'Flagged', color: 'bg-red-100 text-red-700 border-red-200',       bar: 'bg-red-500',    icon: <AlertTriangle size={13} className="text-red-500" /> },
+      warning: { label: 'Warning', color: 'bg-orange-100 text-orange-700 border-orange-200', bar: 'bg-orange-500', icon: <AlertCircle    size={13} className="text-orange-500" /> },
+      online:  { label: 'Clear',   color: 'bg-green-100 text-green-700 border-green-200',   bar: 'bg-green-500',  icon: <CheckCircle2   size={13} className="text-green-500" /> },
+    };
+
+    const buckets: Array<{ key: 'high' | 'medium' | 'low'; label: string; color: string; Icon: any; grouped: GroupedIncident[] }> = [
+      { key: 'high',   label: 'High Severity',   color: 'red',    Icon: AlertCircle, grouped: groupedHigh   },
+      { key: 'medium', label: 'Medium Severity',  color: 'orange', Icon: AlertCircle, grouped: groupedMedium },
+      { key: 'low',    label: 'Low Severity',     color: 'yellow', Icon: Info,        grouped: groupedLow    },
     ];
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+        {/* Refresh row */}
+        <div className="flex items-center justify-between text-xs text-gray-400">
           <span>Last updated: {lastRefresh.toLocaleTimeString()}</span>
           <button onClick={fetchLiveData} className="flex items-center gap-1 text-blue-500 hover:text-blue-700">
             <RefreshCw size={12} />Refresh
           </button>
         </div>
 
-        {buckets.map(({ key, label, color, Icon }) => {
-          const items = incidents?.[key] ?? [];
-          return (
-            <div key={key} className={`bg-white rounded-xl border border-${color}-200 overflow-hidden shadow-sm`}>
-              <div className={`flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-${color}-600 to-${color}-700`}>
-                <Icon size={18} className="text-white" />
-                <span className="font-semibold text-white">{label}</span>
-                <span className={`ml-auto bg-white text-${color}-600 text-xs font-bold px-2.5 py-1 rounded-full`}>
-                  {items.length}
+        {/* Summary stats */}
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: 'Flagged',  value: studentMap.size > 0 ? [...studentMap.values()].filter(s => s.status === 'flagged').length  : 0, color: 'red',    icon: <AlertTriangle size={18} /> },
+            { label: 'Warnings', value: studentMap.size > 0 ? [...studentMap.values()].filter(s => s.status === 'warning').length  : 0, color: 'orange', icon: <AlertCircle   size={18} /> },
+            { label: 'Clear',    value: studentMap.size > 0 ? [...studentMap.values()].filter(s => s.status === 'online').length   : 0, color: 'green',  icon: <CheckCircle2  size={18} /> },
+            { label: 'High Events', value: groupedHigh.reduce((s,i) => s + i.count, 0), color: 'purple', icon: <TrendingUp size={18} /> },
+          ].map(({ label, value, color, icon }) => (
+            <div key={label} className={`bg-${color}-50 border border-${color}-100 rounded-xl p-3 text-center`}>
+              <div className={`w-8 h-8 rounded-full bg-${color}-100 text-${color}-600 flex items-center justify-center mx-auto mb-2`}>{icon}</div>
+              <p className={`text-2xl font-extrabold text-${color}-700`}>{value}</p>
+              <p className={`text-[10px] font-bold uppercase tracking-wider text-${color}-500 mt-0.5`}>{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Main two-column layout */}
+        <div className="flex flex-col xl:flex-row gap-6">
+
+          {/* LEFT: Grouped alert buckets */}
+          <div className="xl:w-1/2 space-y-4">
+            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+              <AlertCircle size={15} className="text-red-500" /> Live Alerts
+            </h3>
+            {buckets.map(({ key, label, color, Icon, grouped }) => (
+              <div key={key} className={`bg-white rounded-xl border border-${color}-200 overflow-hidden shadow-sm`}>
+                <div className={`flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-${color}-600 to-${color}-700`}>
+                  <Icon size={17} className="text-white" />
+                  <span className="font-semibold text-white text-sm">{label}</span>
+                  <span className={`ml-auto bg-white text-${color}-600 text-xs font-bold px-2.5 py-1 rounded-full`}>{grouped.length}</span>
+                </div>
+                {grouped.length === 0 ? (
+                  <p className="px-5 py-4 text-sm text-gray-500 italic">No {key} severity incidents</p>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {grouped.map(item => (
+                      <IncidentRow key={`${item.student_id}-${item.event_type}`} item={item} color={color} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* RIGHT: Sidebar + Student cards */}
+          <div className="xl:w-1/2 flex flex-col gap-4">
+
+            {/* Filter sidebar */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
+                <SlidersHorizontal size={17} className="text-gray-600" />
+                <h3 className="font-bold text-gray-900 text-sm">Filters</h3>
+                {(actSearch || actStatus !== 'All' || actSeverity !== 'All') && (
+                  <button onClick={() => { setActSearch(''); setActStatus('All'); setActSeverity('All'); }}
+                    className="ml-auto flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors">
+                    <X size={12} /> Clear
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Search */}
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Search</label>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input type="text" placeholder="Name or ID..." value={actSearch} onChange={e => setActSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-400/40 placeholder:text-gray-400" />
+                  </div>
+                </div>
+                {/* Status */}
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Status</label>
+                  <select value={actStatus} onChange={e => setActStatus(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400/40 appearance-none">
+                    <option value="All">All</option>
+                    <option value="flagged">Flagged</option>
+                    <option value="warning">Warning</option>
+                    <option value="online">Clear</option>
+                  </select>
+                </div>
+                {/* Severity */}
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Has Severity</label>
+                  <select value={actSeverity} onChange={e => setActSeverity(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-400/40 appearance-none">
+                    <option value="All">All</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Student incident cards */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                  <Users size={15} className="text-blue-500" /> Student Incidents
+                </h3>
+                <span className="text-xs text-gray-400 bg-white border border-gray-200 px-3 py-1 rounded-full">
+                  {studentList.length} student{studentList.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              {items.length === 0 ? (
-                <p className="px-5 py-4 text-sm text-gray-500 italic">No {key} severity incidents</p>
+
+              {studentList.length === 0 ? (
+                <div className="bg-white border border-gray-200 rounded-xl p-10 text-center">
+                  <Search size={36} className="text-gray-200 mx-auto mb-3" />
+                  <p className="text-sm text-gray-400">No students match your filters</p>
+                  <button onClick={() => { setActSearch(''); setActStatus('All'); setActSeverity('All'); }}
+                    className="mt-3 text-xs text-blue-500 hover:text-blue-700 font-semibold">Clear filters</button>
+                </div>
               ) : (
-                <div className="divide-y divide-gray-100">
-                  {items.map(item => (
-                    <IncidentRow key={item.id} item={item} color={color} />
-                  ))}
+                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                  {studentList.map(student => {
+                    const cfg = statusCfg[student.status];
+                    const allEvt = [...student.high, ...student.medium, ...student.low];
+                    return (
+                      <div key={student.student_id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden">
+                        <div className={`absolute top-0 left-0 w-full h-1 ${cfg.bar}`} />
+
+                        <div className="flex items-start justify-between gap-3 mb-3 pt-1">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-200 flex items-center justify-center text-gray-700 font-black text-sm shadow-sm flex-shrink-0">
+                              {student.student_name.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm text-gray-900 leading-tight">{student.student_name}</p>
+                              <p className="text-[11px] text-gray-400 font-mono">{student.student_id}</p>
+                            </div>
+                          </div>
+                          <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider ${cfg.color} flex-shrink-0`}>
+                            {cfg.icon} {cfg.label}
+                          </div>
+                        </div>
+
+                        {/* Severity mini-grid */}
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          {[
+                            { label: 'High',   count: student.high.length,   activeBg: 'bg-red-50 border-red-100',       t: 'text-red-700',    l: 'text-red-600' },
+                            { label: 'Medium', count: student.medium.length, activeBg: 'bg-orange-50 border-orange-100', t: 'text-orange-700', l: 'text-orange-600' },
+                            { label: 'Low',    count: student.low.length,    activeBg: 'bg-yellow-50 border-yellow-100', t: 'text-yellow-700', l: 'text-yellow-600' },
+                          ].map(({ label, count, activeBg, t, l }) => (
+                            <div key={label} className={`rounded-lg p-1.5 text-center border ${count > 0 ? activeBg : 'bg-gray-50 border-gray-100'}`}>
+                              <div className={`text-[9px] font-bold uppercase ${count > 0 ? l : 'text-gray-400'}`}>{label}</div>
+                              <div className={`text-sm font-black ${count > 0 ? t : 'text-gray-500'}`}>{count}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Top 2 events */}
+                        <div className="space-y-1">
+                          {allEvt.slice(0, 2).map(ev => {
+                            const isH = student.high.some(h => h.event_type === ev.event_type);
+                            const isM = !isH && student.medium.some(m => m.event_type === ev.event_type);
+                            const ec = isH ? 'text-red-600 bg-red-50' : isM ? 'text-orange-600 bg-orange-50' : 'text-yellow-700 bg-yellow-50';
+                            return (
+                              <div key={`${ev.student_id}-${ev.event_type}`} className="flex items-center justify-between gap-2">
+                                <span className={`text-[11px] font-medium truncate flex-1 px-2 py-0.5 rounded-md ${ec}`}>{ev.event}</span>
+                                {ev.count > 1 && (
+                                  <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full flex-shrink-0">×{ev.count}</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {allEvt.length > 2 && (
+                            <p className="text-[10px] text-gray-400 pl-1">+{allEvt.length - 2} more event type{allEvt.length - 2 !== 1 ? 's' : ''}</p>
+                          )}
+                        </div>
+
+                        {/* Score footer */}
+                        <div className="bg-gray-50 rounded-lg p-2 flex items-center justify-between border border-gray-100 mt-3">
+                          <span className="text-[11px] font-bold text-gray-500">Violation Score</span>
+                          <span className={`font-black text-sm ${student.status === 'flagged' ? 'text-red-600' : student.status === 'warning' ? 'text-orange-600' : 'text-green-600'}`}>
+                            {student.score.toFixed(1)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
-          );
-        })}
+          </div>
+        </div>
       </div>
     );
   };

@@ -54,23 +54,19 @@ export default function Login() {
         password: formData.password.trim(),
       });
 
-      const { access, refresh, user_role, name, student_id, professor_id } = response.data;
+      // Backend returns: { access, refresh, user_role, name, id }
+      const { access, refresh, user_role, name, id } = response.data;
       console.log("📦 Full Response:", response.data);
-console.log("🔍 Response keys:", Object.keys(response.data));
-console.log("🎭 user_role:", response.data.user_role);
-console.log("🎭 role:", response.data.role);
-console.log("👤 user object:", response.data.user);
-     localStorage.setItem("access_token", access);
+
+      localStorage.setItem("access_token", access);
       localStorage.setItem("refresh", refresh);
-      
       localStorage.setItem("role", user_role);
       localStorage.setItem("userName", name);
+      localStorage.setItem("userId", id);   // custom_id e.g. "ST1234"
 
       if (user_role === "student") {
-        localStorage.setItem("userId", student_id);
         navigate("/home");
       } else if (user_role === "professor") {
-        localStorage.setItem("userId", professor_id);
         navigate("/home-instructor");
       } else {
         navigate("/");

@@ -160,10 +160,10 @@ def verify_face(request):
             )
 
         try:
-            profile = StudentProfile.objects.get(user_id=student_id)
+            profile = StudentProfile.objects.get(user__custom_id=student_id)
         except StudentProfile.DoesNotExist:
             return JsonResponse(
-                {"error": "No student profile found for this ID."}, status=404
+                {"error": f"No student profile found for custom_id={student_id}."}, status=404
             )
 
         if not profile.face_embedding:

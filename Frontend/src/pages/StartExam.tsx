@@ -633,31 +633,45 @@ const ExamInterface: React.FC = () => {
     return canvas.toDataURL('image/jpeg', 0.85);
   }, []);
 
-  // TODO: Replace with real API call when face model is ready
   const verifyFaceWithModel = async (imageBase64: string): Promise<{ verified: boolean; message: string }> => {
-  const token = localStorage.getItem('access_token');
-  
-  // بنجيب student_id من الـ token
-  const payload = JSON.parse(atob(token!.split('.')[1]));
-  const studentId = payload.custom_id;
+    const storedToken = localStorage.getItem('access_token');
+    if (!storedToken) throw new Error('No access token found');
 
-const response = await fetch('http://localhost:8000/api/student/face/verify/', {    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      student_id: studentId,
-      image: imageBase64,
-    }),
-  });
+    // custom_id is NOT in the JWT — it's stored in localStorage as 'userId' at login
+    const studentId = localStorage.getItem('userId');
+    console.log('[FaceVerify] studentId from localStorage:', studentId);
 
-  const data = await response.json();
-  return {
-    verified: data.verified,
-    message: data.message,
+    // Strip data-URL prefix if present
+    const base64Image = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+
+    console.log('[FaceVerify] Sending request:', { student_id: studentId, live_image_length: base64Image.length });
+
+    const response = await fetch('http://127.0.0.1:8000/api/student/face/verify/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${storedToken}`,
+      },
+      body: JSON.stringify({
+        student_id: studentId,
+        live_image: base64Image,
+      }),
+    });
+
+    const data = await response.json();
+    console.log('[FaceVerify] Response:', data);
+
+    if (!response.ok) {
+      // Surface backend error message to user
+      throw new Error(data.error || `Server error ${response.status}`);
+    }
+
+    return {
+      // Backend returns is_match, not verified
+      verified: data.is_match === true,
+      message: data.message || (data.is_match ? 'Identity verified ✓' : 'Face does not match ✗'),
+    };
   };
-};
 
   const handleFaceVerify = useCallback(async () => {
     if (faceStatus !== 'scanning') return;
@@ -675,8 +689,8 @@ const response = await fetch('http://localhost:8000/api/student/face/verify/', {
         setFaceStatus('failed');
         setFaceAttempts(prev => prev + 1);
       }
-    } catch {
-      setFaceMessage('Connection error. Please try again.');
+    } catch (err: any) {
+      setFaceMessage(err?.message || 'Connection error. Please try again.');
       setFaceStatus('failed');
       setFaceAttempts(prev => prev + 1);
     }
