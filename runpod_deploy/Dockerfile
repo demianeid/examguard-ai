@@ -2,6 +2,12 @@
 # ExamGuard AI — RunPod Serverless Worker
 # Build context : runpod_deploy/          (repo root subdirectory)
 # Target env    : CUDA 11.8 · Python 3.10 · Ubuntu 22.04
+#
+# Included AI pipelines
+# ─────────────────────
+# 1. YOLO proctoring  — phone/paper detection + face count + head pose
+# 2. InsightFace      — ArcFace embeddings for student face registration
+# 3. CLIP (ViT-B/32)  — zero-shot ID-card image validation
 # ─────────────────────────────────────────────────────────────────────────────
 FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel
 
@@ -32,14 +38,12 @@ COPY ai_engine/ ./ai_engine/
 # RunPod entry point
 COPY handler.py .
 
-# ── Model weights (downloaded at build time — baked into the image) ───────────
-# yolov8n.pt  : phone / paper detection
-# yolov10n-face.pt : face counting (from akanametov/yolo-face)
+# ── Model weights — baked into image at build time ────────────────────────────
+# ── 1. YOLOv8n (phone / paper detection — COCO pretrained) ───────────────────
 RUN python - <<'EOF'
 from ultralytics import YOLO
-YOLO("yolov8n.pt")          # downloads to cwd, then ultralytics caches it
 import shutil, os
-# Move weight to models/ so ai_engine can find it by default path
+YOLO("yolov8n.pt")          # downloads to cwd via ultralytics hub
 os.makedirs("ai_engine/models", exist_ok=True)
 for src in ["yolov8n.pt"]:
     if os.path.isfile(src):
@@ -47,7 +51,7 @@ for src in ["yolov8n.pt"]:
         print(f"Copied {src} -> ai_engine/models/{src}")
 EOF
 
-# yolov10n-face.pt — community model, downloaded via direct URL
+# ── 2. YOLOv10n-face (face counting during live exam) ────────────────────────
 RUN python - <<'EOF'
 import urllib.request, os
 url  = "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov10n-face.pt"
@@ -59,6 +63,31 @@ size = os.path.getsize(dest) / 1024 / 1024
 print(f"Done -- {size:.1f} MB saved to {dest}")
 EOF
 
+# ── 3. InsightFace buffalo_l (ArcFace embeddings) ─────────────────────────────
+# insightface downloads the model pack to ~/.insightface/models/buffalo_l/
+# on first use.  We pre-populate that cache here so the worker has zero
+# cold-start download time.
+RUN python - <<'EOF'
+from insightface.app import FaceAnalysis
+import os
+print("Pre-downloading InsightFace buffalo_l model pack ...")
+app = FaceAnalysis(name="buffalo_l", root=os.path.expanduser("~/.insightface"))
+# ctx_id=-1 uses CPU — no GPU required during the Docker build step
+app.prepare(ctx_id=-1, det_size=(640, 640))
+print("buffalo_l downloaded and cached successfully.")
+EOF
+
+# ── 4. CLIP ViT-B/32 (ID-card zero-shot classifier) ─────────────────────────
+# Hugging Face Transformers caches models to ~/.cache/huggingface/
+# Pre-downloading here avoids any network call during worker warm-up.
+RUN python - <<'EOF'
+from transformers import CLIPModel, CLIPProcessor
+print("Pre-downloading CLIP openai/clip-vit-base-patch32 ...")
+CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+print("CLIP downloaded and cached successfully.")
+EOF
+
 # ── Environment defaults (override at RunPod endpoint level) ──────────────────
 ENV DJANGO_API_URL=""
 ENV DJANGO_API_TOKEN=""
@@ -67,6 +96,8 @@ ENV ALERT_CONFIDENCE_THRESHOLD="0.45"
 ENV HEAD_YAW_THRESHOLD="30"
 ENV HEAD_PITCH_THRESHOLD="20"
 ENV HEAD_MOVE_THRESHOLD="15"
+ENV CLIP_ID_THRESHOLD="0.30"
+ENV FACE_VERIFY_THRESHOLD="0.35"
 
 # ── Start the serverless worker ───────────────────────────────────────────────
 CMD ["python3", "-u", "handler.py"]

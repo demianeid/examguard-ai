@@ -8,21 +8,8 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from authentication.models import StudentProfile   # ← بدل StudentFaceEmbedding
-from .face_service import get_embedding, compare_embeddings
-
-# ─── CLIP Model (lazy load) ───────────────────────────────────────────────────
-_clip_model     = None
-_clip_processor = None
-
-
-def _load_clip():
-    global _clip_model, _clip_processor
-    if _clip_model is None:
-        from transformers import CLIPProcessor, CLIPModel
-        _clip_model     = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-        _clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-    return _clip_model, _clip_processor
+from authentication.models import StudentProfile
+from .face_service import get_embedding, compare_embeddings, is_id_card
 
 
 # ─── Helper: base64 → temp file ──────────────────────────────────────────────
@@ -32,40 +19,6 @@ def base64_to_tempfile(b64_string: str, suffix=".jpg") -> str:
     tmp.write(img_data)
     tmp.close()
     return tmp.name
-
-
-# ─── Helper: ID Card Check via CLIP ──────────────────────────────────────────
-def is_id_card(image_path: str) -> bool:
-    try:
-        from PIL import Image
-        import torch
-
-        model, processor = _load_clip()
-        image = Image.open(image_path).convert("RGB")
-
-        labels = [
-            "Egyptian national ID card with Arabic text",
-            "identity card document with photo and text",
-            "a selfie photo",
-            "a random image",
-            "a landscape photo",
-        ]
-
-        inputs = processor(text=labels, images=image, return_tensors="pt", padding=True)
-
-        with torch.no_grad():
-            outputs = model(**inputs)
-
-        probs    = outputs.logits_per_image.softmax(dim=1)[0]
-        id_score = probs[0].item() + probs[1].item()
-
-        print(f"DEBUG CLIP scores: { {labels[i]: round(probs[i].item(), 3) for i in range(len(labels))} }")
-
-        return id_score > 0.3
-
-    except Exception as e:
-        print(f"CLIP check failed: {e}")
-        return True   # fail-open لو CLIP مش شغال
 
 
 # ─── VIEW 1: register_face ────────────────────────────────────────────────────
@@ -91,7 +44,7 @@ def register_face(request):
         tmp_path = base64_to_tempfile(b64_image)
 
         try:
-            # ── Step 1: National ID Check ─────────────────────────────────────
+            # ── Step 1: National ID Check (via RunPod CLIP) ───────────────────
             if not is_id_card(tmp_path):
                 return JsonResponse(
                     {
@@ -103,7 +56,7 @@ def register_face(request):
                     status=400,
                 )
 
-            # ── Step 2: Face Detection ────────────────────────────────────────
+            # ── Step 2: Face Detection + Embedding (via RunPod InsightFace) ───
             try:
                 embedding = get_embedding(tmp_path)
             except ValueError:

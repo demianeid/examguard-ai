@@ -8,7 +8,7 @@
 runpod==1.7.3
 Brotli==1.1.0
 
-# ── Object detection ──────────────────────────────────────────────────────────
+# ── Object detection (YOLO proctoring pipeline) ───────────────────────────────
 ultralytics==8.4.38
 
 # ── Computer vision ───────────────────────────────────────────────────────────
@@ -19,6 +19,16 @@ numpy==1.26.4
 # IMPORTANT: 0.10.9 is the last version exposing mp.solutions.face_mesh.
 # Do NOT upgrade without updating ai_engine/head_pose.py to the Tasks API.
 mediapipe==0.10.9
+
+# ── InsightFace (ArcFace embeddings — face registration & verification) ───────
+# onnxruntime-gpu runs the ONNX models inside buffalo_l on CUDA.
+insightface==0.7.3
+onnxruntime-gpu==1.17.1
+
+# ── CLIP (ID-card zero-shot classifier) ───────────────────────────────────────
+transformers==4.40.2
+# sentencepiece is required by some CLIP tokeniser paths
+sentencepiece==0.2.0
 
 # ── Django API communication ──────────────────────────────────────────────────
 requests==2.32.3
