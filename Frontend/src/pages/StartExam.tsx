@@ -28,6 +28,7 @@ interface ExamData {
   duration: number;
   total_marks: number;
   instructions: string;
+  start_datetime?: string;
   end_datetime?: string;
   questions: Question[];
 }
@@ -43,7 +44,8 @@ const ExamInterface: React.FC = () => {
   const [examError, setExamError] = useState<string | null>(null);
 
   // --- Exam State ---
-  const [currentView, setCurrentView] = useState<'rules' | 'face-recognition' | 'system-check' | 'exam' | 'terminated' | 'time-up'>('rules');
+  const [currentView, setCurrentView] = useState<'rules' | 'face-recognition' | 'system-check' | 'waiting-to-start' | 'exam' | 'terminated' | 'time-up'>('rules');
+  const [waitCountdown, setWaitCountdown] = useState(0);
   const [agreedToRules, setAgreedToRules] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
@@ -581,6 +583,24 @@ const ExamInterface: React.FC = () => {
   };
 
   // ============================================================
+  // Waiting to Start Logic
+  // ============================================================
+  useEffect(() => {
+    if (currentView === 'waiting-to-start' && examData?.start_datetime) {
+      const startTimeMs = new Date(examData.start_datetime).getTime();
+      const interval = setInterval(() => {
+        const diff = Math.max(0, Math.floor((startTimeMs - Date.now()) / 1000));
+        setWaitCountdown(diff);
+        if (diff <= 0) {
+          clearInterval(interval);
+          startExamSession();
+        }
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [currentView, examData]);
+
+  // ============================================================
   // Start Exam
   // ============================================================
   const startExam = async () => {
@@ -592,6 +612,21 @@ const ExamInterface: React.FC = () => {
     } catch { console.error('Failed to register exam session'); }
 
     await requestFullScreen();
+
+    if (examData?.start_datetime) {
+      const startTimeMs = new Date(examData.start_datetime).getTime();
+      if (Date.now() < startTimeMs) {
+        setCurrentView('waiting-to-start');
+        const diff = Math.max(0, Math.floor((startTimeMs - Date.now()) / 1000));
+        setWaitCountdown(diff);
+        return;
+      }
+    }
+
+    startExamSession();
+  };
+
+  const startExamSession = async () => {
     setCurrentView('exam');
 
     try {
@@ -1064,6 +1099,34 @@ const ExamInterface: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================
+  // Waiting To Start View
+  // ============================================================
+  if (currentView === 'waiting-to-start') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-6 text-center select-none" style={{ userSelect: 'none' }} onContextMenu={e => e.preventDefault()}>
+        <div className="bg-white rounded-2xl shadow-xl p-10 max-w-lg w-full flex flex-col items-center border border-gray-100">
+          <div className="bg-blue-100 p-4 rounded-full mb-6">
+            <Clock className="w-12 h-12 text-blue-600 animate-pulse" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">You're Early!</h2>
+          <p className="text-gray-600 text-base mb-8 px-4">
+            You have completed all security checks. The exam questions will appear automatically at the scheduled start time.
+          </p>
+          <div className="bg-blue-50 w-full p-6 rounded-xl border border-blue-100 mb-6">
+            <p className="text-sm text-blue-800 mb-2 uppercase tracking-widest font-semibold">Starting in</p>
+            <div className="text-5xl font-mono font-bold text-blue-600">
+              {Math.floor(waitCountdown / 60)}:{(waitCountdown % 60).toString().padStart(2, '0')}
+            </div>
+          </div>
+          <p className="text-gray-500 text-sm flex items-center justify-center gap-2">
+            <Shield size={16} className="text-green-500" /> Please stay in full-screen. Your exam will start automatically.
+          </p>
         </div>
       </div>
     );

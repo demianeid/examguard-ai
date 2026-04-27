@@ -659,7 +659,7 @@ useEffect(() => {
       const fetchGrades = async () => {
         setGradesLoading(true);
         try {
-          const res = await fetch(`https://http://localhost:8000/api/student/classes/${selectedClass.id}/grades/`, {
+          const res = await fetch(`http://127.0.0.1:8000/api/student/classes/${selectedClass.id}/grades/`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
           });
           if (!res.ok) throw new Error('Failed');

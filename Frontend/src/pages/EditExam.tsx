@@ -54,6 +54,14 @@ interface Step {
   label: string;
 }
 
+interface QuestionErrors {
+  [key: string]: {
+    text?: string;
+    options?: string;
+    correctAnswer?: string;
+  };
+}
+
 interface Student {
   id: string;
   name: string;
@@ -161,6 +169,7 @@ export default function EditExam() {
   const [questions, setQuestions]               = useState<Question[]>([]);
   const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>(defaultSecuritySettings);
   const [errors, setErrors]                     = useState<Partial<Record<keyof ExamFormData | "students", string>>>({});
+  const [questionErrors, setQuestionErrors]     = useState<QuestionErrors>({});
   const [isLoading, setIsLoading]               = useState(false);
   const [isFetching, setIsFetching]             = useState(true);
   const [fetchError, setFetchError]             = useState("");
@@ -313,16 +322,25 @@ export default function EditExam() {
       if (value === "true-false")      return { ...base, options: ["True", "False"] };
       return { ...base, options: [] };
     }));
+    if (field === "text" && questionErrors[id]?.text) {
+      setQuestionErrors((prev) => ({ ...prev, [id]: { ...prev[id], text: undefined } }));
+    }
   };
 
   const handleOptionChange = (questionId: string, optionIndex: number, value: string) => {
     setQuestions(questions.map((q) =>
       q.id === questionId ? { ...q, options: q.options.map((opt, idx) => idx === optionIndex ? value : opt) } : q
     ));
+    if (questionErrors[questionId]?.options) {
+      setQuestionErrors((prev) => ({ ...prev, [questionId]: { ...prev[questionId], options: undefined } }));
+    }
   };
 
   const handleCorrectAnswerChange = (questionId: string, optionIndex: number) => {
     setQuestions(questions.map((q) => q.id === questionId ? { ...q, correctAnswer: optionIndex } : q));
+    if (questionErrors[questionId]?.correctAnswer) {
+      setQuestionErrors((prev) => ({ ...prev, [questionId]: { ...prev[questionId], correctAnswer: undefined } }));
+    }
   };
 
   const handleToggleSecurityFeature = (id: string) => {
@@ -370,6 +388,28 @@ export default function EditExam() {
   const getActiveFeatures = () => securitySettings.filter((f) => f.enabled).map((f) => f.name);
   const getTotalMarks     = () => questions.reduce((sum, q) => sum + (parseInt(q.marks) || 0), 0);
 
+  // ── Local-time helpers (browser-timezone-safe) ──
+  const getLocalDateString = (date = new Date()): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const getLocalTimeString = (date = new Date()): string => {
+    const h = String(date.getHours()).padStart(2, "0");
+    const min = String(date.getMinutes()).padStart(2, "0");
+    return `${h}:${min}`;
+  };
+
+  const getMinTime = (): string => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 5);
+    return getLocalTimeString(now);
+  };
+
+  const getTodayString = (): string => getLocalDateString();
+
   // ── Validation ──
   const validateStep1 = (): boolean => {
     const newErrors: Partial<Record<keyof ExamFormData, string>> = {};
@@ -380,23 +420,62 @@ export default function EditExam() {
     if (!formData.startTime) newErrors.startTime = "Start time is required";
     if (!formData.endDate)   newErrors.endDate   = "End date is required";
     if (!formData.endTime)   newErrors.endTime   = "End time is required";
+
+    const today = getTodayString();
+    if (formData.startDate && formData.startDate < today) newErrors.startDate = "Start date cannot be in the past";
+    if (formData.endDate   && formData.endDate   < today) newErrors.endDate   = "End date cannot be in the past";
+    if (formData.startDate && formData.endDate && formData.endDate < formData.startDate)
+      newErrors.endDate = "End date must be after start date";
+    if (formData.startDate === today && formData.startTime && formData.startTime < getMinTime())
+      newErrors.startTime = "Start time must be at least 5 minutes from now";
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const validateStep2 = (): boolean => {
-    if (!questions.length) { alert("Please add at least one question"); return false; }
-    for (const q of questions) {
-      if (!q.text.trim()) { alert("Please fill in all question texts"); return false; }
-      if (q.type === "multiple-choice") {
-        if (q.options.filter((o) => o.trim()).length < 2) { alert("MCQ needs at least 2 options"); return false; }
-        if (q.correctAnswer === undefined) { alert(`Select correct answer for: "${q.text.substring(0, 50)}"`); return false; }
-      }
-      if (q.type === "true-false" && q.correctAnswer === undefined) {
-        alert(`Select correct answer for: "${q.text.substring(0, 50)}"`); return false;
-      }
+    const newQuestionErrors: QuestionErrors = {};
+    let isValid = true;
+
+    if (questions.length === 0) {
+      setQuestionErrors({ general: { text: "Please add at least one question" } });
+      return false;
     }
-    return true;
+
+    questions.forEach((question) => {
+      const errs: { text?: string; options?: string; correctAnswer?: string } = {};
+      if (!question.text.trim()) { errs.text = "Question text is required"; isValid = false; }
+      if (question.type === "multiple-choice") {
+        const filled = question.options.filter((opt) => opt.trim() !== "");
+        if (filled.length < 2) {
+          errs.options = "Multiple choice questions need at least 2 options";
+          isValid = false;
+        } else {
+          const uniqueFilled = new Set(filled.map(o => o.trim()));
+          if (uniqueFilled.size !== filled.length) {
+            errs.options = "All options must be unique";
+            isValid = false;
+          }
+        }
+        if (question.correctAnswer === undefined) { errs.correctAnswer = "Please select the correct answer"; isValid = false; }
+      }
+      if (question.type === "true-false" && question.correctAnswer === undefined) {
+        errs.correctAnswer = "Please select the correct answer (True/False)"; isValid = false;
+      }
+      if (Object.keys(errs).length > 0) newQuestionErrors[question.id] = errs;
+    });
+
+    const questionsTotal = getTotalMarks();
+    const totalMarks = parseInt(formData.totalMarks) || 0;
+    if (questionsTotal !== totalMarks) {
+      newQuestionErrors.marksError = {
+        text: `Marks mismatch! Questions total is ${questionsTotal} but Exam Total Marks is set to ${totalMarks}. Please fix them to match.`,
+      };
+      isValid = false;
+    }
+
+    setQuestionErrors(newQuestionErrors);
+    return isValid;
   };
 
   const validateStep3 = (): boolean => {
@@ -447,7 +526,15 @@ export default function EditExam() {
 
   const handleNextStep = () => {
     if (currentStep === 1 && !validateStep1()) return;
-    if (currentStep === 2 && !validateStep2()) return;
+    if (currentStep === 2) {
+      if (!validateStep2()) {
+        setTimeout(() => {
+          const firstError = document.querySelector('[data-error="true"]');
+          if (firstError) firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 100);
+        return;
+      }
+    }
     if (currentStep === 3 && !validateStep3()) return;
     if (currentStep === 5) { handleSaveChanges(); return; }
     setCurrentStep(currentStep + 1);
@@ -593,7 +680,9 @@ export default function EditExam() {
                 <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-2">
                   Start Date <span className="text-red-500">*</span>
                 </label>
-                <input id="startDate" type="date" value={formData.startDate}
+                <input id="startDate" type="date"
+                  min={getTodayString()}
+                  value={formData.startDate}
                   onChange={(e) => handleInputChange("startDate", e.target.value)}
                   className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${errors.startDate ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
                 />
@@ -603,7 +692,9 @@ export default function EditExam() {
                 <label htmlFor="startTime" className="block text-sm font-medium text-gray-700 mb-2">
                   Start Time <span className="text-red-500">*</span>
                 </label>
-                <input id="startTime" type="time" value={formData.startTime}
+                <input id="startTime" type="time"
+                  min={formData.startDate === getTodayString() ? getMinTime() : undefined}
+                  value={formData.startTime}
                   onChange={(e) => handleInputChange("startTime", e.target.value)}
                   className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${errors.startTime ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
                 />
@@ -616,7 +707,9 @@ export default function EditExam() {
                 <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-2">
                   End Date <span className="text-red-500">*</span>
                 </label>
-                <input id="endDate" type="date" value={formData.endDate}
+                <input id="endDate" type="date"
+                  min={formData.startDate || getTodayString()}
+                  value={formData.endDate}
                   onChange={(e) => handleInputChange("endDate", e.target.value)}
                   className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${errors.endDate ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
                 />
@@ -664,6 +757,19 @@ export default function EditExam() {
               </div>
             )}
 
+            {questionErrors.marksError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <p className="text-sm text-red-600">{questionErrors.marksError.text}</p>
+              </div>
+            )}
+
+            {questionErrors.general && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-sm text-red-600">{questionErrors.general.text}</p>
+              </div>
+            )}
+
             {questions.length === 0 ? (
               <div className="text-center py-12 border border-gray-200 rounded-md bg-gray-50">
                 <p className="text-gray-600 mb-4">No questions added yet</p>
@@ -674,9 +780,13 @@ export default function EditExam() {
             ) : (
               <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                 {questions.map((question, index) => (
-                  <div key={question.id} className="border border-gray-300 rounded-md p-4">
+                  <div 
+                    key={question.id} 
+                    className={`border rounded-md p-4 ${questionErrors[question.id] ? "border-red-300 bg-red-50" : "border-gray-300"}`}
+                    data-error={questionErrors[question.id] ? "true" : "false"}
+                  >
                     <div className="flex items-start gap-4 mb-4">
-                      <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold text-sm">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${questionErrors[question.id] ? "bg-red-500 text-white" : "bg-blue-500 text-white"}`}>
                         {index + 1}
                       </div>
                       <div className="flex-1 flex gap-3 items-center">
@@ -705,13 +815,18 @@ export default function EditExam() {
                       </button>
                     </div>
 
-                    <textarea
-                      value={question.text}
-                      onChange={(e) => handleQuestionChange(question.id, "text", e.target.value)}
-                      placeholder="Enter your question here..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none mb-4"
-                      rows={3}
-                    />
+                    <div className="mb-4">
+                      <textarea
+                        value={question.text}
+                        onChange={(e) => handleQuestionChange(question.id, "text", e.target.value)}
+                        placeholder="Enter your question here..."
+                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:border-transparent resize-none ${questionErrors[question.id]?.text ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
+                        rows={3}
+                      />
+                      {questionErrors[question.id]?.text && (
+                        <p className="mt-1 text-xs text-red-600">{questionErrors[question.id].text}</p>
+                      )}
+                    </div>
 
                     {question.type === "multiple-choice" && (
                       <div className="space-y-2 ml-8">
@@ -728,10 +843,12 @@ export default function EditExam() {
                               type="text" value={option}
                               onChange={(e) => handleOptionChange(question.id, optIdx, e.target.value)}
                               placeholder={`Option ${optIdx + 1}`}
-                              className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className={`flex-1 px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-2 focus:border-transparent ${questionErrors[question.id]?.options && !option.trim() ? "border-red-300 focus:ring-red-500" : "border-gray-300 focus:ring-blue-500"}`}
                             />
                           </div>
                         ))}
+                        {questionErrors[question.id]?.options      && <p className="text-xs text-red-600 mt-1">{questionErrors[question.id].options}</p>}
+                        {questionErrors[question.id]?.correctAnswer && <p className="text-xs text-red-600 mt-1">{questionErrors[question.id].correctAnswer}</p>}
                       </div>
                     )}
 
@@ -748,6 +865,7 @@ export default function EditExam() {
                             <label htmlFor={`${label}-${question.id}`} className="text-sm text-gray-600">{label}</label>
                           </div>
                         ))}
+                        {questionErrors[question.id]?.correctAnswer && <p className="text-xs text-red-600 mt-1">{questionErrors[question.id].correctAnswer}</p>}
                       </div>
                     )}
 

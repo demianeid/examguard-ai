@@ -183,7 +183,7 @@ def verify_face(request):
 
         similarity = compare_embeddings(stored_embedding, live_embedding)
 
-        THRESHOLD = 0.4
+        THRESHOLD = 0.35
         is_match  = similarity >= THRESHOLD
 
         return JsonResponse({

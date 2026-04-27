@@ -363,7 +363,16 @@ export default function CreateExam() {
       if (!question.text.trim()) { errs.text = "Question text is required"; isValid = false; }
       if (question.type === "multiple-choice") {
         const filled = question.options.filter((opt) => opt.trim() !== "");
-        if (filled.length < 2)               { errs.options       = "Multiple choice questions need at least 2 options"; isValid = false; }
+        if (filled.length < 2) {
+          errs.options = "Multiple choice questions need at least 2 options";
+          isValid = false;
+        } else {
+          const uniqueFilled = new Set(filled.map(o => o.trim()));
+          if (uniqueFilled.size !== filled.length) {
+            errs.options = "All options must be unique";
+            isValid = false;
+          }
+        }
         if (question.correctAnswer === undefined) { errs.correctAnswer = "Please select the correct answer"; isValid = false; }
       }
       if (question.type === "true-false" && question.correctAnswer === undefined) {

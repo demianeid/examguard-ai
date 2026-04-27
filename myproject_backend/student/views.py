@@ -4,6 +4,7 @@ from rest_framework import permissions, status
 from instructors.models import Class, ClassEnrollment
 from exam.models import Exam, StudentAnswer, ExamResult, Choice, ExamSession
 from django.utils import timezone
+from datetime import timedelta
 from django.db.models import Q
 from violation_Exam.risk_engine import compute_risk_score  # Phase 3
 
@@ -124,7 +125,7 @@ class StudentClassExamsView(APIView):
         now = timezone.now()
 
         for exam in Exam.objects.filter(class_id=class_id):
-            if exam.status == 'upcoming' and exam.start_datetime <= now:
+            if exam.status == 'upcoming' and exam.start_datetime <= now + timedelta(minutes=5):
                 exam.status = 'active'
                 exam.save()
 
@@ -146,7 +147,7 @@ class StudentClassExamsView(APIView):
         for exam in exams:
             result = results_map.get(exam.id)
 
-            if now < exam.start_datetime:
+            if now < exam.start_datetime - timedelta(minutes=5):
                 student_status = 'upcoming'
             elif now < exam.end_datetime:
                 student_status = 'submitted' if result else 'active'
@@ -203,11 +204,11 @@ class StudentExamDetailView(APIView):
 
         now = timezone.now()
 
-        if exam.status == 'upcoming' and exam.start_datetime <= now:
+        if exam.status == 'upcoming' and exam.start_datetime <= now + timedelta(minutes=5):
             exam.status = 'active'
             exam.save()
 
-        if now < exam.start_datetime:
+        if now < exam.start_datetime - timedelta(minutes=5):
             return Response(
                 {'detail': f'Exam has not started yet. Starts at {exam.start_datetime}'},
                 status=status.HTTP_403_FORBIDDEN
@@ -254,6 +255,7 @@ class StudentExamDetailView(APIView):
             'duration': exam.duration,
             'total_marks': exam.total_marks,
             'instructions': exam.instructions,
+            'start_datetime': exam.start_datetime.isoformat(),
             'end_datetime': exam.end_datetime.isoformat(),
             'questions': questions,
         })
@@ -286,11 +288,11 @@ class StudentExamStartView(APIView):
 
         now = timezone.now()
 
-        if exam.status == 'upcoming' and exam.start_datetime <= now:
+        if exam.status == 'upcoming' and exam.start_datetime <= now + timedelta(minutes=5):
             exam.status = 'active'
             exam.save()
 
-        if now < exam.start_datetime:
+        if now < exam.start_datetime - timedelta(minutes=5):
             return Response(
                 {'detail': 'Exam has not started yet.'},
                 status=status.HTTP_400_BAD_REQUEST
