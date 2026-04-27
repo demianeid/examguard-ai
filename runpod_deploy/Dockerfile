@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6             \
     libxext6           \
     libxrender-dev     \
+    wget               \
+    unzip              \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Working directory ─────────────────────────────────────────────────────────
@@ -64,18 +66,13 @@ print(f"Done -- {size:.1f} MB saved to {dest}")
 EOF
 
 # ── 3. InsightFace buffalo_l (ArcFace embeddings) ─────────────────────────────
-# insightface downloads the model pack to ~/.insightface/models/buffalo_l/
-# on first use.  We pre-populate that cache here so the worker has zero
-# cold-start download time.
-RUN python - <<'EOF'
-from insightface.app import FaceAnalysis
-import os
-print("Pre-downloading InsightFace buffalo_l model pack ...")
-app = FaceAnalysis(name="buffalo_l", root=os.path.expanduser("~/.insightface"))
-# ctx_id=-1 uses CPU — no GPU required during the Docker build step
-app.prepare(ctx_id=-1, det_size=(640, 640))
-print("buffalo_l downloaded and cached successfully.")
-EOF
+# insightface's python downloader frequently fails or times out in CI.
+# We download and extract the model manually to bypass this issue.
+RUN mkdir -p ~/.insightface/models/buffalo_l && \
+    wget -qO buffalo_l.zip "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip" && \
+    unzip -q buffalo_l.zip -d ~/.insightface/models/buffalo_l && \
+    rm buffalo_l.zip && \
+    echo "buffalo_l downloaded and extracted successfully."
 
 # ── 4. CLIP ViT-B/32 (ID-card zero-shot classifier) ─────────────────────────
 # Hugging Face Transformers caches models to ~/.cache/huggingface/
