@@ -5,7 +5,7 @@ from instructors.models import Class, ClassEnrollment
 from exam.models import Exam, StudentAnswer, ExamResult, Choice, ExamSession
 from django.utils import timezone
 from datetime import timedelta
-from django.db.models import Q
+from django.db.models import Q, Avg, Count
 from violation_Exam.risk_engine import compute_risk_score  # Phase 3
 
 
@@ -523,3 +523,46 @@ class StudentClassGradesView(APIView):
             })
 
         return Response(data)
+
+# --- Get student performance dashboard ---
+class StudentDashboardView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        enrollments = ClassEnrollment.objects.filter(student=user).select_related('class_enrolled', 'class_enrolled__instructor')
+        
+        enrolled_classes_data = []
+        for enrollment in enrollments:
+            cls = enrollment.class_enrolled
+            avg_score = ExamResult.objects.filter(student=user, exam__class_id=cls).aggregate(Avg('percentage'))['percentage__avg']
+            
+            color = "bg-blue-500"
+            if avg_score is not None:
+                if avg_score >= 85: color = "bg-green-500"
+                elif avg_score >= 70: color = "bg-blue-500"
+                elif avg_score >= 50: color = "bg-yellow-500"
+                else: color = "bg-red-500"
+                
+            enrolled_classes_data.append({
+                'name': cls.name,
+                'instructor': cls.instructor.get_full_name() or cls.instructor.username,
+                'progress': round(avg_score) if avg_score is not None else 0,
+                'color': color,
+            })
+            
+        overall_avg = ExamResult.objects.filter(student=user).aggregate(Avg('percentage'))['percentage__avg']
+        completed_count = ExamResult.objects.filter(student=user).count()
+        
+        total_exams = Exam.objects.filter(
+            class_id__in=[e.class_enrolled.id for e in enrollments]
+        ).filter(
+            Q(assigned_students__isnull=True) | Q(assigned_students=user)
+        ).distinct().count()
+        
+        return Response({
+            'average_score': round(overall_avg) if overall_avg is not None else 0,
+            'completed_exams': completed_count,
+            'total_exams': total_exams,
+            'enrolled_classes': enrolled_classes_data,
+        })

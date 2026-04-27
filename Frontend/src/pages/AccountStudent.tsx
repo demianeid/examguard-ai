@@ -19,20 +19,27 @@ interface ProfileData {
   last_login: string;
 }
 
+interface DashboardData {
+  average_score: number;
+  completed_exams: number;
+  total_exams: number;
+  enrolled_classes: {
+    name: string;
+    instructor: string;
+    progress: number;
+    color: string;
+  }[];
+}
+
 const AccountStudent: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showRefreshNotice, setShowRefreshNotice] = useState(false);
-
-  const enrolledClasses = [
-    { name: "Data Structures & Algorithms", instructor: "Dr. Ahmed Hassan", progress: 75, color: "bg-blue-500" },
-    { name: "Database Systems", instructor: "Dr. Sara Mohamed", progress: 60, color: "bg-blue-400" },
-    { name: "Web Development", instructor: "Dr. Omar Ali", progress: 91, color: "bg-blue-600" }
-  ];
 
   useEffect(() => {
     const wasUpdated = location.state?.updated === true;
@@ -76,6 +83,21 @@ const AccountStudent: React.FC = () => {
       const data = await response.json();
       if (response.ok) {
         setProfile(data);
+        
+        try {
+          const dashResponse = await fetch('http://127.0.0.1:8000/api/student/dashboard/', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (dashResponse.ok) {
+            setDashboard(await dashResponse.json());
+          }
+        } catch (err) {
+          console.error("Failed to load dashboard data", err);
+        }
       } else {
         setError(data.error || 'Failed to load profile');
       }
@@ -238,21 +260,13 @@ const AccountStudent: React.FC = () => {
               <div className="bg-gradient-to-r from-blue-400 to-blue-500 rounded-xl p-6 text-white">
                 <p className="text-sm font-semibold mb-2 opacity-90">Average Score</p>
                 <div className="flex items-end gap-3">
-                  <h3 className="text-3xl font-bold">78%</h3>
-                  <div className="flex items-center gap-1 text-sm font-semibold mb-2">
-                    <TrendingUp className="w-4 h-4" />
-                    <span>+5%</span>
-                  </div>
+                  <h3 className="text-3xl font-bold">{dashboard?.average_score ?? 0}%</h3>
                 </div>
               </div>
               <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-6 text-white">
                 <p className="text-sm font-semibold mb-2 opacity-90">Completed Exams</p>
                 <div className="flex items-end gap-3">
-                  <h3 className="text-3xl font-bold">12/15</h3>
-                  <div className="flex items-center gap-1 text-sm font-semibold mb-2">
-                    <TrendingUp className="w-4 h-4" />
-                    <span>80%</span>
-                  </div>
+                  <h3 className="text-3xl font-bold">{dashboard?.completed_exams ?? 0}/{dashboard?.total_exams ?? 0}</h3>
                 </div>
               </div>
             </div>
@@ -263,24 +277,28 @@ const AccountStudent: React.FC = () => {
                 <h3 className="text-lg font-bold text-gray-900">Enrolled Classes</h3>
               </div>
               <div className="space-y-3">
-                {enrolledClasses.map((course, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.5, delay: 0.3 + index * 0.1 }}
-                    className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className={`w-2 h-2 ${course.color} rounded-full flex-shrink-0`}></div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-gray-900 mb-0.5">{course.name}</h4>
-                      <p className="text-sm text-gray-500">{course.instructor}</p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <span className="text-lg font-bold text-blue-600">{course.progress}%</span>
-                    </div>
-                  </motion.div>
-                ))}
+                {!dashboard?.enrolled_classes || dashboard.enrolled_classes.length === 0 ? (
+                  <p className="text-gray-500 text-sm italic">No enrolled classes.</p>
+                ) : (
+                  dashboard.enrolled_classes.map((course, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.5, delay: 0.3 + index * 0.1 }}
+                      className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <div className={`w-2 h-2 ${course.color} rounded-full flex-shrink-0`}></div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-gray-900 mb-0.5">{course.name}</h4>
+                        <p className="text-sm text-gray-500">{course.instructor}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-lg font-bold text-blue-600">{course.progress}%</span>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
               </div>
             </div>
           </motion.div>

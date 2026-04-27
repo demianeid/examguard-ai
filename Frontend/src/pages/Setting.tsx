@@ -129,7 +129,6 @@ const SettingsPage: React.FC = () => {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const [deletePassword, setDeletePassword]         = useState("");
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteError, setDeleteError]               = useState("");
   const [isDeletingAccount, setIsDeletingAccount]   = useState(false);
   const [deleteSuccess, setDeleteSuccess]           = useState(false);
@@ -333,7 +332,6 @@ const SettingsPage: React.FC = () => {
   const handleDeleteAccount = async () => {
     setDeleteError("");
     if (!deletePassword)                { setDeleteError("Please enter your password"); return; }
-    if (deleteConfirmation !== "DELETE") { setDeleteError("Please type DELETE to confirm"); return; }
 
     const token = localStorage.getItem('access_token');
     if (!token) { setDeleteError("No access token found"); return; }
@@ -503,7 +501,6 @@ const SettingsPage: React.FC = () => {
                 </div>
                 {[
                   { id: 'delete_password',     label: 'Enter your password to confirm', placeholder: 'Enter your password', type: 'password', value: deletePassword, setter: setDeletePassword },
-                  { id: 'delete_confirmation', label: <>Type <span className="font-bold text-red-600">DELETE</span> to confirm</>, placeholder: 'DELETE', type: 'text', value: deleteConfirmation, setter: setDeleteConfirmation },
                 ].map(({ id, label, placeholder, type, value, setter }) => (
                   <div key={id}>
                     <label htmlFor={id} className="block text-sm font-semibold text-slate-700 mb-2">{label}</label>
