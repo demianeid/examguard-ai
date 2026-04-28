@@ -174,6 +174,8 @@ CELERY_BEAT_SCHEDULE = {
 
 # ─── RunPod & Dispatcher Config ───────────────────────────────────
 RUNPOD_ENDPOINT             = config('RUNPOD_ENDPOINT',             default='')
+RUNPOD_FACE_ENDPOINT_URL    = config('RUNPOD_FACE_ENDPOINT_URL',    default=RUNPOD_ENDPOINT)
+RUNPOD_API_KEY              = config('RUNPOD_API_KEY',              default='')
 DJANGO_API_URL              = config('DJANGO_API_URL',              default='http://localhost:8000/api')
 DJANGO_API_TOKEN            = config('DJANGO_API_TOKEN',            default='')
 ALERT_CONFIDENCE_THRESHOLD  = config('ALERT_CONFIDENCE_THRESHOLD',  default=0.6, cast=float)

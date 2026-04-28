@@ -31,10 +31,13 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+from django.conf import settings
+
 # ── Config ─────────────────────────────────────────────────────────────────────
-_ENDPOINT_URL = os.environ.get("RUNPOD_FACE_ENDPOINT_URL", "")
-_API_KEY       = os.environ.get("RUNPOD_API_KEY", "")
-_TIMEOUT       = int(os.environ.get("RUNPOD_TIMEOUT_SECONDS", "60"))
+# We read these from Django settings (which load from .env via python-decouple)
+_ENDPOINT_URL = getattr(settings, "RUNPOD_FACE_ENDPOINT_URL", getattr(settings, "RUNPOD_ENDPOINT", ""))
+_API_KEY       = getattr(settings, "RUNPOD_API_KEY", "")
+_TIMEOUT       = getattr(settings, "RUNPOD_TIMEOUT_SECONDS", 60)
 
 
 # ── Internal helper ────────────────────────────────────────────────────────────
