@@ -196,7 +196,9 @@ function App() {
       <Route path="/CreateExam" element={<CreateExam />} />
       <Route path="/edit-exam/:examId" element={<EditExam />} />
       <Route path="/exam-results/:examId" element={<ExamResults />} />
+      <Route path="/review-incidents/:examId" element={<ReviewIncidents />} />
       <Route path="/review-incidents" element={<ReviewIncidents />} />
+      <Route path="/live-proctoring/:examId" element={<LiveProctoring />} />
       <Route path="/live-proctoring" element={<LiveProctoring />} />
       <Route path="/proctor/:examId" element={<ProctoringPage />} />
       <Route path="/exam-review/:examId" element={<ExamReviewPage />} />

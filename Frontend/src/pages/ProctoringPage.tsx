@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Eye, AlertCircle, Info, Clock, Users, FileText,
+  Eye, AlertCircle, Info, Clock, Users, FileText, Video,
   Calendar, BarChart3, ChevronLeft, CheckCircle, RefreshCw, ShieldAlert,
   Search, SlidersHorizontal, AlertTriangle, CheckCircle2, TrendingUp, X,
 } from 'lucide-react';
@@ -301,10 +301,18 @@ const ProctoringPage = () => {
 
       {/* Camera grid */}
       <div>
-        <h3 className="text-base font-semibold text-gray-700 mb-4 flex items-center gap-2">
-          <Eye size={16} className="text-[#1A80F6]" />
-          Camera feeds — {students.length} student{students.length !== 1 ? 's' : ''}
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-gray-700 flex items-center gap-2">
+            <Eye size={16} className="text-[#1A80F6]" />
+            Camera feeds — {students.length} student{students.length !== 1 ? 's' : ''}
+          </h3>
+          <button
+            onClick={() => navigate(`/live-proctoring/${examId}`)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#1A80F6] hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+          >
+            <Video size={13} /> Full Camera View
+          </button>
+        </div>
 
         {dataLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -435,7 +443,6 @@ const ProctoringPage = () => {
     const groupedHigh   = groupIncidents(incidents?.high   ?? []);
     const groupedMedium = groupIncidents(incidents?.medium ?? []);
     const groupedLow    = groupIncidents(incidents?.low    ?? []);
-    const allGrouped    = [...groupedHigh, ...groupedMedium, ...groupedLow];
 
     // ── Per-student summary for cards ───────────────────────────────────────
     interface StudentSummary {
@@ -598,9 +605,17 @@ const ProctoringPage = () => {
                 <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
                   <Users size={15} className="text-blue-500" /> Student Incidents
                 </h3>
-                <span className="text-xs text-gray-400 bg-white border border-gray-200 px-3 py-1 rounded-full">
-                  {studentList.length} student{studentList.length !== 1 ? 's' : ''}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 bg-white border border-gray-200 px-3 py-1 rounded-full">
+                    {studentList.length} student{studentList.length !== 1 ? 's' : ''}
+                  </span>
+                  <button
+                    onClick={() => navigate(`/review-incidents/${examId}`)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                  >
+                    <AlertCircle size={12} /> Review Incidents
+                  </button>
+                </div>
               </div>
 
               {studentList.length === 0 ? (

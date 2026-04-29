@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Video, Clock, Users, AlertCircle, RefreshCw } from 'lucide-react';
 import Header from '../components/Header';
@@ -31,14 +31,8 @@ interface LiveStatusData {
 }
 
 const LiveProctoring: React.FC = () => {
-  const navigate   = useNavigate();
-  const location   = useLocation();
-
-  // examId can be passed via router state or query param
-  const examId: string | null =
-    (location.state as any)?.examId ??
-    new URLSearchParams(location.search).get('examId') ??
-    null;
+  const navigate = useNavigate();
+  const { examId = null } = useParams<{ examId?: string }>();
 
   const [liveData, setLiveData]     = useState<LiveStatusData | null>(null);
   const [loading, setLoading]       = useState(true);
@@ -159,16 +153,14 @@ const LiveProctoring: React.FC = () => {
             transition={{ duration: 0.5 }}
             className="bg-white rounded-2xl shadow-lg p-6 relative"
           >
-            {/* Back */}
-            <button
-              onClick={() => navigate(-1)}
-              className="absolute top-6 right-6 flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors font-medium text-sm"
-            >
-              <ArrowLeft className="w-4 h-4" />Back
-            </button>
-
-            {/* Header */}
-            <div className="flex items-center mb-6 pr-16">
+            {/* Header row — Back button LEFT-aligned to match arrow direction */}
+            <div className="flex items-center gap-4 mb-6">
+              <button
+                onClick={() => navigate(-1)}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors font-medium text-sm flex-shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />Back
+              </button>
               <div className="flex items-center gap-3">
                 <Video className="w-8 h-8 text-blue-600" />
                 <h1 className="text-3xl font-bold text-gray-900">Live Proctoring</h1>
