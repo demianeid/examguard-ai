@@ -17,8 +17,12 @@ urlpatterns = [
     # StudentZone
     path('exams/<int:exam_id>/zones/', views.student_zone_list,   name='student-zone-list'),
     path('zones/<int:pk>/',            views.student_zone_detail, name='student-zone-detail'),
-    
-    path('halls/<int:hall_id>/students/',      views.hall_enrollment_list,   name='hall-enrollment-list'),
-path('halls/students/<int:pk>/remove/',    views.hall_enrollment_detail, name='hall-enrollment-detail'),
-path('students/list/', views.student_list_view, name='student-list'),
+
+    # HallEnrollment
+    path('halls/<int:hall_id>/students/',                   views.hall_enrollment_list,     name='hall-enrollment-list'),
+    path('halls/<int:hall_id>/students/bulk-upload/',       views.bulk_enroll_from_excel,   name='hall-enrollment-bulk'),
+    path('halls/students/<int:pk>/',                        views.hall_enrollment_detail,   name='hall-enrollment-detail'),
+
+    # Students list
+    path('students/list/', views.student_list_view, name='student-list'),
 ]

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   LayoutDashboard,
   Crosshair,
@@ -13,6 +13,11 @@ import {
   ChevronLeft,
   Loader2,
   X,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  Edit2,
 } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import {
@@ -137,6 +142,31 @@ export default function FacilitiesPage() {
   const [newStudentIdCode, setNewStudentIdCode] = useState("")
   const [newStudentSeat, setNewStudentSeat] = useState("")   // ← NEW
 
+  // Edit Student modal
+  const [showEditStudentModal, setShowEditStudentModal] = useState(false)
+  const [studentToEdit, setStudentToEdit] = useState<Student | null>(null)
+  const [editStudentName, setEditStudentName] = useState("")
+  const [editStudentIdCode, setEditStudentIdCode] = useState("")
+  const [editStudentSeat, setEditStudentSeat] = useState("")
+  const [editStudentSaving, setEditStudentSaving] = useState(false)
+
+  // Delete Student confirmation
+  const [studentToDelete, setStudentToDelete] = useState<number | null>(null)
+  const [studentDeleting, setStudentDeleting] = useState(false)
+
+  // Upload Excel modal
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadDragging, setUploadDragging] = useState(false)
+  const [uploadSaving, setUploadSaving] = useState(false)
+  const [uploadResult, setUploadResult] = useState<{
+    created: number; skipped: number;
+    errors: { row: number; reason: string }[];
+    message: string;
+  } | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     const load = async () => {
       setHallsLoading(true)
@@ -242,13 +272,21 @@ export default function FacilitiesPage() {
     }
   }
 
-  const deleteStudent = async (id: number) => {
-    if (!confirm("Remove this student from the hall?")) return
+  const deleteStudent = (id: number) => {
+    setStudentToDelete(id)
+  }
+
+  const confirmDeleteStudent = async () => {
+    if (studentToDelete === null) return
+    setStudentDeleting(true)
     try {
-      await hallEnrollmentApi.delete(id)
-      setStudents((prev) => prev.filter((s) => s.id !== id))
+      await hallEnrollmentApi.delete(studentToDelete)
+      setStudents((prev) => prev.filter((s) => s.id !== studentToDelete))
+      setStudentToDelete(null)
     } catch {
       alert("Failed to remove student.")
+    } finally {
+      setStudentDeleting(false)
     }
   }
 
@@ -449,13 +487,27 @@ export default function FacilitiesPage() {
                   <h3 className="text-lg font-bold text-gray-900">
                     Enrolled Students
                   </h3>
-                  <button
-                    onClick={() => setShowStudentModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-all"
-                  >
-                    <Plus size={14} />
-                    Enroll Student
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setUploadFile(null)
+                        setUploadResult(null)
+                        setUploadError(null)
+                        setShowUploadModal(true)
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-all"
+                    >
+                      <FileSpreadsheet size={14} />
+                      Upload Excel
+                    </button>
+                    <button
+                      onClick={() => setShowStudentModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-all"
+                    >
+                      <Plus size={14} />
+                      Enroll Student
+                    </button>
+                  </div>
                 </div>
 
                 {studentsLoading ? (
@@ -497,7 +549,20 @@ export default function FacilitiesPage() {
                                 {s.seat_number}
                               </span>
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 flex gap-2 justify-end">
+                              <button
+                                onClick={() => {
+                                  setStudentToEdit(s)
+                                  setEditStudentName(s.name)
+                                  setEditStudentIdCode(s.student_id)
+                                  setEditStudentSeat(s.seat_number === '-' ? '' : s.seat_number)
+                                  setShowEditStudentModal(true)
+                                }}
+                                title="Edit student"
+                                className="text-gray-400 hover:text-blue-500 transition-colors p-1"
+                              >
+                                <Edit2 size={16} />
+                              </button>
                               <button
                                 onClick={() => deleteStudent(s.id)}
                                 title="Remove student"
@@ -660,6 +725,73 @@ export default function FacilitiesPage() {
         </Modal>
       )}
 
+      {/* Edit Student Modal */}
+      {showEditStudentModal && (
+        <Modal
+          title="Edit Student"
+          onClose={() => {
+            setShowEditStudentModal(false)
+            setStudentToEdit(null)
+          }}
+          onSubmit={async () => {
+            if (!studentToEdit || !editStudentIdCode.trim()) return
+            setEditStudentSaving(true)
+            try {
+              const updated = await hallEnrollmentApi.update(studentToEdit.id, {
+                student_name: editStudentName,
+                student_code: editStudentIdCode,
+                seat_number: editStudentSeat.trim() || undefined,
+              })
+              setStudents(prev => prev.map(s => s.id === studentToEdit.id ? {
+                ...s,
+                name: updated.student_name || editStudentName,
+                student_id: updated.student_code || editStudentIdCode,
+                seat_number: updated.seat_number || editStudentSeat.trim() || '-',
+              } : s))
+              setShowEditStudentModal(false)
+            } catch {
+              alert("Failed to update student.")
+            } finally {
+              setEditStudentSaving(false)
+            }
+          }}
+          saving={editStudentSaving}
+          disabled={!editStudentName.trim() || !editStudentIdCode.trim()}
+          submitLabel="Save Changes"
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Student Name</label>
+            <input
+              type="text"
+              value={editStudentName}
+              onChange={(e) => setEditStudentName(e.target.value)}
+              placeholder="John Doe"
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Student ID Code</label>
+            <input
+              type="text"
+              value={editStudentIdCode}
+              onChange={(e) => setEditStudentIdCode(e.target.value)}
+              placeholder="STU-2024-001"
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Assigned Seat</label>
+            <input
+              type="text"
+              value={editStudentSeat}
+              onChange={(e) => setEditStudentSeat(e.target.value)}
+              placeholder="e.g. A1"
+              className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
+            />
+          </div>
+        </Modal>
+      )}
+
       {/* Delete Hall Confirmation Modal */}
       {hallToDelete !== null && (
         <Modal
@@ -674,6 +806,247 @@ export default function FacilitiesPage() {
             Are you sure you want to delete this facility? This action cannot be undone.
           </p>
         </Modal>
+      )}
+
+      {/* Delete Student Confirmation Modal */}
+      {studentToDelete !== null && (
+        <Modal
+          title="Remove Student"
+          onClose={() => setStudentToDelete(null)}
+          onSubmit={confirmDeleteStudent}
+          saving={studentDeleting}
+          disabled={false}
+          submitLabel="Remove"
+        >
+          <p className="text-gray-600 text-sm">
+            Are you sure you want to remove this student from the hall? This action cannot be undone.
+          </p>
+        </Modal>
+      )}
+
+      {/* ── Upload Excel Modal ──────────────────────────────────── */}
+      {showUploadModal && (
+        <div
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200,
+          }}
+        >
+          <div style={{
+            background: "#fff", borderRadius: 16, padding: 32,
+            width: "100%", maxWidth: 500, margin: "0 16px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+          }}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ background: "#ecfdf5", borderRadius: 10, padding: 8 }}>
+                  <FileSpreadsheet size={20} color="#059669" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, color: "#111827", margin: 0 }}>
+                    Bulk Enroll via Excel
+                  </h3>
+                  <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
+                    Upload a .xlsx / .xls file to enroll multiple students at once
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Template hint */}
+            <div style={{
+              background: "#eff6ff", border: "1px solid #bfdbfe",
+              borderRadius: 10, padding: "10px 14px", marginBottom: 18,
+              fontSize: 12, color: "#1d4ed8", lineHeight: 1.6,
+            }}>
+              <strong>Required columns (row 1):</strong>&nbsp;
+              <code style={{ background: "#dbeafe", borderRadius: 4, padding: "1px 5px" }}>Student Name</code>&nbsp;
+              <code style={{ background: "#dbeafe", borderRadius: 4, padding: "1px 5px" }}>ID</code>&nbsp;
+              <code style={{ background: "#dbeafe", borderRadius: 4, padding: "1px 5px" }}>Seat Number</code>
+              &nbsp;(Seat Number is optional)
+            </div>
+
+            {/* Drop zone */}
+            {!uploadResult && (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setUploadDragging(true) }}
+                onDragLeave={() => setUploadDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setUploadDragging(false)
+                  const f = e.dataTransfer.files[0]
+                  if (f) { setUploadFile(f); setUploadError(null) }
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: `2px dashed ${uploadDragging ? "#059669" : uploadFile ? "#059669" : "#d1d5db"}`,
+                  borderRadius: 12,
+                  padding: "28px 20px",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  background: uploadDragging ? "#ecfdf5" : uploadFile ? "#f0fdf4" : "#f9fafb",
+                  transition: "all .2s",
+                  marginBottom: 16,
+                }}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) { setUploadFile(f); setUploadError(null) }
+                  }}
+                />
+                {uploadFile ? (
+                  <>
+                    <FileSpreadsheet size={32} color="#059669" style={{ margin: "0 auto 8px" }} />
+                    <p style={{ fontWeight: 600, color: "#065f46", fontSize: 14, margin: "0 0 4px" }}>
+                      {uploadFile.name}
+                    </p>
+                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>
+                      {(uploadFile.size / 1024).toFixed(1)} KB — click to change
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={32} color="#9ca3af" style={{ margin: "0 auto 8px" }} />
+                    <p style={{ fontWeight: 600, color: "#374151", fontSize: 14, margin: "0 0 4px" }}>
+                      Drag &amp; drop your Excel file here
+                    </p>
+                    <p style={{ fontSize: 12, color: "#9ca3af", margin: 0 }}>
+                      or click to browse — .xlsx / .xls only
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Error banner */}
+            {uploadError && (
+              <div style={{
+                display: "flex", alignItems: "flex-start", gap: 8,
+                background: "#fef2f2", border: "1px solid #fecaca",
+                borderRadius: 10, padding: "10px 14px", marginBottom: 16,
+                fontSize: 13, color: "#b91c1c",
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>{uploadError}</span>
+              </div>
+            )}
+
+            {/* Success result */}
+            {uploadResult && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: "#f0fdf4", border: "1px solid #bbf7d0",
+                  borderRadius: 10, padding: "12px 16px", marginBottom: 12,
+                }}>
+                  <CheckCircle2 size={18} color="#16a34a" />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#15803d" }}>
+                    {uploadResult.message}
+                  </span>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  <div style={{
+                    flex: 1, textAlign: "center", background: "#ecfdf5",
+                    borderRadius: 10, padding: "10px 0",
+                  }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "#15803d" }}>{uploadResult.created}</div>
+                    <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>Enrolled</div>
+                  </div>
+                  <div style={{
+                    flex: 1, textAlign: "center", background: "#fefce8",
+                    borderRadius: 10, padding: "10px 0",
+                  }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "#ca8a04" }}>{uploadResult.skipped}</div>
+                    <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>Skipped (duplicate)</div>
+                  </div>
+                </div>
+
+                {uploadResult.errors.length > 0 && (
+                  <div style={{ background: "#fef2f2", borderRadius: 10, padding: "10px 14px" }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: "#b91c1c", marginBottom: 6 }}>
+                      Row errors ({uploadResult.errors.length}):
+                    </p>
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {uploadResult.errors.map((e) => (
+                        <li key={e.row} style={{ fontSize: 12, color: "#991b1b", marginBottom: 3 }}>
+                          Row {e.row}: {e.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                style={{
+                  flex: 1, padding: "10px", border: "1px solid #e5e7eb",
+                  borderRadius: 8, background: "#fff", color: "#374151",
+                  fontSize: 14, fontWeight: 500, cursor: "pointer",
+                }}
+              >
+                {uploadResult ? "Close" : "Cancel"}
+              </button>
+
+              {!uploadResult && (
+                <button
+                  disabled={!uploadFile || uploadSaving}
+                  onClick={async () => {
+                    if (!uploadFile || !selectedHall) return
+                    setUploadSaving(true)
+                    setUploadError(null)
+                    try {
+                      const result = await hallEnrollmentApi.bulkUpload(selectedHall.id, uploadFile)
+                      setUploadResult(result)
+                      // Refresh students list
+                      const data = await hallEnrollmentApi.getByHall(selectedHall.id)
+                      setStudents(data.map(e => ({
+                        id: e.id,
+                        name: e.student_name || "Unknown",
+                        student_id: e.student_code || "-",
+                        seat_number: e.seat_number || "-",
+                      })))
+                    } catch (err: any) {
+                      const msg =
+                        err?.response?.data?.error ||
+                        err?.response?.data?.detail ||
+                        "Upload failed. Please check the file and try again."
+                      setUploadError(msg)
+                    } finally {
+                      setUploadSaving(false)
+                    }
+                  }}
+                  style={{
+                    flex: 1, padding: "10px", border: "none", borderRadius: 8,
+                    background: !uploadFile || uploadSaving ? "#d1d5db" : "#059669",
+                    color: "#fff", fontSize: 14, fontWeight: 600,
+                    cursor: !uploadFile || uploadSaving ? "not-allowed" : "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  }}
+                >
+                  {uploadSaving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
+                  {uploadSaving ? "Uploading…" : "Upload & Enroll"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

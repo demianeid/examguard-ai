@@ -371,7 +371,8 @@ const ExamInterface: React.FC = () => {
       } catch(e) {}
     }
 
-    const ws = new WebSocket(`ws://127.0.0.1:8001/ws/analyze/${examId}/${studentId}`);
+    const host = window.location.hostname;
+    const ws = new WebSocket(`ws://${host}:8001/ws/analyze/${examId}/${studentId}`);
     ws.binaryType = 'arraybuffer';
     aiWsRef.current = ws;
 
@@ -408,7 +409,13 @@ const ExamInterface: React.FC = () => {
         if (result.cheating_detected) {
           const reason = result.cheating_reason ?? 'AI: suspicious behaviour';
           setLastAiAlert(reason);
+        } else {
+          // Clear the AI alert if now clean
+          setLastAiAlert(null);
+        }
 
+        if (result.new_violation) {
+          const reason = result.cheating_reason ?? 'AI: suspicious behaviour';
           // Map AI reason → violation type string for the DB
           const eventType = result.yolo_suspicious ? 'ai_object_detected' : 'ai_head_pose';
           addViolation(1.5, `⚠ AI: ${reason}`, eventType);
@@ -423,9 +430,6 @@ const ExamInterface: React.FC = () => {
             h_ratio:          result.h_ratio ?? 0,
             v_ratio:          result.v_ratio ?? 0,
           });
-        } else {
-          // Clear the AI alert if now clean
-          setLastAiAlert(null);
         }
       } catch (e) {
         console.warn('[AI] Failed to parse message', e);
@@ -629,13 +633,16 @@ const ExamInterface: React.FC = () => {
   const startExamSession = async () => {
     setCurrentView('exam');
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch { console.error('Camera access denied'); }
+    // Wait for React to render the exam view so videoRef.current is available
+    setTimeout(async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      } catch { console.error('Camera access denied'); }
 
-    // Connect to AI proctoring service
-    startAIProctoring();
+      // Connect to AI proctoring service
+      startAIProctoring();
+    }, 100);
   };
 
   // ============================================================

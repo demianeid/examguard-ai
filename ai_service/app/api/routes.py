@@ -117,13 +117,27 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str):
             yolo = yolo_detector.analyze_frame(bgr)
 
             # ── 5. Build combined verdict ────────────────────────────────
-            # head_suspicious is True only on the transition into a new
-            # looking-away event, preventing repeated identical alerts.
+            # head["suspicious"] is the STATE (are they currently looking away?)
+            # head["should_alert"] is the EDGE TRIGGER (did they just start looking away?)
+            
+            # Simple debounce for YOLO to prevent continuous point deduction
+            # If the tracker has an attribute, we could use it, but since we don't,
+            # we'll just report the state and let the frontend handle edge triggers if needed,
+            # OR we just pass the edge triggers.
+            
+            # Actually, let's keep track of YOLO state per connection
+            if not hasattr(tracker, "last_yolo_suspicious"):
+                tracker.last_yolo_suspicious = False
+                
+            yolo_alert = yolo["suspicious"] and not tracker.last_yolo_suspicious
+            tracker.last_yolo_suspicious = yolo["suspicious"]
+            
             head_alert = head["should_alert"]
-            cheating   = head_alert or yolo["suspicious"]
+            new_violation = head_alert or yolo_alert
+            cheating_state = head["suspicious"] or yolo["suspicious"]
 
             reasons = []
-            if head_alert:
+            if head["suspicious"]:
                 reasons.append(head["direction"] or "NO FACE")
             if yolo["suspicious"]:
                 labels = [d["label"] for d in yolo["detections"]]
@@ -134,10 +148,11 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str):
                 h_ratio           = head["h_ratio"],
                 v_ratio           = head["v_ratio"],
                 head_direction    = head["direction"],
-                head_suspicious   = head_alert,        # edge-triggered
+                head_suspicious   = head["suspicious"],
                 detections        = [Detection(**d) for d in yolo["detections"]],
                 yolo_suspicious   = yolo["suspicious"],
-                cheating_detected = cheating,
+                cheating_detected = cheating_state,
+                new_violation     = new_violation,
                 cheating_reason   = " | ".join(reasons) if reasons else None,
             )
 

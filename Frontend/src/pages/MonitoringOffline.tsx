@@ -5,8 +5,9 @@ import {
   Download,
   User, Phone, FileText, Volume2, Radio, WifiOff,
   CheckCircle, XCircle, AlertTriangle,
-  Save, Loader2, Play
+  Save, Loader2, Play, FileSpreadsheet
 } from 'lucide-react';
+import { downloadXlsx } from '../utils/xlsxExport';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   examHallApi,
@@ -332,15 +333,87 @@ const OfflineMonitoringPage: FC = () => {
     setActionLoading(true);
     setActionError('');
     try {
+      // 1. Generate report on backend (connects violations)
       await monitoringApi.generateReport(session.id);
+
+      // 2. Fetch raw violations from backend
       const violations = await monitoringApi.getViolations(session.id);
-      const blob = new Blob([JSON.stringify(violations, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `violation-report-session-${session.id}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+
+      // ── Sheet 1: Session Summary ──────────────────────────────
+      const examTitle  = exam?.title  || 'N/A';
+      const hallName   = currentHall?.name ?? exam?.hall_name ?? 'N/A';
+      const exportedAt = new Date().toLocaleString();
+
+      const summaryRows = [
+        { Field: 'Exam Title',                  Value: examTitle },
+        { Field: 'Hall',                        Value: hallName },
+        { Field: 'Session ID',                  Value: session.id },
+        { Field: 'Session Status',              Value: session.status },
+        { Field: 'Started At',                  Value: session.started_at ? new Date(session.started_at).toLocaleString() : 'N/A' },
+        { Field: 'Ended At',                    Value: session.ended_at   ? new Date(session.ended_at).toLocaleString()   : 'In Progress' },
+        { Field: 'Monitoring Duration',         Value: formatTime(time) },
+        { Field: 'Total Students',              Value: stats.totalStudents },
+        { Field: 'Normal Behavior',             Value: stats.normalBehavior },
+        { Field: 'Suspicious',                  Value: stats.suspicious },
+        { Field: 'Violation Seats',             Value: stats.violations },
+        { Field: 'Total Alerts',                Value: alerts.length },
+        { Field: 'Cameras Online',              Value: stats.camerasOnline },
+        { Field: 'Face Match Rate',             Value: `${stats.faceMatchRate}%` },
+        { Field: 'Avg Violations / Student',    Value: stats.avgViolationsPerStudent },
+        { Field: 'Report Exported At',          Value: exportedAt },
+      ];
+
+      // ── Sheet 2: Student Violations (per seat) ────────────────
+      const studentRows = seats.map(seat => ({
+        'Student Name':      seat.studentName,
+        'Student ID':        seat.studentId,
+        'Seat Number':       seat.seatNumber,
+        'Status':            seat.status.toUpperCase(),
+        'Total Alerts':      seat.violations,
+        'Face Match':        seat.faceMatch ? 'Yes' : 'No',
+        'Last Activity':     seat.lastActivity,
+      }));
+
+      // ── Sheet 3: Full Alert Log ────────────────────────────────
+      const alertRows = alerts.map(a => {
+        const zone = zones.find(z => z.id === a.zone);
+        return {
+          'Alert ID':      a.id,
+          'Student Name':  a.student_name || zone?.student_name || `Zone ${a.zone}`,
+          'Student ID':    zone?.student_code || '',
+          'Seat':          a.seat_number   || zone?.seat_number   || '',
+          'Alert Type':    a.alert_type.replace(/_/g, ' '),
+          'Severity':      a.severity,
+          'Timestamp':     new Date(a.timestamp).toLocaleString(),
+          'Reviewed':      a.is_reviewed ? 'Yes' : 'No',
+        };
+      });
+
+      // ── Sheet 4: Backend Violations Summary ───────────────────
+      const violationRows = violations.map(v => ({
+        'Student Name':       v.student_name,
+        'Student ID':         v.student_code,
+        'Seat':               v.seat_number,
+        'Exam':               v.exam_title,
+        'Total Alerts':       v.total_alerts,
+        'High Severity':      v.high_severity,
+        'Medium Severity':    v.medium_severity,
+        'Low Severity':       v.low_severity,
+        'Violation Score':    v.violation_score,
+      }));
+
+      const filename = `exam-report-session-${session.id}-${new Date().toISOString().slice(0,10)}.xlsx`;
+
+      downloadXlsx(
+        [
+          { name: 'Session Summary',       rows: summaryRows },
+          { name: 'Student Violations',    rows: studentRows.length > 0 ? studentRows : [{ Note: 'No students monitored' }] },
+          { name: 'Alert Log',             rows: alertRows.length    > 0 ? alertRows    : [{ Note: 'No alerts recorded' }] },
+          { name: 'Violations Summary',    rows: violationRows.length > 0 ? violationRows : [{ Note: 'No backend violations' }] },
+        ],
+        filename
+      );
+
     } catch {
       setActionError('Failed to generate report.');
     } finally {
@@ -939,10 +1012,12 @@ const OfflineMonitoringPage: FC = () => {
               <button
                 onClick={handleGenerateReport}
                 disabled={!session?.id || actionLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50"
               >
-                <Download size={20} />
-                Export Report
+                {actionLoading
+                  ? <Loader2 size={18} className="animate-spin" />
+                  : <FileSpreadsheet size={18} />}
+                Export Excel Report
               </button>
             </div>
           </div>

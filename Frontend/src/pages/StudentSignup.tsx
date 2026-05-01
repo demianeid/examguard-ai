@@ -15,7 +15,6 @@ type ValidationStatus = "idle" | "loading" | "success" | "error";
 interface ValidationState {
   idCheck:   { status: ValidationStatus; message: string };
   faceCheck: { status: ValidationStatus; message: string };
-  nameCheck: { status: ValidationStatus; message: string };
 }
 
 // ─── Helper: File → base64 ────────────────────────────────────────────────────
@@ -56,7 +55,6 @@ export default function StudentSignup() {
   const [validationState, setValidationState] = useState<ValidationState>({
     idCheck:   { status: "idle", message: "" },
     faceCheck: { status: "idle", message: "" },
-    nameCheck: { status: "idle", message: "" },
   });
 
   // هل الـ validation اتعمل بنجاح (بيتحكم في شكل الـ panel بس — مش بيمنع الـ submit)
@@ -93,7 +91,6 @@ export default function StudentSignup() {
       setValidationState({
         idCheck:   { status: "idle", message: "" },
         faceCheck: { status: "idle", message: "" },
-        nameCheck: { status: "idle", message: "" },
       });
     }
   };
@@ -129,7 +126,6 @@ export default function StudentSignup() {
     setValidationState({
       idCheck:   { status: "loading", message: "Checking National ID image..." },
       faceCheck: { status: "loading", message: "Detecting face in ID..." },
-      nameCheck: { status: "idle",    message: "" },
     });
 
     let hasFace = false;
@@ -139,7 +135,6 @@ export default function StudentSignup() {
       setValidationState({
         idCheck:   { status: "error", message: "Could not connect to server. Please try again." },
         faceCheck: { status: "idle",  message: "" },
-        nameCheck: { status: "idle",  message: "" },
       });
       setLoading(false);
       return;
@@ -149,17 +144,14 @@ export default function StudentSignup() {
       setValidationState({
         idCheck:   { status: "error", message: "The uploaded image is not a valid National ID." },
         faceCheck: { status: "error", message: "Please upload a clear front-side National ID." },
-        nameCheck: { status: "idle",  message: "" },
       });
       setLoading(false);
       return;
     }
 
-    const formFullName = `${formData.firstName} ${formData.lastName}`.trim();
     setValidationState({
       idCheck:   { status: "success", message: "ID image accepted ✓" },
       faceCheck: { status: "success", message: "Face detected successfully ✓" },
-      nameCheck: { status: "success", message: `Name confirmed: "${formFullName}" ✓` },
     });
     setValidationDone(true);
 
@@ -483,7 +475,6 @@ export default function StudentSignup() {
                   <div className="divide-y divide-gray-100">
                     <ValidationStep label="Step 1 — National ID Check" {...validationState.idCheck} />
                     <ValidationStep label="Step 2 — Face Detection"    {...validationState.faceCheck} />
-                    <ValidationStep label="Step 3 — Name Confirmation" {...validationState.nameCheck} />
                   </div>
 
                   {hasError && !loading && (

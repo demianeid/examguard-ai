@@ -22,6 +22,7 @@ class AnalysisResult(BaseModel):
 
     # ── Combined verdict ─────────────────────────────────
     cheating_detected: bool
+    new_violation: bool = False
     cheating_reason:   Optional[str] = None  # human-readable reason
 
 

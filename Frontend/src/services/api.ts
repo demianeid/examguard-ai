@@ -414,8 +414,27 @@ export const hallEnrollmentApi = {
     body: JSON.stringify(payload),
   }),
 
+  bulkUpload: async (hallId: number, file: File): Promise<{ created: number; skipped: number; errors: {row: number; reason: string}[]; message: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    // Use the underlying axios instance directly for multipart
+    const { default: axiosInstance } = await import("../api");
+    const response = await axiosInstance.post(
+      `/api/hardware/monitoring/halls/${hallId}/students/bulk-upload/`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+    return response.data;
+  },
+
+  update: (enrollmentId: number, payload: Partial<HallEnrollment>): Promise<HallEnrollment> =>
+    request<HallEnrollment>(`/api/hardware/monitoring/halls/students/${enrollmentId}/`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
   delete: (enrollmentId: number): Promise<void> =>
-    request<void>(`/api/hardware/monitoring/halls/students/${enrollmentId}/remove/`, {
+    request<void>(`/api/hardware/monitoring/halls/students/${enrollmentId}/`, {
       method: "DELETE",
     }),
 };

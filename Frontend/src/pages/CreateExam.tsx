@@ -82,33 +82,46 @@ interface Student {
 export default function CreateExam() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [currentStep, setCurrentStep] = useState<number>(1);
+  const STORAGE_KEY = searchParams.get('classId') ? `examDraft_${searchParams.get('classId')}` : 'examDraft_new';
+
+  const [currentStep, setCurrentStep] = useState<number>(() => {
+    const saved = sessionStorage.getItem(`${STORAGE_KEY}_step`);
+    return saved ? parseInt(saved, 10) : 1;
+  });
+
   const [apiError, setApiError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState<ExamFormData>({
-    examTitle: "",
-    description: "",
-    duration: "60",
-    totalMarks: "100",
-    startDate: "",
-    startTime: "",
-    endDate: "",
-    endTime: "",
-    instructions: "",
-    studentSelectionType: "all",
+  const [formData, setFormData] = useState<ExamFormData>(() => {
+    const saved = sessionStorage.getItem(`${STORAGE_KEY}_formData`);
+    if (saved) return JSON.parse(saved);
+    return {
+      examTitle: "",
+      description: "",
+      duration: "60",
+      totalMarks: "100",
+      startDate: "",
+      startTime: "",
+      endDate: "",
+      endTime: "",
+      instructions: "",
+      studentSelectionType: "all",
+    };
   });
 
-  const [questions, setQuestions] = useState<Question[]>([
-    {
+  const [questions, setQuestions] = useState<Question[]>(() => {
+    const saved = sessionStorage.getItem(`${STORAGE_KEY}_questions`);
+    if (saved) return JSON.parse(saved);
+    return [{
       id: "1",
       type: "multiple-choice",
       text: "",
       options: ["", "", "", ""],
       marks: "1",
       correctAnswer: undefined,
-    },
-  ]);
+    }];
+  });
+
   const [errors, setErrors] = useState<
     Partial<Record<keyof ExamFormData | "students", string>>
   >({});
@@ -118,7 +131,6 @@ export default function CreateExam() {
   const [selectedStudents, setSelectedStudents]   = useState<Student[]>([]);
   const [availableStudents, setAvailableStudents] = useState<Student[]>([]);
   const [studentSearchTerm, setStudentSearchTerm] = useState<string>("");
-  const [classFilter, setClassFilter]             = useState<string>("all");
   const [studentsLoading, setStudentsLoading]     = useState<boolean>(false);
 
   useEffect(() => {
@@ -131,13 +143,22 @@ export default function CreateExam() {
           headers: { Authorization: `Bearer ${getToken()}` },
         });
         const data = await res.json();
-        setAvailableStudents(data.map((s: any) => ({
+        const allStudents = data.map((s: any) => ({
           id: s.student_custom_id || s.student_id || String(s.id),
           name: s.full_name,
           email: '',
           class: '',
           rollNumber: s.student_custom_id || s.student_id,
-        })));
+        }));
+        
+        const savedIdsStr = sessionStorage.getItem(`${STORAGE_KEY}_selectedStudentIds`);
+        const savedIds = savedIdsStr ? JSON.parse(savedIdsStr) : [];
+        
+        const available = allStudents.filter((s: Student) => !savedIds.includes(s.id));
+        const selected = allStudents.filter((s: Student) => savedIds.includes(s.id));
+        
+        setAvailableStudents(available);
+        setSelectedStudents(selected);
       } catch {
         setAvailableStudents([]);
       } finally {
@@ -145,20 +166,45 @@ export default function CreateExam() {
       }
     };
     fetchStudents();
-  }, []);
+  }, [searchParams, STORAGE_KEY]);
 
-  const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>([
+  const baseSecuritySettings: SecurityFeature[] = [
     { id: "1",  name: "AI Proctoring",          description: "Automated behavior analysis and anomaly detection",   recommended: true,  enabled: true,  icon: <Shield      className="w-5 h-5 text-blue-500" /> },
-    { id: "2",  name: "Live Proctoring",         description: "Real-time human monitoring during the exam",           recommended: false, enabled: false, icon: <Eye         className="w-5 h-5 text-gray-400" /> },
-    { id: "3",  name: "Eye Tracking",            description: "Monitor eye movements and focus patterns",             recommended: true,  enabled: true,  icon: <Eye         className="w-5 h-5 text-blue-500" /> },
+    { id: "2",  name: "Live Proctoring",         description: "Real-time human monitoring during the exam",           recommended: true,  enabled: true,  icon: <Eye         className="w-5 h-5 text-blue-500" /> },
     { id: "4",  name: "Multiple Face Detection", description: "Alert if multiple people are detected",                recommended: true,  enabled: true,  icon: <Users       className="w-5 h-5 text-blue-500" /> },
-    { id: "5",  name: "Speaker Recognition",     description: "Detect unauthorized voices or conversations",          recommended: false, enabled: false, icon: <Mic         className="w-5 h-5 text-gray-400" /> },
     { id: "6",  name: "Lockdown Browser",        description: "Restrict access to other applications",               recommended: true,  enabled: true,  icon: <Lock        className="w-5 h-5 text-blue-500" /> },
     { id: "7",  name: "Record & Review",         description: "Record entire session for later review",              recommended: false, enabled: false, icon: <Video       className="w-5 h-5 text-gray-400" /> },
     { id: "8",  name: "Object Detection",        description: "Detect phones, notes, or unauthorized materials",     recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
     { id: "9",  name: "Real-Time Alerts",        description: "Instant notifications for suspicious activity",       recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
     { id: "10", name: "Offline Exam Mode",       description: "Allow exams without internet connection",             recommended: false, enabled: false, icon: <Wifi        className="w-5 h-5 text-gray-400" /> },
-  ]);
+  ];
+
+  const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>(() => {
+    const saved = sessionStorage.getItem(`${STORAGE_KEY}_security`);
+    if (saved) {
+      try {
+        const enabledIds = JSON.parse(saved);
+        return baseSecuritySettings.map(s => ({ ...s, enabled: enabledIds.includes(s.id) }));
+      } catch (e) {}
+    }
+    return baseSecuritySettings;
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem(`${STORAGE_KEY}_step`, currentStep.toString());
+    sessionStorage.setItem(`${STORAGE_KEY}_formData`, JSON.stringify(formData));
+    sessionStorage.setItem(`${STORAGE_KEY}_questions`, JSON.stringify(questions));
+    sessionStorage.setItem(`${STORAGE_KEY}_security`, JSON.stringify(securitySettings.filter(s => s.enabled).map(s => s.id)));
+    sessionStorage.setItem(`${STORAGE_KEY}_selectedStudentIds`, JSON.stringify(selectedStudents.map(s => s.id)));
+  }, [currentStep, formData, questions, securitySettings, selectedStudents, STORAGE_KEY]);
+
+  const clearDraft = () => {
+    sessionStorage.removeItem(`${STORAGE_KEY}_step`);
+    sessionStorage.removeItem(`${STORAGE_KEY}_formData`);
+    sessionStorage.removeItem(`${STORAGE_KEY}_questions`);
+    sessionStorage.removeItem(`${STORAGE_KEY}_security`);
+    sessionStorage.removeItem(`${STORAGE_KEY}_selectedStudentIds`);
+  };
 
   const steps: Step[] = [
     { number: 1, label: "Basic Info" },
@@ -174,18 +220,26 @@ export default function CreateExam() {
     { value: "essay",           label: "Essay" },
   ];
 
-  const uniqueClasses = Array.from(
-    new Set(availableStudents.map((s) => s.class))
-  ).filter((c): c is string => c !== undefined);
-
   const getFilteredAvailableStudents = () =>
     availableStudents.filter((student) => {
+      const search = studentSearchTerm.toLowerCase();
       const matchesSearch =
-        student.name.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
-        student.id.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
-        student.email.toLowerCase().includes(studentSearchTerm.toLowerCase());
-      const matchesClass = classFilter === "all" || student.class === classFilter;
-      return matchesSearch && matchesClass && !selectedStudents.some((s) => s.id === student.id);
+        String(student.name || "").toLowerCase().includes(search) ||
+        String(student.id || "").toLowerCase().includes(search) ||
+        String(student.email || "").toLowerCase().includes(search) ||
+        String(student.rollNumber || "").toLowerCase().includes(search);
+      return matchesSearch && !selectedStudents.some((s) => s.id === student.id);
+    });
+
+  const getFilteredSelectedStudents = () =>
+    selectedStudents.filter((student) => {
+      const search = studentSearchTerm.toLowerCase();
+      return (
+        String(student.name || "").toLowerCase().includes(search) ||
+        String(student.id || "").toLowerCase().includes(search) ||
+        String(student.email || "").toLowerCase().includes(search) ||
+        String(student.rollNumber || "").toLowerCase().includes(search)
+      );
     });
 
   const handleInputChange = (field: keyof ExamFormData, value: string) => {
@@ -217,7 +271,6 @@ export default function CreateExam() {
       correctAnswer: undefined,
     };
     setQuestions([...questions, newQuestion]);
-    setQuestionErrors((prev) => ({ ...prev, [newQuestion.id]: {} }));
   };
 
   const handleDeleteQuestion = (id: string) => {
@@ -285,19 +338,17 @@ export default function CreateExam() {
   };
 
   const handleAddAllStudents = () => {
-    setSelectedStudents([...selectedStudents, ...availableStudents]);
-    setAvailableStudents([]);
+    const studentsToAdd = getFilteredAvailableStudents();
+    const studentsToAddIds = new Set(studentsToAdd.map((s) => s.id));
+    setSelectedStudents([...selectedStudents, ...studentsToAdd]);
+    setAvailableStudents(availableStudents.filter((s) => !studentsToAddIds.has(s.id)));
   };
 
   const handleRemoveAllStudents = () => {
-    setAvailableStudents([...availableStudents, ...selectedStudents].sort((a, b) => a.name.localeCompare(b.name)));
-    setSelectedStudents([]);
-  };
-
-  const handleAddByClass = (className: string) => {
-    const studentsInClass = availableStudents.filter((s) => s.class === className);
-    setSelectedStudents([...selectedStudents, ...studentsInClass]);
-    setAvailableStudents(availableStudents.filter((s) => s.class !== className));
+    const studentsToRemove = getFilteredSelectedStudents();
+    const studentsToRemoveIds = new Set(studentsToRemove.map((s) => s.id));
+    setAvailableStudents([...availableStudents, ...studentsToRemove].sort((a, b) => a.name.localeCompare(b.name)));
+    setSelectedStudents(selectedStudents.filter((s) => !studentsToRemoveIds.has(s.id)));
   };
 
   const getActiveFeatures = () => securitySettings.filter((f) => f.enabled).map((f) => f.name);
@@ -477,6 +528,7 @@ export default function CreateExam() {
         throw new Error(data?.detail || data?.message || `Server error (${res.status})`);
       }
 
+      clearDraft();
       navigate("/classes-instructor", { state: { message: "Exam published successfully!" } });
     } catch (err: any) {
       setApiError(err.message || "Failed to publish exam. Please try again.");
@@ -487,6 +539,7 @@ export default function CreateExam() {
 
   const handleClose = () => {
     if (window.confirm("Are you sure you want to close? All unsaved changes will be lost.")) {
+      clearDraft();
       navigate(-1);
     }
   };
@@ -747,14 +800,16 @@ export default function CreateExam() {
               </div>
             ) : (
               <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                {questions.map((question, index) => (
+                {questions.map((question, index) => {
+                  const hasError = questionErrors[question.id] && Object.values(questionErrors[question.id]).some(Boolean);
+                  return (
                   <div
                     key={question.id}
-                    className={`border rounded-md p-4 ${questionErrors[question.id] ? "border-red-300 bg-red-50" : "border-gray-300"}`}
-                    data-error={questionErrors[question.id] ? "true" : "false"}
+                    className={`border rounded-md p-4 ${hasError ? "border-red-300 bg-red-50" : "border-gray-300"}`}
+                    data-error={hasError ? "true" : "false"}
                   >
                     <div className="flex items-start gap-4 mb-4">
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${questionErrors[question.id] ? "bg-red-500 text-white" : "bg-blue-500 text-white"}`}>
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${hasError ? "bg-red-500 text-white" : "bg-blue-500 text-white"}`}>
                         {index + 1}
                       </div>
                       <div className="flex-1 flex gap-3 items-center">
@@ -854,7 +909,8 @@ export default function CreateExam() {
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -901,11 +957,11 @@ export default function CreateExam() {
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-semibold text-gray-900">Selected Students: {selectedStudents.length}</h3>
                     <div className="flex gap-2">
-                      <button onClick={handleAddAllStudents} disabled={availableStudents.length === 0}
+                      <button onClick={handleAddAllStudents} disabled={getFilteredAvailableStudents().length === 0}
                         className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
                         Add All
                       </button>
-                      <button onClick={handleRemoveAllStudents} disabled={selectedStudents.length === 0}
+                      <button onClick={handleRemoveAllStudents} disabled={getFilteredSelectedStudents().length === 0}
                         className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">
                         Remove All
                       </button>
@@ -929,26 +985,7 @@ export default function CreateExam() {
                             className="w-full pl-8 pr-4 py-2 border rounded-md text-sm"
                           />
                         </div>
-                        <select
-                          title="Filter by class"
-                          value={classFilter}
-                          onChange={(e) => setClassFilter(e.target.value)}
-                          className="w-full px-3 py-2 border rounded-md text-sm"
-                        >
-                          <option value="all">All Classes</option>
-                          {uniqueClasses.map((cls) => <option key={cls} value={cls}>{cls}</option>)}
-                        </select>
-                        <div className="flex flex-wrap gap-2">
-                          {uniqueClasses.map((cls) => {
-                            const count = availableStudents.filter((s) => s.class === cls).length;
-                            return count > 0 && (
-                              <button key={cls} onClick={() => handleAddByClass(cls)}
-                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
-                                Add {cls} ({count})
-                              </button>
-                            );
-                          })}
-                        </div>
+
                       </div>
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {getFilteredAvailableStudents().length === 0 ? (
@@ -958,7 +995,7 @@ export default function CreateExam() {
                             <div key={student.id} className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100">
                               <div>
                                 <p className="text-sm font-medium">{student.name}</p>
-                                <p className="text-xs text-gray-500">{student.id} · {student.class} · {student.rollNumber}</p>
+                                <p className="text-xs text-gray-500">{student.id}</p>
                               </div>
                               <button onClick={() => handleAddStudent(student)} className="text-blue-600 hover:text-blue-800" title="Add student">
                                 <UserPlus size={18} />
@@ -973,14 +1010,14 @@ export default function CreateExam() {
                     <div className="border rounded-lg p-3">
                       <h4 className="font-medium text-gray-700 mb-3">Selected Students</h4>
                       <div className="space-y-2 max-h-80 overflow-y-auto">
-                        {selectedStudents.length === 0 ? (
-                          <p className="text-sm text-gray-500 text-center py-4">No students selected</p>
+                        {getFilteredSelectedStudents().length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-4">No students found</p>
                         ) : (
-                          selectedStudents.map((student) => (
+                          getFilteredSelectedStudents().map((student) => (
                             <div key={student.id} className="flex items-center justify-between p-2 bg-blue-50 rounded hover:bg-blue-100">
                               <div>
                                 <p className="text-sm font-medium">{student.name}</p>
-                                <p className="text-xs text-gray-500">{student.id} · {student.class} · {student.rollNumber}</p>
+                                <p className="text-xs text-gray-500">{student.id}</p>
                               </div>
                               <button onClick={() => handleRemoveStudent(student)} className="text-red-600 hover:text-red-800" title="Remove student">
                                 <UserMinus size={18} />
@@ -1094,7 +1131,7 @@ export default function CreateExam() {
                 <div className="mt-3 max-h-32 overflow-y-auto">
                   {selectedStudents.map((student) => (
                     <div key={student.id} className="text-sm text-gray-600 py-1 border-b last:border-0">
-                      {student.name} ({student.id}) — {student.class}
+                      {student.name} ({student.id})
                     </div>
                   ))}
                 </div>

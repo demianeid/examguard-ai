@@ -40,7 +40,7 @@ const Hero = () => {
             <Link to="/SignUp" className="px-6 py-3 bg-primary text-white font-semibold rounded-lg hover:bg-secondary transition-colors"> 
               Get Started
             </Link>
-            <button className="px-6 py-3 bg-transparent border-2 border-gray-900 text-gray-900 font-semibold rounded-lg hover:bg-gray-900 hover:text-white transition-all flex items-center gap-2">
+            <button className="px-6 py-3 bg-transparent border-[1.5px] border-gray-900 text-gray-900 font-semibold rounded-lg hover:bg-gray-900 hover:text-white transition-all flex items-center gap-2">
               <span className="text-sm">▶</span>
               Watch A Demo
             </button>
