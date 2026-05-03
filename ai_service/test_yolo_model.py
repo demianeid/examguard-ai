@@ -5,7 +5,7 @@ import os
 # Add the parent directory to the path so we can import the module correctly
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from services.yolo_detector import analyze_frame
+from services.yolo_detector import YoloTracker, FRAME_INTERVAL, CONFIRM_FRAMES
 
 def main():
     print("Initializing webcam...")
@@ -15,8 +15,12 @@ def main():
         print("Error: Could not open the webcam. Please ensure it's connected and not used by another application.")
         return
 
-    print("Webcam successfully opened.")
-    print("Press 'q' in the window to quit.")
+    print("Webcam successfully opened. Press 'q' to quit.")
+    print(f"Frame interval : every {FRAME_INTERVAL} frames")
+    print(f"Confirm frames : {CONFIRM_FRAMES} consecutive frames to confirm event")
+
+    tracker = YoloTracker()
+    alert_count = 0
 
     while True:
         ret, frame = cap.read()
@@ -24,20 +28,27 @@ def main():
             print("Failed to grab frame from webcam.")
             break
 
-        # Process the frame through the YOLO detector
-        # Default conf is 0.5 for general objects, but earphone requires >= 0.75 internally
-        result = analyze_frame(frame, conf=0.5)
+        # Process the frame through the YOLO tracker (with debouncing)
+        info = tracker.update(frame, conf=0.5)
         
-        # Get the annotated frame (with boxes drawn)
-        annotated_frame = result["annotated_frame"]
+        # ── Terminal feedback ─────────────────────────────────────────────────
+        if info.get("should_alert"):
+            alert_count += 1
+            labels = ", ".join([d["label"] for d in info.get("detections", [])])
+            print(f"[ALERT #{alert_count}] OBJECT DETECTED: {labels}")
+
+        if info.get("alert_cleared"):
+            print("[CLEAR] No objects detected.")
+
+        # ── On-screen overlay ─────────────────────────────────────────────────
+        annotated_frame = info["annotated_frame"]
+        color = (0, 0, 255) if info.get("is_violating") else (0, 200, 0)
         
-        # Display the detections locally in the terminal (optional)
-        if result["suspicious"]:
-            # Uncomment below to print detections to the terminal
-            # print("Detections:")
-            # for det in result["detections"]:
-            #     print(f"  - {det['label']} (conf: {det['confidence']:.2f})")
-            pass
+        cv2.putText(
+            annotated_frame,
+            f"alerts: {alert_count}",
+            (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1,
+        )
 
         # Show the frame in an OpenCV window
         cv2.imshow("ExamGuard YOLO Test (Press 'q' to quit)", annotated_frame)
@@ -50,6 +61,7 @@ def main():
     # Clean up
     cap.release()
     cv2.destroyAllWindows()
+    print(f"\nDone. Total alerts fired: {alert_count}")
 
 if __name__ == "__main__":
     main()

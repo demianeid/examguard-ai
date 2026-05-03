@@ -32,6 +32,7 @@ class PostBehaviorViolationView(APIView):
             score_points     = request.data.get('score_points', 0),
             cumulative_score = request.data.get('cumulative_score', 0),
             details          = request.data.get('details', ''),
+            snapshot         = request.data.get('snapshot', ''),
         )
 
         # Auto-update risk score in ExamResult if it already exists
@@ -189,11 +190,24 @@ class ExamLiveStatusView(APIView):
 
         total_questions = exam.questions.count()
 
+        results_map = {
+            r.student_id: r
+            for r in ExamResult.objects.filter(exam=exam)
+        }
+
         students_data = []
         for session in sessions:
             sid       = session.student_id
             v_score   = score_map.get(sid, 0.0)
             r_score   = compute_risk_score(session.student, exam)
+            
+            # Determine status based on ExamResult first, then current score
+            res = results_map.get(sid)
+            if res:
+                status_val = 'terminated' if res.is_terminated else 'submitted'
+            else:
+                status_val = _student_status(v_score)
+
             students_data.append({
                 'student_id':     session.student.custom_id,
                 'db_id':          sid,
@@ -206,7 +220,7 @@ class ExamLiveStatusView(APIView):
                 'is_active':      session.is_active,
                 'violation_score': round(v_score, 1),
                 'ai_event_count': ai_map.get(sid, 0),
-                'status':         _student_status(v_score),
+                'status':         status_val,
                 'progress':       progress_map.get(sid, 0),
                 'started_at':     session.started_at.isoformat(),
                 'risk_score':     r_score,
@@ -242,7 +256,7 @@ class ExamIncidentsView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes     = [IsAuthenticated]
 
-    HIGH_EVENTS   = {'devtools', 'ai_object_detected'}
+    HIGH_EVENTS   = {'devtools', 'ai_object_detected', 'ai_multiple_faces'}
     MEDIUM_EVENTS = {'tab_switch', 'ai_head_pose', 'fullscreen_exit'}
 
     def _severity(self, event_type: str, score_points: float) -> str:
@@ -264,12 +278,6 @@ class ExamIncidentsView(APIView):
             .select_related('student')
             .order_by('-occurred_at')
         )
-        ai_events = (
-            AIEventViolation.objects
-            .filter(exam=exam, cheating_detected=True)
-            .select_related('student')
-            .order_by('-occurred_at')
-        )
 
         high, medium, low = [], [], []
 
@@ -285,23 +293,7 @@ class ExamIncidentsView(APIView):
                 'score_points': float(v.score_points),
                 'time':         v.occurred_at.strftime('%I:%M %p'),
                 'occurred_at':  v.occurred_at.isoformat(),
-            }
-            (high if sev == 'high' else medium if sev == 'medium' else low).append(item)
-
-        for a in ai_events:
-            et  = 'ai_object_detected' if a.yolo_suspicious else 'ai_head_pose'
-            sev = self._severity(et, 1.5)
-            item = {
-                'id':           f'ai_{a.id}',
-                'type':         'ai',
-                'student_id':   a.student.custom_id,
-                'student_name': a.student.get_full_name() or a.student.email,
-                'event':        a.cheating_reason or 'AI suspicious behaviour',
-                'event_type':   et,
-                'score_points': 1.5,
-                'time':         a.occurred_at.strftime('%I:%M %p'),
-                'occurred_at':  a.occurred_at.isoformat(),
-                'yolo_labels':  a.yolo_labels,
+                'snapshot':     v.snapshot,
             }
             (high if sev == 'high' else medium if sev == 'medium' else low).append(item)
 
@@ -412,6 +404,15 @@ class ExamExportAuditTrailView(APIView):
             if a.head_suspicious and severity == 'Low':
                 severity = 'Medium'
                 
+            pts = 1.0
+            if a.yolo_suspicious:
+                pts = 2.0
+            elif a.head_direction == 'NO FACE':
+                if a.cheating_reason and 'CRITICAL' in a.cheating_reason:
+                    pts = 2.0
+                else:
+                    pts = 0.5
+                    
             events.append({
                 'timestamp': a.occurred_at.isoformat(),
                 'time': a.occurred_at.strftime('%Y-%m-%d %H:%M:%S'),
@@ -421,7 +422,7 @@ class ExamExportAuditTrailView(APIView):
                 'description': a.cheating_reason or 'Suspicious behavior detected',
                 'severity': severity,
                 'details': f"Labels: {', '.join(yolo_labels)} | Head: {a.head_direction}",
-                'score_impact': 5.0 if severity == 'High' else (1.5 if severity == 'Medium' else 0.5),
+                'score_impact': pts,
             })
 
         # Sort chronologically (oldest to newest)

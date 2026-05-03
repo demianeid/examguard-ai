@@ -19,7 +19,7 @@ import mediapipe as mp
 # ── Singleton FaceMesh (created once, reused forever) ─────────────────────────
 _face_mesh = mp.solutions.face_mesh.FaceMesh(
     static_image_mode=False,
-    max_num_faces=1,
+    max_num_faces=3,
     refine_landmarks=True,
     min_detection_confidence=0.5,
     min_tracking_confidence=0.5,
@@ -28,7 +28,8 @@ _face_mesh = mp.solutions.face_mesh.FaceMesh(
 # ── Tunable constants ──────────────────────────────────────────────────────────
 HORIZONTAL_THRESHOLD = 0.35   # ratio – increased from 0.18 for less strictness
 VERTICAL_THRESHOLD   = 0.25   # ratio – increased from 0.15 for less strictness
-CONFIRM_FRAMES       = 6      # consecutive suspicious frames – increased from 3
+CONFIRM_FRAMES       = 2      # consecutive suspicious frames (2 × 400ms ≈ 800ms at WS rate)
+NO_FACE_CRITICAL_FRAMES = 5   # 5 frames ≈ 2 seconds
 FRAME_INTERVAL       = 3      # run inference only every N frames
 
 
@@ -79,6 +80,7 @@ def analyze_frame(rgb_frame) -> dict:
     if not result.multi_face_landmarks:
         _cached_result = {
             "face_detected": False,
+            "multiple_faces": False,
             "h_ratio":       0.0,
             "v_ratio":       0.0,
             "direction":     "NO FACE",
@@ -86,25 +88,32 @@ def analyze_frame(rgb_frame) -> dict:
         }
         return _cached_result
 
+    multiple_faces = len(result.multi_face_landmarks) > 1
+
     lm = result.multi_face_landmarks[0].landmark
     h_ratio, v_ratio = get_head_pose(lm, w, h)
 
     suspicious = False
     direction  = ""
 
-    if h_ratio > HORIZONTAL_THRESHOLD:
+    if multiple_faces:
         suspicious = True
-        direction  = "LOOKING RIGHT"
-    elif h_ratio < -HORIZONTAL_THRESHOLD:
-        suspicious = True
-        direction  = "LOOKING LEFT"
+        direction  = "MULTIPLE FACES DETECTED"
+    else:
+        if h_ratio > HORIZONTAL_THRESHOLD:
+            suspicious = True
+            direction  = "LOOKING RIGHT"
+        elif h_ratio < -HORIZONTAL_THRESHOLD:
+            suspicious = True
+            direction  = "LOOKING LEFT"
 
-    if v_ratio > VERTICAL_THRESHOLD:
-        suspicious = True
-        direction  = "LOOKING DOWN" if not direction else direction + " + DOWN"
+        if v_ratio > VERTICAL_THRESHOLD:
+            suspicious = True
+            direction  = "LOOKING DOWN" if not direction else direction + " + DOWN"
 
     _cached_result = {
         "face_detected": True,
+        "multiple_faces": multiple_faces,
         "h_ratio":       round(h_ratio, 4),
         "v_ratio":       round(v_ratio, 4),
         "direction":     direction,
@@ -175,31 +184,39 @@ class HeadPoseTracker:
         if not result.multi_face_landmarks:
             base = {
                 "face_detected": False,
+                "multiple_faces": False,
                 "h_ratio":       0.0,
                 "v_ratio":       0.0,
                 "direction":     "NO FACE",
                 "suspicious":    True,
             }
         else:
+            multiple_faces = len(result.multi_face_landmarks) > 1
+
             lm = result.multi_face_landmarks[0].landmark
             h_ratio, v_ratio = get_head_pose(lm, w, h)
 
             suspicious = False
             direction  = ""
 
-            if h_ratio > HORIZONTAL_THRESHOLD:
+            if multiple_faces:
                 suspicious = True
-                direction  = "LOOKING RIGHT"
-            elif h_ratio < -HORIZONTAL_THRESHOLD:
-                suspicious = True
-                direction  = "LOOKING LEFT"
+                direction  = "MULTIPLE FACES DETECTED"
+            else:
+                if h_ratio > HORIZONTAL_THRESHOLD:
+                    suspicious = True
+                    direction  = "LOOKING RIGHT"
+                elif h_ratio < -HORIZONTAL_THRESHOLD:
+                    suspicious = True
+                    direction  = "LOOKING LEFT"
 
-            if v_ratio > VERTICAL_THRESHOLD:
-                suspicious = True
-                direction  = "LOOKING DOWN" if not direction else direction + " + DOWN"
+                if v_ratio > VERTICAL_THRESHOLD:
+                    suspicious = True
+                    direction  = "LOOKING DOWN" if not direction else direction + " + DOWN"
 
             base = {
                 "face_detected": True,
+                "multiple_faces": multiple_faces,
                 "h_ratio":       round(h_ratio, 4),
                 "v_ratio":       round(v_ratio, 4),
                 "direction":     direction,
@@ -220,14 +237,20 @@ class HeadPoseTracker:
         # ── Edge-triggered debounce ───────────────────────────────────────────
         should_alert   = False
         alert_cleared  = False
+        is_critical_no_face = False
 
         if confirmed_suspicious and not self._currently_away:
             self._currently_away = True
             should_alert = True          # ← fires ONCE per looking-away event
+
+        # Trigger a SECOND alert if the face is missing for > 2 seconds
+        if not base["face_detected"] and self._suspicious_run == NO_FACE_CRITICAL_FRAMES:
+            should_alert = True
+            is_critical_no_face = True
 
         if confirmed_ok and self._currently_away:
             self._currently_away = False
             alert_cleared = True         # ← fires ONCE when gaze returns
 
         self._cached = base
-        return {**base, "should_alert": should_alert, "alert_cleared": alert_cleared}
+        return {**base, "should_alert": should_alert, "alert_cleared": alert_cleared, "is_critical_no_face": is_critical_no_face}

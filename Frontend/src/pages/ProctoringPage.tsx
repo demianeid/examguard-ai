@@ -1,11 +1,10 @@
 import Header from '../components/Header';
-import { motion } from 'framer-motion';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Eye, AlertCircle, Info, Clock, Users, FileText, Video,
   Calendar, BarChart3, ChevronLeft, CheckCircle, RefreshCw, ShieldAlert,
-  Search, SlidersHorizontal, AlertTriangle, CheckCircle2, TrendingUp, X,
+  Search, SlidersHorizontal, AlertTriangle, CheckCircle2, TrendingUp, X, UserCheck,
 } from 'lucide-react';
 
 const DJANGO = 'http://127.0.0.1:8000';
@@ -43,7 +42,7 @@ interface LiveStudent {
   is_active: boolean;
   violation_score: number;
   ai_event_count: number;
-  status: 'online' | 'warning' | 'flagged';
+  status: 'online' | 'warning' | 'flagged' | 'terminated' | 'submitted';
   progress: number;
   started_at: string;
   risk_score: number;
@@ -73,6 +72,7 @@ interface Incident {
   time: string;
   occurred_at: string;
   yolo_labels?: string[];
+  snapshot?: string;
 }
 
 interface IncidentsData {
@@ -87,6 +87,8 @@ interface LiveStatusData {
   flagged: number;
   warning: number;
   online: number;
+  terminated: number;
+  submitted: number;
   students: LiveStudent[];
 }
 
@@ -106,9 +108,31 @@ const ProctoringPage = () => {
   const [riskData, setRiskData] = useState<{ students: RiskStudent[]; critical_count: number; high_count: number } | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   
-  // Phase 4: Live frame dictionary mapping db_id to base64 jpeg
+  // Live frame dictionary mapping db_id → base64 jpeg
   const [liveFrames, setLiveFrames] = useState<Record<number, string>>({});
+
+  // Real-time AI alerts pushed from the instructor WebSocket
+  interface LiveAlert {
+    id: number;
+    student_id: number;
+    student_name: string;
+    cheating_reason: string | null;
+    head_direction: string;
+    h_ratio: number;
+    v_ratio: number;
+    yolo_labels: string[];
+    head_suspicious: boolean;
+    yolo_suspicious: boolean;
+    new_violation: boolean;
+    time: string;
+  }
+  const [liveAlerts, setLiveAlerts] = React.useState<LiveAlert[]>([]);
+  const alertIdRef    = React.useRef(0);
+  // Always-fresh ref so the WS closure can look up student names
+  // even though useEffect([examId]) only runs once.
+  const liveStatusRef = React.useRef(liveStatus);
 
   // ── Fetch exam info ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -141,7 +165,8 @@ const ProctoringPage = () => {
     fetchExam();
   }, [examId]);
 
-  // ── Fetch live student data + incidents ─────────────────────────────────
+  // Keep liveStatusRef in sync with liveStatus state
+  React.useEffect(() => { liveStatusRef.current = liveStatus; }, [liveStatus]);
   const fetchLiveData = useCallback(async () => {
     if (!examId) return;
     try {
@@ -168,7 +193,7 @@ const ProctoringPage = () => {
     return () => clearInterval(interval);
   }, [fetchLiveData]);
 
-  // Phase 4: Connect to FastAPI Instructor WS
+  // Connect to FastAPI Instructor WS
   useEffect(() => {
     if (!examId) return;
 
@@ -177,18 +202,44 @@ const ProctoringPage = () => {
 
     const connect = () => {
       ws = new WebSocket(`ws://127.0.0.1:8001/ws/instructor/${examId}`);
-      
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+
           if (data.type === 'frame' && data.student_id) {
             setLiveFrames(prev => ({ ...prev, [Number(data.student_id)]: data.frame }));
+          }
+
+          if (data.type === 'alert' && data.student_id) {
+            setLiveAlerts(prev => {
+              // Use the always-fresh ref (liveStatus via closure would be stale)
+              const matched = liveStatusRef.current?.students?.find(
+                s => s.db_id === Number(data.student_id)
+              );
+              const name = matched?.name ?? `Student #${data.student_id}`;
+              const newAlert: LiveAlert = {
+                id:              ++alertIdRef.current,
+                student_id:      Number(data.student_id),
+                student_name:    name,
+                cheating_reason: data.cheating_reason ?? null,
+                head_direction:  data.head_direction  ?? '',
+                h_ratio:         data.h_ratio         ?? 0,
+                v_ratio:         data.v_ratio         ?? 0,
+                yolo_labels:     data.yolo_labels     ?? [],
+                head_suspicious: data.head_suspicious ?? false,
+                yolo_suspicious: data.yolo_suspicious ?? false,
+                new_violation:   data.new_violation   ?? false,
+                time:            new Date().toLocaleTimeString(),
+              };
+              // Keep only latest 50 alerts, newest first
+              return [newAlert, ...prev].slice(0, 50);
+            });
           }
         } catch (e) {}
       };
 
       ws.onclose = () => {
-        // Auto-reconnect if WS drops
         reconnectTimeout = setTimeout(connect, 2000);
       };
     };
@@ -198,10 +249,11 @@ const ProctoringPage = () => {
     return () => {
       clearTimeout(reconnectTimeout);
       if (ws) {
-        ws.onclose = null; // Prevent reconnect on unmount
+        ws.onclose = null;
         ws.close();
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
   // ── Derived ──────────────────────────────────────────────────────────────
@@ -215,6 +267,8 @@ const ProctoringPage = () => {
   const getCameraRingColor = (s: string) => {
     if (s === 'flagged') return 'ring-2 ring-red-500 border-red-400';
     if (s === 'warning') return 'ring-2 ring-orange-400 border-orange-300';
+    if (s === 'terminated') return 'ring-2 ring-gray-600 border-gray-500 opacity-80';
+    if (s === 'submitted') return 'ring-2 ring-blue-500 border-blue-400 opacity-80';
     return 'ring-1 ring-green-400 border-green-300';
   };
 
@@ -229,6 +283,18 @@ const ProctoringPage = () => {
       return (
         <span className="absolute top-2 left-2 flex items-center gap-1 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow">
           ⚠ WARN
+        </span>
+      );
+    if (s === 'terminated')
+      return (
+        <span className="absolute top-2 left-2 flex items-center gap-1 bg-gray-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow">
+          <Info size={9} />TERMINATED
+        </span>
+      );
+    if (s === 'submitted')
+      return (
+        <span className="absolute top-2 left-2 flex items-center gap-1 bg-blue-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow">
+          <CheckCircle2 size={9} />SUBMITTED
         </span>
       );
     return (
@@ -291,6 +357,7 @@ const ProctoringPage = () => {
         </div>
       )}
 
+
       {/* Refresh row */}
       <div className="flex items-center justify-between text-xs text-gray-400">
         <span>Last updated: {lastRefresh.toLocaleTimeString()}</span>
@@ -327,48 +394,71 @@ const ProctoringPage = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {students.map(student => (
-              <div
-                key={student.db_id}
-                className={`relative rounded-xl overflow-hidden border bg-gray-900 cursor-pointer hover:scale-105 transition-transform duration-200 ${getCameraRingColor(student.status)}`}
-                style={{ aspectRatio: '4/3' }}
-                onClick={() => navigate(`/footage/${student.db_id}`)}
-              >
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 group">
-                  {liveFrames[student.db_id] ? (
-                    <img 
-                      src={`data:image/jpeg;base64,${liveFrames[student.db_id]}`} 
-                      alt="Live Feed" 
-                      className="w-full h-full object-cover" 
-                    />
-                  ) : student.profile_image ? (
-                    <img src={student.profile_image} alt={student.name} className="w-14 h-14 rounded-full object-cover border-2 border-gray-500" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold text-lg border-2 border-gray-500">
-                      {student.name.charAt(0).toUpperCase()}
-                    </div>
+            {students.map(student => {
+              // Check if this student has a currently-active alert
+              const hasLiveAlert = liveAlerts.slice(0, 10).some(
+                a => a.student_id === student.db_id
+              );
+              return (
+                <div
+                  key={student.db_id}
+                  className={`relative rounded-xl overflow-hidden border bg-gray-900 cursor-pointer hover:scale-105 transition-transform duration-200 ${
+                    hasLiveAlert ? 'ring-2 ring-orange-400 border-orange-400' : getCameraRingColor(student.status)
+                  }`}
+                  style={{ aspectRatio: '4/3' }}
+                  onClick={() => setSelectedStudentId(student.db_id)}
+                >
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 group">
+                    {liveFrames[student.db_id] ? (
+                      <img
+                        src={`data:image/jpeg;base64,${liveFrames[student.db_id]}`}
+                        alt="Live Feed"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : student.profile_image ? (
+                      <img src={student.profile_image} alt={student.name} className="w-14 h-14 rounded-full object-cover border-2 border-gray-500" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold text-lg border-2 border-gray-500">
+                        {student.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    {student.violation_score > 0 && !liveFrames[student.db_id] && (
+                      <span className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full ${student.status === 'flagged' ? 'bg-red-600 text-white' : 'bg-orange-500 text-white'}`}>
+                        {student.violation_score.toFixed(1)} pts
+                      </span>
+                    )}
+                  </div>
+                  {getStatusBadge(student.status)}
+                  {(student.status === 'flagged' || hasLiveAlert) && (
+                    <div className="absolute inset-0 border-2 border-orange-400 rounded-xl animate-pulse pointer-events-none" />
                   )}
-                  {student.violation_score > 0 && !liveFrames[student.db_id] && (
-                    <span className={`mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full ${student.status === 'flagged' ? 'bg-red-600 text-white' : 'bg-orange-500 text-white'}`}>
-                      {student.violation_score.toFixed(1)} pts
-                    </span>
-                  )}
-                </div>
-                {getStatusBadge(student.status)}
-                {student.status === 'flagged' && (
-                  <div className="absolute inset-0 border-2 border-red-500 rounded-xl animate-pulse pointer-events-none" />
-                )}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2.5 py-2.5">
-                  <p className="text-white text-xs font-semibold truncate">{student.name}</p>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <div className="flex-1 bg-white/20 rounded-full h-1.5">
-                      <div className="h-1.5 rounded-full bg-white" style={{ width: `${student.progress}%` }} />
+                  {/* Live head-pose direction overlay on camera tile */}
+                  {(() => {
+                    const latestAlert = liveAlerts.find(a => a.student_id === student.db_id);
+                    if (!latestAlert) return null;
+                    return (
+                      <div className="absolute top-1 left-1 bg-black/70 text-[9px] font-bold px-1.5 py-0.5 rounded text-orange-300 leading-tight">
+                        {latestAlert.head_suspicious && (latestAlert.head_direction?.includes('LOOKING') ? 'LOOKING AWAY' : latestAlert.head_direction || 'HEAD')}
+                        {latestAlert.yolo_suspicious && latestAlert.yolo_labels.length > 0 && (
+                          <span className={latestAlert.head_suspicious ? ' | ' : ''}>
+                            OBJ: {latestAlert.yolo_labels[0]}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2.5 py-2.5">
+                    <p className="text-white text-xs font-semibold truncate">{student.name}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex-1 bg-white/20 rounded-full h-1.5">
+                        <div className="h-1.5 rounded-full bg-white" style={{ width: `${student.progress}%` }} />
+                      </div>
+                      <span className="text-white text-[10px] font-bold">{student.progress}%</span>
                     </div>
-                    <span className="text-white text-[10px] font-bold">{student.progress}%</span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -381,10 +471,12 @@ const ProctoringPage = () => {
   const groupIncidents = (items: Incident[]): GroupedIncident[] => {
     const map = new Map<string, GroupedIncident>();
     for (const item of items) {
-      const key = `${item.student_id}||${item.event_type}`;
+      const key = `${item.student_id}||${item.event}`;
       if (map.has(key)) {
-        map.get(key)!.count += 1;
-        map.get(key)!.time = item.time; // keep most recent
+        const existing = map.get(key)!;
+        existing.count += 1;
+        existing.time = item.time; // keep most recent
+        existing.score_points += item.score_points;
       } else {
         map.set(key, { ...item, count: 1 });
       }
@@ -393,8 +485,14 @@ const ProctoringPage = () => {
   };
 
   // ── Incident row (grouped) ──────────────────────────────────────────────────
-  const IncidentRow = ({ item, color }: { item: GroupedIncident; color: string }) => (
-    <div className={`px-5 py-4 flex items-center justify-between gap-4 hover:bg-${color}-50 transition-colors`}>
+  const IncidentRow = ({ item, color }: { item: GroupedIncident; color: string }) => {
+    const liveStudent = students.find((s) => s.student_id === item.student_id);
+    
+    return (
+    <div 
+      onClick={() => liveStudent && setSelectedStudentId(liveStudent.db_id)}
+      className={`px-5 py-4 flex items-center justify-between gap-4 hover:bg-${color}-50 transition-colors ${liveStudent ? 'cursor-pointer' : ''}`}
+    >
       <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-full bg-gradient-to-r from-${color}-500 to-${color}-600 flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0`}>
           {item.student_name.charAt(0).toUpperCase()}
@@ -402,7 +500,7 @@ const ProctoringPage = () => {
         <div>
           <p className="font-semibold text-gray-800 text-sm">{item.student_name}</p>
           <p className={`text-${color}-600 text-xs mt-0.5 flex items-center gap-1`}>
-            <AlertCircle size={11} />{item.event}
+            <AlertCircle size={11} />{item.event.includes('LOOKING') ? item.event.replace(/LOOKING.*/, 'Looking away') : item.event}
             {item.yolo_labels && item.yolo_labels.length > 0 && (
               <span className="ml-1 text-gray-500">({item.yolo_labels.join(', ')})</span>
             )}
@@ -422,11 +520,12 @@ const ProctoringPage = () => {
       </div>
     </div>
   );
+};
 
   // ── Activity Tab — sidebar + cards layout ────────────────────────────────────
   const ActivityTab = () => {
     const [actSearch, setActSearch] = React.useState('');
-    const [actStatus, setActStatus] = React.useState<'All' | 'flagged' | 'warning' | 'online'>('All');
+    const [actStatus, setActStatus] = React.useState<'All' | 'flagged' | 'warning' | 'online' | 'terminated' | 'submitted'>('All');
     const [actSeverity, setActSeverity] = React.useState<'All' | 'high' | 'medium' | 'low'>('All');
 
     if (dataLoading) {
@@ -451,10 +550,24 @@ const ProctoringPage = () => {
       high: GroupedIncident[];
       medium: GroupedIncident[];
       low: GroupedIncident[];
-      status: 'flagged' | 'warning' | 'online';
+      status: 'flagged' | 'warning' | 'online' | 'terminated' | 'submitted';
       score: number;
     }
     const studentMap = new Map<string, StudentSummary>();
+
+    // Pre-populate with ALL active students
+    if (students) {
+      for (const live of students) {
+        studentMap.set(live.student_id, {
+          student_id: live.student_id,
+          student_name: live.name,
+          high: [], medium: [], low: [],
+          status: live.status,
+          score: live.violation_score,
+        });
+      }
+    }
+
     const addToMap = (items: GroupedIncident[], bucket: 'high' | 'medium' | 'low') => {
       for (const item of items) {
         if (!studentMap.has(item.student_id)) {
@@ -481,12 +594,14 @@ const ProctoringPage = () => {
       studentList = studentList.filter(s => s.student_name.toLowerCase().includes(q) || s.student_id.toLowerCase().includes(q));
     }
     if (actStatus !== 'All') studentList = studentList.filter(s => s.status === actStatus);
-    if (actSeverity !== 'All') studentList = studentList.filter(s => s[actSeverity].length > 0);
+    if (actSeverity !== 'All') studentList = studentList.filter(s => s[actSeverity as 'high' | 'medium' | 'low'].length > 0);
 
-    const statusCfg = {
-      flagged: { label: 'Flagged', color: 'bg-red-100 text-red-700 border-red-200',       bar: 'bg-red-500',    icon: <AlertTriangle size={13} className="text-red-500" /> },
-      warning: { label: 'Warning', color: 'bg-orange-100 text-orange-700 border-orange-200', bar: 'bg-orange-500', icon: <AlertCircle    size={13} className="text-orange-500" /> },
-      online:  { label: 'Clear',   color: 'bg-green-100 text-green-700 border-green-200',   bar: 'bg-green-500',  icon: <CheckCircle2   size={13} className="text-green-500" /> },
+    const statusCfg: Record<string, any> = {
+      flagged:    { label: 'Flagged',    color: 'bg-red-100 text-red-700 border-red-200',       bar: 'bg-red-500',    icon: <AlertTriangle size={13} className="text-red-500" /> },
+      warning:    { label: 'Warning',    color: 'bg-orange-100 text-orange-700 border-orange-200', bar: 'bg-orange-500', icon: <AlertCircle    size={13} className="text-orange-500" /> },
+      online:     { label: 'Clear',      color: 'bg-green-100 text-green-700 border-green-200',   bar: 'bg-green-500',  icon: <CheckCircle2   size={13} className="text-green-500" /> },
+      terminated: { label: 'Terminated', color: 'bg-gray-100 text-gray-700 border-gray-300',      bar: 'bg-gray-600',   icon: <Info           size={13} className="text-gray-600" /> },
+      submitted:  { label: 'Submitted',  color: 'bg-blue-100 text-blue-700 border-blue-200',      bar: 'bg-blue-500',   icon: <CheckCircle2   size={13} className="text-blue-500" /> },
     };
 
     const buckets: Array<{ key: 'high' | 'medium' | 'low'; label: string; color: string; Icon: any; grouped: GroupedIncident[] }> = [
@@ -524,10 +639,131 @@ const ProctoringPage = () => {
         {/* Main two-column layout */}
         <div className="flex flex-col xl:flex-row gap-6">
 
-          {/* LEFT: Grouped alert buckets */}
+          {/* LEFT: Real-time AI alerts + incident history */}
           <div className="xl:w-1/2 space-y-4">
-            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-              <AlertCircle size={15} className="text-red-500" /> Live Alerts
+
+            {/* ── Live Alerts: real-time from head_pose.py + yolo_detector.py ── */}
+            <div className="bg-white rounded-xl border border-red-200 overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-red-600 to-orange-500">
+                <span className="text-white font-semibold text-sm flex items-center gap-2">
+                  <AlertTriangle size={15} />
+                  Live Alerts
+                  <span className="text-white/60 text-[10px] font-normal">head pose · object detection</span>
+                  {liveAlerts.filter(a => a.new_violation).length > 0 && (
+                    <span className="bg-white text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
+                      {liveAlerts.filter(a => a.new_violation).length} violation{liveAlerts.filter(a => a.new_violation).length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </span>
+                {liveAlerts.length > 0 && (
+                  <button
+                    onClick={() => setLiveAlerts([])}
+                    className="text-white/70 hover:text-white text-xs transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {liveAlerts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-2 text-gray-400">
+                  <AlertCircle size={28} className="opacity-30" />
+                  <p className="text-xs italic">No alerts yet — monitoring active students…</p>
+                </div>
+              ) : (
+                <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+                  {liveAlerts.map(alert => {
+                    const isHeadPose = alert.head_suspicious;
+                    const isYolo    = alert.yolo_suspicious && alert.yolo_labels.length > 0;
+                    const isViolation = alert.new_violation;
+
+                    return (
+                      <div
+                        key={alert.id}
+                        onClick={() => setSelectedStudentId(alert.student_id)}
+                        className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                          isViolation ? 'bg-red-50/80 hover:bg-red-100/80' : 'bg-orange-50/30 hover:bg-orange-50/80'
+                        }`}
+                      >
+                        {/* Source icon badge */}
+                        <div className="flex flex-col items-center gap-1 flex-shrink-0 mt-0.5">
+                          {isHeadPose && (
+                            <span
+                              title="Head Pose (head_pose.py)"
+                              className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-[10px] font-black"
+                            >👁</span>
+                          )}
+                          {isYolo && (
+                            <span
+                              title="Object Detection (yolo_detector.py)"
+                              className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-[10px] font-black"
+                            >📦</span>
+                          )}
+                          {!isHeadPose && !isYolo && (
+                            <div className="w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center text-white text-[9px] font-black">
+                              {alert.student_name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          {/* Student name + violation badge */}
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <span className="text-xs font-bold text-gray-800 truncate">
+                              {alert.student_name}
+                            </span>
+                            {isViolation && (
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full flex-shrink-0">
+                                VIOLATION
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Head pose detail */}
+                          {isHeadPose && (
+                            <p className="text-[11px] text-blue-700 font-semibold flex items-center gap-1">
+                              <span className="text-[9px] bg-blue-100 text-blue-600 px-1 rounded font-bold uppercase">HEAD POSE</span>
+                              {isViolation && (
+                                <span className="text-[9px] bg-red-100 text-red-600 px-1 rounded font-bold">
+                                  {alert.cheating_reason?.includes('CRITICAL') ? '+2.0 pts' : alert.head_direction === 'NO FACE' ? '+0.5 pt' : '+1.0 pt'}
+                                </span>
+                              )}
+                              {alert.head_direction?.includes('LOOKING') ? 'Looking away' : (alert.head_direction || 'SUSPICIOUS')}
+                              <span className="text-blue-400 font-mono text-[10px] ml-1">
+                                h={alert.h_ratio >= 0 ? '+' : ''}{alert.h_ratio?.toFixed(3) ?? '0.000'}
+                                &nbsp;v={alert.v_ratio >= 0 ? '+' : ''}{alert.v_ratio?.toFixed(3) ?? '0.000'}
+                              </span>
+                            </p>
+                          )}
+
+                          {/* YOLO detail */}
+                          {isYolo && (
+                            <p className="text-[11px] text-purple-700 font-semibold flex items-center gap-1 mt-0.5">
+                              <span className="text-[9px] bg-purple-100 text-purple-600 px-1 rounded font-bold uppercase">OBJECT</span>
+                              {isViolation && <span className="text-[9px] bg-red-100 text-red-600 px-1 rounded font-bold">+2.0 pts</span>}
+                              {alert.yolo_labels.join(', ')}
+                            </p>
+                          )}
+
+                          {/* Fallback */}
+                          {!isHeadPose && !isYolo && (
+                            <p className="text-[11px] text-gray-600">
+                              {alert.cheating_reason ?? 'Suspicious behaviour'}
+                            </p>
+                          )}
+                        </div>
+
+                        <span className="text-[10px] text-gray-400 flex-shrink-0 pt-0.5">{alert.time}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Incident History: Django-polled High / Medium / Low buckets ── */}
+            <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2 pt-1">
+              <AlertCircle size={15} className="text-gray-400" /> Incident History
             </h3>
             {buckets.map(({ key, label, color, Icon, grouped }) => (
               <div key={key} className={`bg-white rounded-xl border border-${color}-200 overflow-hidden shadow-sm`}>
@@ -541,7 +777,7 @@ const ProctoringPage = () => {
                 ) : (
                   <div className="divide-y divide-gray-100">
                     {grouped.map(item => (
-                      <IncidentRow key={`${item.student_id}-${item.event_type}`} item={item} color={color} />
+                      <IncidentRow key={`${item.student_id}-${item.event_type}-${item.event}`} item={item} color={color} />
                     ))}
                   </div>
                 )}
@@ -583,6 +819,8 @@ const ProctoringPage = () => {
                     <option value="flagged">Flagged</option>
                     <option value="warning">Warning</option>
                     <option value="online">Clear</option>
+                    <option value="terminated">Terminated</option>
+                    <option value="submitted">Submitted</option>
                   </select>
                 </div>
                 {/* Severity */}
@@ -626,10 +864,10 @@ const ProctoringPage = () => {
                     className="mt-3 text-xs text-blue-500 hover:text-blue-700 font-semibold">Clear filters</button>
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
                   {studentList.map(student => {
                     const cfg = statusCfg[student.status];
-                    const allEvt = [...student.high, ...student.medium, ...student.low];
+                    const allEvt = [...student.high, ...student.medium, ...student.low].sort((a, b) => b.count - a.count);
                     return (
                       <div key={student.student_id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden">
                         <div className={`absolute top-0 left-0 w-full h-1 ${cfg.bar}`} />
@@ -652,9 +890,9 @@ const ProctoringPage = () => {
                         {/* Severity mini-grid */}
                         <div className="grid grid-cols-3 gap-2 mb-3">
                           {[
-                            { label: 'High',   count: student.high.length,   activeBg: 'bg-red-50 border-red-100',       t: 'text-red-700',    l: 'text-red-600' },
-                            { label: 'Medium', count: student.medium.length, activeBg: 'bg-orange-50 border-orange-100', t: 'text-orange-700', l: 'text-orange-600' },
-                            { label: 'Low',    count: student.low.length,    activeBg: 'bg-yellow-50 border-yellow-100', t: 'text-yellow-700', l: 'text-yellow-600' },
+                            { label: 'High',   count: student.high.reduce((s, i) => s + i.count, 0),   activeBg: 'bg-red-50 border-red-100',       t: 'text-red-700',    l: 'text-red-600' },
+                            { label: 'Medium', count: student.medium.reduce((s, i) => s + i.count, 0), activeBg: 'bg-orange-50 border-orange-100', t: 'text-orange-700', l: 'text-orange-600' },
+                            { label: 'Low',    count: student.low.reduce((s, i) => s + i.count, 0),    activeBg: 'bg-yellow-50 border-yellow-100', t: 'text-yellow-700', l: 'text-yellow-600' },
                           ].map(({ label, count, activeBg, t, l }) => (
                             <div key={label} className={`rounded-lg p-1.5 text-center border ${count > 0 ? activeBg : 'bg-gray-50 border-gray-100'}`}>
                               <div className={`text-[9px] font-bold uppercase ${count > 0 ? l : 'text-gray-400'}`}>{label}</div>
@@ -663,24 +901,25 @@ const ProctoringPage = () => {
                           ))}
                         </div>
 
-                        {/* Top 2 events */}
-                        <div className="space-y-1">
-                          {allEvt.slice(0, 2).map(ev => {
-                            const isH = student.high.some(h => h.event_type === ev.event_type);
-                            const isM = !isH && student.medium.some(m => m.event_type === ev.event_type);
+                        {/* All events */}
+                        <div className="space-y-1 max-h-[160px] overflow-y-auto pr-1">
+                          {allEvt.map(ev => {
+                            const isH = student.high.some(h => h.event_type === ev.event_type && h.event === ev.event);
+                            const isM = !isH && student.medium.some(m => m.event_type === ev.event_type && m.event === ev.event);
                             const ec = isH ? 'text-red-600 bg-red-50' : isM ? 'text-orange-600 bg-orange-50' : 'text-yellow-700 bg-yellow-50';
+                            const displayEvent = ev.event.includes('LOOKING') ? ev.event.replace(/LOOKING.*/, 'Looking away') : ev.event;
                             return (
-                              <div key={`${ev.student_id}-${ev.event_type}`} className="flex items-center justify-between gap-2">
-                                <span className={`text-[11px] font-medium truncate flex-1 px-2 py-0.5 rounded-md ${ec}`}>{ev.event}</span>
-                                {ev.count > 1 && (
-                                  <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full flex-shrink-0">×{ev.count}</span>
-                                )}
+                              <div key={`${ev.student_id}-${ev.event_type}-${ev.event}`} className="flex items-center justify-between gap-2">
+                                <span className={`text-[11px] font-medium truncate flex-1 px-2 py-0.5 rounded-md ${ec}`}>{displayEvent}</span>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  {ev.count > 1 && (
+                                    <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">×{ev.count}</span>
+                                  )}
+                                  <span className="text-[10px] font-bold text-gray-400">+{ev.score_points.toFixed(1)}</span>
+                                </div>
                               </div>
                             );
                           })}
-                          {allEvt.length > 2 && (
-                            <p className="text-[10px] text-gray-400 pl-1">+{allEvt.length - 2} more event type{allEvt.length - 2 !== 1 ? 's' : ''}</p>
-                          )}
                         </div>
 
                         {/* Score footer */}
@@ -761,7 +1000,7 @@ const ProctoringPage = () => {
                     {student.risk_band} RISK
                   </span>
                   <button
-                    onClick={() => navigate(`/footage/${student.db_id}`)}
+                    onClick={() => setSelectedStudentId(student.db_id)}
                     className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
                   >
                     Review <ChevronLeft className="rotate-180" size={14} />
@@ -881,6 +1120,165 @@ const ProctoringPage = () => {
         </div>
 
       </div>
+
+      {/* ── Student Detail Modal ── */}
+      {selectedStudentId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setSelectedStudentId(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <UserCheck size={20} className="text-[#1A80F6]" />
+                Student Details
+              </h2>
+              <button onClick={() => setSelectedStudentId(null)} className="p-2 bg-white border border-gray-200 text-gray-500 hover:text-red-500 rounded-full transition-colors shadow-sm">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+              {(() => {
+                const liveData = students.find(s => s.db_id === selectedStudentId);
+                const rData = riskData?.students.find(s => s.db_id === selectedStudentId);
+                const allEvtRaw = [
+                  ...(incidents?.high || []),
+                  ...(incidents?.medium || []),
+                  ...(incidents?.low || []),
+                ].filter(e => e.student_id === liveData?.student_id);
+
+                const map = new Map<string, any>();
+                for (const item of allEvtRaw) {
+                  const key = item.event;
+                  if (map.has(key)) {
+                    const existing = map.get(key)!;
+                    existing.count += 1;
+                    existing.score_points += item.score_points;
+                    if (item.snapshot) {
+                      if (!existing.snapshots) existing.snapshots = [];
+                      existing.snapshots.push(item.snapshot);
+                    }
+                  } else {
+                    map.set(key, { ...item, count: 1, snapshots: item.snapshot ? [item.snapshot] : [] });
+                  }
+                }
+                const groupedEvents = Array.from(map.values()).sort((a, b) => b.count - a.count);
+
+                return (
+                  <>
+                    {/* Left side: Camera feed & Summary */}
+                    <div className="md:w-1/2 p-6 bg-gray-50 flex flex-col gap-5 border-r border-gray-100 overflow-y-auto custom-scrollbar">
+                      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4">
+                        {liveData?.profile_image ? (
+                          <img src={liveData.profile_image} alt="Profile" className="w-16 h-16 rounded-full object-cover border-2 border-gray-100" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#1A80F6] to-blue-600 flex items-center justify-center text-white font-bold text-2xl shadow-sm">
+                            {(liveData?.name || '?').charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <h3 className="font-bold text-lg text-gray-900">{liveData?.name || 'Unknown'}</h3>
+                          <p className="text-xs text-gray-500 font-mono">{liveData?.student_id || 'ID Unknown'}</p>
+                          <div className="flex gap-2 mt-2">
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded uppercase">
+                              {liveData?.status || 'Offline'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-900 rounded-xl overflow-hidden shadow-md relative" style={{ aspectRatio: '4/3' }}>
+                        {liveFrames[selectedStudentId] ? (
+                          <img
+                            src={`data:image/jpeg;base64,${liveFrames[selectedStudentId]}`}
+                            alt="Live Feed"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+                            <Video size={40} className="mb-2 opacity-30" />
+                            <span className="text-xs font-semibold">No active camera feed</span>
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2 flex items-center gap-2">
+                          <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Score Summary grid */}
+                      <div className="grid grid-cols-2 gap-3 mt-1">
+                        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+                          <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Violation Score</p>
+                          <p className={`text-3xl font-black ${liveData?.violation_score && liveData.violation_score > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {liveData?.violation_score?.toFixed(1) || '0.0'}
+                          </p>
+                        </div>
+                        <div className={`rounded-xl border p-4 shadow-sm ${rData ? 'bg-' + rData.risk_color + '-50 border-' + rData.risk_color + '-200' : 'bg-white border-gray-200'}`}>
+                          <p className={`text-[10px] uppercase font-bold mb-1 ${rData ? 'text-' + rData.risk_color + '-600' : 'text-gray-400'}`}>Risk Score</p>
+                          <p className={`text-3xl font-black ${rData ? 'text-' + rData.risk_color + '-700' : 'text-gray-900'}`}>
+                            {rData?.risk_score ? Math.round(rData.risk_score) : '0'}
+                          </p>
+                          {rData && <p className={`text-[9px] font-bold mt-1 uppercase text-${rData.risk_color}-700 opacity-80`}>{rData.risk_band} RISK</p>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right side: Incident List */}
+                    <div className="md:w-1/2 p-6 flex flex-col bg-white overflow-hidden">
+                      <h3 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+                        <AlertTriangle size={16} className="text-red-500" />
+                        Incident History ({allEvtRaw.length})
+                      </h3>
+                      
+                      <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                        {groupedEvents.length === 0 ? (
+                          <div className="text-center py-10">
+                            <CheckCircle2 size={30} className="mx-auto text-green-300 mb-2" />
+                            <p className="text-sm text-gray-400">No incidents recorded yet.</p>
+                          </div>
+                        ) : (
+                          groupedEvents.map((ev: any, idx: number) => {
+                            const isH = incidents?.high.some(h => h.event === ev.event);
+                            const isM = !isH && incidents?.medium.some(m => m.event === ev.event);
+                            const bg = isH ? 'bg-red-50 text-red-700' : isM ? 'bg-orange-50 text-orange-700' : 'bg-yellow-50 text-yellow-800';
+                            const displayEv = ev.event.includes('LOOKING') ? ev.event.replace(/LOOKING.*/, 'Looking away') : ev.event;
+                            return (
+                              <div key={idx} className="flex flex-col border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors overflow-hidden">
+                                <div className="flex items-center justify-between p-3">
+                                  <div className="flex items-center gap-3 overflow-hidden">
+                                    <div className={`px-2 py-1 rounded text-[10px] font-bold flex-shrink-0 ${bg}`}>
+                                      {isH ? 'HIGH' : isM ? 'MED' : 'LOW'}
+                                    </div>
+                                    <span className="text-xs font-semibold text-gray-800 truncate">{displayEv}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                    <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">×{ev.count}</span>
+                                    <span className="text-[11px] font-bold text-gray-400">+{ev.score_points.toFixed(1)} pt</span>
+                                  </div>
+                                </div>
+                                {ev.snapshots && ev.snapshots.length > 0 && (
+                                  <div className="bg-gray-100 border-t border-gray-200 p-3 overflow-x-auto custom-scrollbar flex gap-3">
+                                    {ev.snapshots.map((snap: string, i: number) => (
+                                      <img key={i} src={snap} alt={`Snapshot ${i+1}`} className="h-32 rounded border border-gray-300 object-contain shadow-sm flex-shrink-0 bg-white" />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

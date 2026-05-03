@@ -249,6 +249,13 @@ class StudentExamDetailView(APIView):
                 'choices': choices,
             })
 
+        from violation_Exam.models import ViolationBehavior
+        from django.db.models import Sum
+        
+        v_score = ViolationBehavior.objects.filter(
+            student=request.user, exam=exam
+        ).aggregate(total=Sum('score_points'))['total'] or 0.0
+
         return Response({
             'id': exam.id,
             'title': exam.title,
@@ -258,6 +265,7 @@ class StudentExamDetailView(APIView):
             'start_datetime': exam.start_datetime.isoformat(),
             'end_datetime': exam.end_datetime.isoformat(),
             'questions': questions,
+            'violation_score': v_score,
         })
 
 

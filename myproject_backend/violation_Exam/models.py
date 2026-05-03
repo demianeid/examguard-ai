@@ -10,14 +10,17 @@ class ViolationBehavior(models.Model):
     """
 
     VIOLATION_TYPES = [
-        ('tab_switch',       'Tab Switch'),
-        ('copy_paste',       'Copy / Paste Attempt'),
-        ('devtools',         'Developer Tools Opened'),
-        ('fullscreen_exit',  'Exited Fullscreen'),
-        ('keyboard_shortcut','Blocked Keyboard Shortcut'),
-        ('right_click',      'Right Click Attempt'),
-        ('drag_select',      'Drag / Select Attempt'),
-        ('other',            'Other'),
+        ('tab_switch',         'Tab Switch'),
+        ('copy_paste',         'Copy / Paste Attempt'),
+        ('devtools',           'Developer Tools Opened'),
+        ('fullscreen_exit',    'Exited Fullscreen'),
+        ('keyboard_shortcut',  'Blocked Keyboard Shortcut'),
+        ('right_click',        'Right Click Attempt'),
+        ('drag_select',        'Drag / Select Attempt'),
+        ('ai_head_pose',       'AI: Suspicious Head Movement'),
+        ('ai_multiple_faces',  'AI: Multiple Faces Detected'),
+        ('ai_object_detected', 'AI: Unauthorized Object Detected'),
+        ('other',              'Other'),
     ]
 
     student        = models.ForeignKey(
@@ -36,6 +39,8 @@ class ViolationBehavior(models.Model):
                                       help_text='Human-readable reason, e.g. reason string from frontend')
     cumulative_score = models.DecimalField(max_digits=5, decimal_places=1, default=0,
                                            help_text='Total violation score at the time of this event')
+    snapshot       = models.TextField(blank=True, null=True,
+                                      help_text='Base64 JPEG of the camera frame at the time of violation')
     occurred_at    = models.DateTimeField(auto_now_add=True)
 
     class Meta:

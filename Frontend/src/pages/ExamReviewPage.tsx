@@ -27,6 +27,7 @@ interface IncidentItem {
   score_points: number;
   time: string;
   occurred_at: string;
+  snapshot?: string;
 }
 
 interface IncidentBuckets {
@@ -53,17 +54,23 @@ interface ExamInfo {
   questions_count: number;
 }
 
-type GroupedIncident = IncidentItem & { count: number };
+type GroupedIncident = IncidentItem & { count: number; snapshots?: string[] };
 
 function groupByStudentAndEvent(items: IncidentItem[]): GroupedIncident[] {
   const map = new Map<string, GroupedIncident>();
   for (const item of items) {
-    const key = `${item.student_id}||${item.event_type}`;
+    const key = `${item.student_id}||${item.event}`;
     if (map.has(key)) {
-      map.get(key)!.count += 1;
-      map.get(key)!.time = item.time;
+      const existing = map.get(key)!;
+      existing.count += 1;
+      existing.time = item.time;
+      existing.score_points += item.score_points;
+      if (item.snapshot) {
+        if (!existing.snapshots) existing.snapshots = [];
+        existing.snapshots.push(item.snapshot);
+      }
     } else {
-      map.set(key, { ...item, count: 1 });
+      map.set(key, { ...item, count: 1, snapshots: item.snapshot ? [item.snapshot] : [] });
     }
   }
   return Array.from(map.values());
@@ -76,7 +83,7 @@ interface StudentSummary {
   medium: GroupedIncident[];
   low: GroupedIncident[];
   totalScore: number;
-  status: "flagged" | "warning" | "online";
+  status: "flagged" | "warning" | "online" | "terminated" | "submitted";
 }
 
 function buildStudentSummaries(buckets: IncidentBuckets, liveStudents: LiveStudent[]): StudentSummary[] {
@@ -128,7 +135,7 @@ export default function ExamReviewPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | "flagged" | "warning" | "online">("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | "flagged" | "warning" | "online" | "terminated" | "submitted">("All");
   const [severityFilter, setSeverityFilter] = useState<"All" | "high" | "medium" | "low">("All");
 
   useEffect(() => {
@@ -206,10 +213,12 @@ export default function ExamReviewPage() {
   );
 
   const examDate = new Date(exam.start_datetime);
-  const statusConfig = {
-    flagged: { label: "Flagged", color: "bg-red-100 text-red-700 border-red-200",      topBar: "bg-red-500",    icon: <AlertTriangle size={14} className="text-red-500" /> },
-    warning: { label: "Warning", color: "bg-orange-100 text-orange-700 border-orange-200", topBar: "bg-orange-500", icon: <AlertCircle   size={14} className="text-orange-500" /> },
-    online:  { label: "Clear",   color: "bg-green-100 text-green-700 border-green-200",  topBar: "bg-green-500",  icon: <CheckCircle2  size={14} className="text-green-500" /> },
+  const statusConfig: Record<string, any> = {
+    flagged:    { label: "Flagged",    color: "bg-red-100 text-red-700 border-red-200",      topBar: "bg-red-500",    icon: <AlertTriangle size={14} className="text-red-500" /> },
+    warning:    { label: "Warning",    color: "bg-orange-100 text-orange-700 border-orange-200", topBar: "bg-orange-500", icon: <AlertCircle   size={14} className="text-orange-500" /> },
+    online:     { label: "Clear",      color: "bg-green-100 text-green-700 border-green-200",  topBar: "bg-green-500",  icon: <CheckCircle2  size={14} className="text-green-500" /> },
+    terminated: { label: "Terminated", color: "bg-gray-100 text-gray-700 border-gray-300",     topBar: "bg-gray-600",   icon: <Info          size={14} className="text-gray-600" /> },
+    submitted:  { label: "Submitted",  color: "bg-blue-100 text-blue-700 border-blue-200",     topBar: "bg-blue-500",   icon: <CheckCircle2  size={14} className="text-blue-500" /> },
   };
 
   return (
@@ -284,7 +293,7 @@ export default function ExamReviewPage() {
               <div className="mb-6">
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Status</label>
                 <div className="space-y-1">
-                  {(["All", "flagged", "warning", "online"] as const).map((s) => (
+                  {(["All", "flagged", "warning", "online", "terminated", "submitted"] as const).map((s) => (
                     <label key={s} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors group">
                       <div className="flex items-center gap-3">
                         <input type="radio" name="status" checked={statusFilter === s} onChange={() => setStatusFilter(s)} className="w-4 h-4 text-orange-600" />
@@ -376,13 +385,13 @@ export default function ExamReviewPage() {
                       {/* Severity counts */}
                       <div className="grid grid-cols-3 gap-2 mb-4">
                         {[
-                          { label: "High",   count: student.high.length,   activeBg: "bg-red-50 border-red-100",       activeText: "text-red-700",    lbl: "text-red-600" },
-                          { label: "Medium", count: student.medium.length, activeBg: "bg-orange-50 border-orange-100", activeText: "text-orange-700", lbl: "text-orange-600" },
-                          { label: "Low",    count: student.low.length,    activeBg: "bg-yellow-50 border-yellow-100", activeText: "text-yellow-700", lbl: "text-yellow-600" },
-                        ].map(({ label, count, activeBg, activeText, lbl }) => (
+                          { label: "High",   count: student.high.reduce((s, i) => s + i.count, 0),   activeBg: "bg-red-50 border-red-100",       t: "text-red-700",    l: "text-red-600" },
+                          { label: "Medium", count: student.medium.reduce((s, i) => s + i.count, 0), activeBg: "bg-orange-50 border-orange-100", t: "text-orange-700", l: "text-orange-600" },
+                          { label: "Low",    count: student.low.reduce((s, i) => s + i.count, 0),    activeBg: "bg-yellow-50 border-yellow-100", t: "text-yellow-700", l: "text-yellow-600" },
+                        ].map(({ label, count, activeBg, t, l }) => (
                           <div key={label} className={`rounded-lg p-2 text-center border ${count > 0 ? activeBg : "bg-gray-50 border-gray-100"}`}>
-                            <div className={`text-[9px] font-bold uppercase ${count > 0 ? lbl : "text-gray-400"}`}>{label}</div>
-                            <div className={`text-sm font-black mt-0.5 ${count > 0 ? activeText : "text-gray-500"}`}>{count}</div>
+                            <div className={`text-[9px] font-bold uppercase ${count > 0 ? l : "text-gray-400"}`}>{label}</div>
+                            <div className={`text-sm font-black mt-0.5 ${count > 0 ? t : "text-gray-500"}`}>{count}</div>
                           </div>
                         ))}
                       </div>
@@ -400,10 +409,25 @@ export default function ExamReviewPage() {
                             const isHigh = student.high.some((h) => h.event_type === ev.event_type);
                             const isMed  = !isHigh && student.medium.some((m) => m.event_type === ev.event_type);
                             const evColor = isHigh ? "text-red-600 bg-red-50" : isMed ? "text-orange-600 bg-orange-50" : "text-yellow-700 bg-yellow-50";
+                            const displayEvent = ev.event.includes('LOOKING') ? ev.event.replace(/LOOKING.*/, 'Looking away') : ev.event;
                             return (
-                              <div key={`${ev.student_id}-${ev.event_type}`} className="flex items-center justify-between gap-2">
-                                <span className={`text-[11px] font-medium truncate flex-1 px-2 py-1 rounded-lg ${evColor}`}>{ev.event}</span>
-                                {ev.count > 1 && <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full flex-shrink-0">×{ev.count}</span>}
+                              <div key={`${ev.student_id}-${ev.event_type}-${ev.event}`} className="flex flex-col gap-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`text-[11px] font-medium truncate flex-1 px-2 py-1 rounded-lg ${evColor}`}>
+                                    {displayEvent}
+                                  </span>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    {ev.count > 1 && <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">×{ev.count}</span>}
+                                    <span className="text-[10px] font-bold text-gray-400">+{ev.score_points.toFixed(1)}</span>
+                                  </div>
+                                </div>
+                                {ev.snapshots && ev.snapshots.length > 0 && (
+                                  <div className="mt-1 bg-gray-50 border border-gray-100 p-1.5 rounded-lg flex gap-2 overflow-x-auto custom-scrollbar">
+                                    {ev.snapshots.map((snap: string, i: number) => (
+                                      <img key={i} src={snap} alt={`Violation Snapshot ${i+1}`} className="max-h-24 rounded border border-gray-200 object-contain flex-shrink-0" />
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             );
                           })
@@ -414,7 +438,7 @@ export default function ExamReviewPage() {
                       <div className="bg-gray-50/50 rounded-xl p-3 flex items-center justify-between border border-gray-100 mt-auto">
                         <span className="text-xs font-bold text-gray-500">Violation Score</span>
                         <span className={`font-black text-base ${student.status === "flagged" ? "text-red-600" : student.status === "warning" ? "text-orange-600" : "text-green-600"}`}>
-                          {student.totalScore.toFixed(1)}
+                          {student.totalScore.toFixed(1)}<span className="text-xs font-semibold text-gray-400">/20</span>
                         </span>
                       </div>
                     </div>

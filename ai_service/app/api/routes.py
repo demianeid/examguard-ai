@@ -3,6 +3,7 @@ import json
 import numpy as np
 import base64
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import asyncio
 from typing import Dict, List
 
 from ai_service.services import yolo_detector
@@ -32,22 +33,38 @@ class ConnectionManager:
             print(f"Instructor disconnected from exam {exam_id}")
 
     async def broadcast_frame(self, exam_id: str, student_id: str, frame_bytes: bytes):
-        """Broadcasts a base64 encoded JPEG to all instructors watching this exam."""
+        """Broadcasts a base64-encoded JPEG to all instructors watching this exam."""
         if exam_id not in self.instructor_rooms or not self.instructor_rooms[exam_id]:
             return
-        
+
         b64_frame = base64.b64encode(frame_bytes).decode('utf-8')
         payload = {
             "type": "frame",
             "student_id": student_id,
-            "frame": b64_frame
+            "frame": b64_frame,
         }
-        
-        for ws in self.instructor_rooms[exam_id]:
+        dead: list = []
+        for ws in list(self.instructor_rooms.get(exam_id, [])):
             try:
                 await ws.send_json(payload)
             except Exception:
-                pass  # Ignore dead sockets, they will be cleaned up on next disconnect
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect_instructor(ws, exam_id)
+
+    async def broadcast_alert(self, exam_id: str, student_id: str, alert: dict):
+        """Pushes a real-time violation alert to all instructors watching this exam."""
+        if exam_id not in self.instructor_rooms or not self.instructor_rooms[exam_id]:
+            return
+        payload = {"type": "alert", "student_id": student_id, **alert}
+        dead: list = []
+        for ws in list(self.instructor_rooms.get(exam_id, [])):
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect_instructor(ws, exam_id)
 
 manager = ConnectionManager()
 
@@ -86,16 +103,18 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str):
     await websocket.accept()
     print(f"WebSocket connected  exam={exam_id} student={student_id}")
 
-    # One tracker per student connection – gives independent debounce state
-    tracker = HeadPoseTracker()
+    # One tracker per student connection – gives independent debounce state.
+    # frame_interval=1 because the browser already throttles the frame rate;
+    # we want every received frame to be evaluated so CONFIRM_FRAMES fires
+    # in wall-clock time equivalent to the browser send interval × CONFIRM_FRAMES
+    # (not frame_interval × browser_interval × CONFIRM_FRAMES).
+    tracker = HeadPoseTracker(frame_interval=1)
+    yolo_tracker = yolo_detector.YoloTracker(frame_interval=1)
 
     try:
         while True:
             # ── 1. Receive frame bytes from React frontend ───────────────
             data = await websocket.receive_bytes()
-
-            # Broadcast the raw JPEG directly to instructors in this exam room
-            await manager.broadcast_frame(exam_id, student_id, data)
 
             # ── 2. Decode JPEG → numpy BGR ───────────────────────────────
             np_arr = np.frombuffer(data, dtype=np.uint8)
@@ -111,40 +130,53 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str):
             rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
             # ── 3. Run head-pose tracker (frame-skipping + debouncing) ───
-            head = tracker.update(rgb)
+            loop = asyncio.get_running_loop()
+            head = await loop.run_in_executor(None, tracker.update, rgb)
 
-            # ── 4. Run YOLO object detector ──────────────────────────────
-            yolo = yolo_detector.analyze_frame(bgr)
+            # ── 4. Run YOLO object detector (frame-skipping + debouncing) ───
+            # yolo_tracker must be initialized outside the loop, same as head pose tracker
+            yolo = await loop.run_in_executor(None, yolo_tracker.update, bgr)
 
-            # ── 5. Build combined verdict ────────────────────────────────
-            # head["suspicious"] is the STATE (are they currently looking away?)
-            # head["should_alert"] is the EDGE TRIGGER (did they just start looking away?)
+            # ── 5. Draw head pose on the annotated frame and broadcast ────
+            annotated = yolo.get("annotated_frame", bgr)
+            direction_text = head.get("direction") or "FORWARD"
+            text_color = (0, 0, 255) if head.get("suspicious") else (0, 220, 90) # BGR (Red or Green)
             
-            # Simple debounce for YOLO to prevent continuous point deduction
-            # If the tracker has an attribute, we could use it, but since we don't,
-            # we'll just report the state and let the frontend handle edge triggers if needed,
-            # OR we just pass the edge triggers.
-            
-            # Actually, let's keep track of YOLO state per connection
-            if not hasattr(tracker, "last_yolo_suspicious"):
-                tracker.last_yolo_suspicious = False
-                
-            yolo_alert = yolo["suspicious"] and not tracker.last_yolo_suspicious
-            tracker.last_yolo_suspicious = yolo["suspicious"]
-            
-            head_alert = head["should_alert"]
-            new_violation = head_alert or yolo_alert
-            cheating_state = head["suspicious"] or yolo["suspicious"]
+            # Draw semi-transparent background for text (optional but good for visibility)
+            (tw, th), _ = cv2.getTextSize(direction_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            cv2.rectangle(annotated, (8, 10), (12 + tw, 20 + th), (0, 0, 0), -1)
+            cv2.putText(annotated, direction_text, (10, 15 + th), cv2.FONT_HERSHEY_SIMPLEX, 0.6, text_color, 2)
 
-            reasons = []
-            if head["suspicious"]:
-                reasons.append(head["direction"] or "NO FACE")
-            if yolo["suspicious"]:
-                labels = [d["label"] for d in yolo["detections"]]
-                reasons.append("OBJECT: " + ", ".join(labels))
+            _, buffer = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            await manager.broadcast_frame(exam_id, student_id, buffer.tobytes())
+
+            # ── 6. Build combined verdict ────────────────────────────────
+            # Both trackers now emit `should_alert` exactly once per violation event
+            new_violation  = head.get("should_alert", False) or yolo.get("should_alert", False)
+            cheating_state = head.get("is_violating", False) or yolo.get("is_violating", False)
+
+            is_critical_no_face = head.get("is_critical_no_face", False)
+            if is_critical_no_face:
+                new_violation = True
+                cheating_state = True
+                reasons = ["CRITICAL: Face missing > 2s"]
+            else:
+                reasons: list[str] = []
+                if head["suspicious"]:
+                    direction = head["direction"] or "NO FACE"
+                    if head.get("multiple_faces"):
+                        reasons.append("MULTIPLE FACES DETECTED")
+                    else:
+                        reasons.append("Looking away" if "LOOKING" in direction else direction)
+                if yolo["suspicious"]:
+                    labels = [d["label"] for d in yolo["detections"]]
+                    reasons.append("OBJECT: " + ", ".join(labels))
+
+            cheating_reason = " | ".join(reasons) if reasons else None
 
             result = AnalysisResult(
                 face_detected     = head["face_detected"],
+                multiple_faces    = head.get("multiple_faces", False),
                 h_ratio           = head["h_ratio"],
                 v_ratio           = head["v_ratio"],
                 head_direction    = head["direction"],
@@ -153,11 +185,28 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str):
                 yolo_suspicious   = yolo["suspicious"],
                 cheating_detected = cheating_state,
                 new_violation     = new_violation,
-                cheating_reason   = " | ".join(reasons) if reasons else None,
+                is_critical_no_face = is_critical_no_face,
+                cheating_reason   = cheating_reason,
             )
 
-            # ── 6. Send JSON result back to frontend ─────────────────────
+            # ── 6. Send JSON result back to student frontend ──────────────
             await websocket.send_text(result.model_dump_json())
+
+            # ── 7. Push real-time alert to instructor WS room ─────────────
+            # Fire on new_violation (edge trigger) so short glances reach
+            # the instructor immediately, AND on cheating_state (persistent)
+            # so sustained violations keep the feed updated.
+            if new_violation or cheating_state:
+                await manager.broadcast_alert(exam_id, student_id, {
+                    "cheating_reason":  cheating_reason,
+                    "head_direction":   head["direction"],
+                    "head_suspicious":  head["suspicious"],
+                    "yolo_suspicious":  yolo["suspicious"],
+                    "yolo_labels":      [d["label"] for d in yolo["detections"]],
+                    "h_ratio":          head["h_ratio"],
+                    "v_ratio":          head["v_ratio"],
+                    "new_violation":    new_violation,
+                })
 
     except WebSocketDisconnect:
         print(f"WebSocket disconnected  exam={exam_id} student={student_id}")

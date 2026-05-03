@@ -1,4 +1,0 @@
-- [x] Add import for useEffect from React in App.tsx
-- [x] Add useEffect hook in App component to scroll to top on mount
-- [x] Add import for useLocation from react-router-dom in App.tsx
-- [x] Add useEffect hook in App component to scroll to top on route change

@@ -31,6 +31,7 @@ interface ExamData {
   start_datetime?: string;
   end_datetime?: string;
   questions: Question[];
+  violation_score?: number;
 }
 
 const ExamInterface: React.FC = () => {
@@ -44,19 +45,30 @@ const ExamInterface: React.FC = () => {
   const [examError, setExamError] = useState<string | null>(null);
 
   // --- Exam State ---
-  const [currentView, setCurrentView] = useState<'rules' | 'face-recognition' | 'system-check' | 'waiting-to-start' | 'exam' | 'terminated' | 'time-up'>('rules');
+  const [currentView, setCurrentView] = useState<'rules' | 'face-recognition' | 'system-check' | 'waiting-to-start' | 'exam' | 'terminated' | 'time-up'>(() => {
+    return (sessionStorage.getItem(`exam_${examId}_currentView`) as any) || 'rules';
+  });
   const [waitCountdown, setWaitCountdown] = useState(0);
-  const [agreedToRules, setAgreedToRules] = useState(false);
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<(number | null)[]>([]);
-  const [flagged, setFlagged] = useState<boolean[]>([]);
-  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [agreedToRules, setAgreedToRules] = useState(() => sessionStorage.getItem(`exam_${examId}_agreed`) === 'true');
+  const [currentQuestion, setCurrentQuestion] = useState(() => parseInt(sessionStorage.getItem(`exam_${examId}_currentQuestion`) || '0', 10));
+  const [answers, setAnswers] = useState<(number | null)[]>(() => {
+    const saved = sessionStorage.getItem(`exam_${examId}_answers`);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [flagged, setFlagged] = useState<boolean[]>(() => {
+    const saved = sessionStorage.getItem(`exam_${examId}_flagged`);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [timeRemaining, setTimeRemaining] = useState(() => {
+    const savedEnd = sessionStorage.getItem(`exam_${examId}_endTime`);
+    return savedEnd ? Math.max(0, Math.floor((parseInt(savedEnd, 10) - Date.now()) / 1000)) : 0;
+  });
   const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showLeaveWarning, setShowLeaveWarning] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [timeUp, setTimeUp] = useState(false);
 
   // --- Anti-Cheating State ---
-  const [copyAttempts, setCopyAttempts] = useState(0);
   const [fullScreenActive, setFullScreenActive] = useState(false);
   const [tabFocus, setTabFocus] = useState(true);
   const [violationScore, setViolationScore] = useState(0);
@@ -84,6 +96,15 @@ const ExamInterface: React.FC = () => {
   const [aiStatus, setAiStatus] = useState<'idle' | 'connected' | 'error'>('idle');
   const [lastAiAlert, setLastAiAlert] = useState<string | null>(null);
 
+  // --- Head-Pose Overlay State (mirrors test_head_pose.py terminal output) ---
+  const [headDirection, setHeadDirection] = useState<string>('');
+  const [headSuspicious, setHeadSuspicious] = useState<boolean>(false);
+  const [headHRatio, setHeadHRatio] = useState<number>(0);
+  const [headVRatio, setHeadVRatio] = useState<number>(0);
+  const [aiAlertCount, setAiAlertCount] = useState<number>(0);
+  const [yoloLabels, setYoloLabels] = useState<string[]>([]);
+  const [yoloSuspicious, setYoloSuspicious] = useState<boolean>(false);
+
   // --- Refs ---
   const videoRef = useRef<HTMLVideoElement>(null);
   const examContainerRef = useRef<HTMLDivElement>(null);
@@ -95,6 +116,29 @@ const ExamInterface: React.FC = () => {
   const aiCanvasRef = useRef<HTMLCanvasElement | null>(null); // off-screen canvas for frame capture
   const aiIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null); // frame-send interval
   const violationScoreRef = useRef(0);  // sync mirror of violationScore for WS closure
+  const currentViewRef = useRef(currentView);
+  const answersRef = useRef<(number | null)[]>([]);
+
+  // Keep refs in sync
+  useEffect(() => {
+    currentViewRef.current = currentView;
+  }, [currentView]);
+
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  // Session Storage Persistence
+  useEffect(() => { sessionStorage.setItem(`exam_${examId}_currentView`, currentView); }, [currentView, examId]);
+  useEffect(() => { sessionStorage.setItem(`exam_${examId}_agreed`, agreedToRules.toString()); }, [agreedToRules, examId]);
+  useEffect(() => { sessionStorage.setItem(`exam_${examId}_currentQuestion`, currentQuestion.toString()); }, [currentQuestion, examId]);
+  useEffect(() => { sessionStorage.setItem(`exam_${examId}_answers`, JSON.stringify(answers)); }, [answers, examId]);
+  useEffect(() => { sessionStorage.setItem(`exam_${examId}_flagged`, JSON.stringify(flagged)); }, [flagged, examId]);
+  useEffect(() => {
+    if (currentView === 'exam' && timeRemaining > 0 && !sessionStorage.getItem(`exam_${examId}_endTime`)) {
+      sessionStorage.setItem(`exam_${examId}_endTime`, (Date.now() + timeRemaining * 1000).toString());
+    }
+  }, [currentView, timeRemaining, examId]);
 
   // ============================================================
   // Fetch exam data from backend
@@ -119,10 +163,30 @@ const ExamInterface: React.FC = () => {
           const endMs = Date.parse(/[Z+]|[+-]\d{2}:/.test(endStr) ? endStr : endStr + 'Z');
           setTimeRemaining(Math.max(0, Math.floor((endMs - Date.now()) / 1000)));
         } else {
-          setTimeRemaining(data.duration * 60);
+          const savedEnd = sessionStorage.getItem(`exam_${examId}_endTime`);
+          if (savedEnd) {
+             setTimeRemaining(Math.max(0, Math.floor((parseInt(savedEnd, 10) - Date.now()) / 1000)));
+          } else {
+             setTimeRemaining(data.duration * 60);
+          }
         }
-        setAnswers(Array(data.questions.length).fill(null));
-        setFlagged(Array(data.questions.length).fill(false));
+        setViolationScore(data.violation_score ?? 0);
+        violationScoreRef.current = data.violation_score ?? 0;
+        
+        const savedAnswers = sessionStorage.getItem(`exam_${examId}_answers`);
+        setAnswers(savedAnswers ? JSON.parse(savedAnswers) : Array(data.questions.length).fill(null));
+        
+        const savedFlagged = sessionStorage.getItem(`exam_${examId}_flagged`);
+        setFlagged(savedFlagged ? JSON.parse(savedFlagged) : Array(data.questions.length).fill(false));
+
+        // Fix for stale sessionStorage across database resets
+        const storedView = sessionStorage.getItem(`exam_${examId}_currentView`);
+        if ((storedView === 'terminated' || storedView === 'time-up') && (data.violation_score ?? 0) < 20) {
+          setCurrentView('rules');
+          sessionStorage.removeItem(`exam_${examId}_currentView`);
+          sessionStorage.removeItem(`exam_${examId}_agreed`);
+          sessionStorage.removeItem(`exam_${examId}_endTime`);
+        }
       } catch (err: any) {
         setExamError(err.message || 'Failed to load exam');
       } finally {
@@ -183,7 +247,6 @@ const ExamInterface: React.FC = () => {
     const handler = (e: ClipboardEvent) => {
       if (currentView === 'exam' && !examTerminated) {
         e.preventDefault();
-        setCopyAttempts(prev => prev + 1);
         addViolation(0.5, 'Copy/Paste attempt detected', 'copy_paste');
       }
     };
@@ -264,8 +327,81 @@ const ExamInterface: React.FC = () => {
     const handler = (e: Event) => { if (currentView === 'exam' && !examTerminated) e.preventDefault(); };
     document.addEventListener('selectstart', handler);
     document.addEventListener('dragstart', handler);
-    return () => { document.removeEventListener('selectstart', handler); document.removeEventListener('dragstart', handler); };
+    // Disable right click context menu
+    document.addEventListener('contextmenu', handler);
+    return () => { 
+      document.removeEventListener('selectstart', handler); 
+      document.removeEventListener('dragstart', handler); 
+      document.removeEventListener('contextmenu', handler);
+    };
   }, [currentView, examTerminated]);
+
+  // Keyboard shortcut tracking & prevention
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (currentView !== 'exam' || examTerminated) return;
+
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+      // Prevent Copy / Paste / Cut / Print / Save / Find
+      if (cmdOrCtrl && ['c', 'v', 'x', 'p', 's', 'f'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        addViolation(1, `Keyboard shortcut blocked (Ctrl+${e.key.toUpperCase()})`, 'shortcut_used');
+        return;
+      }
+
+      // Prevent Developer Tools & View Source
+      // F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U
+      if (
+        e.key === 'F12' || 
+        (cmdOrCtrl && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase())) ||
+        (cmdOrCtrl && e.key.toLowerCase() === 'u')
+      ) {
+        e.preventDefault();
+        addViolation(2, 'Developer tools shortcut blocked', 'devtools');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [currentView, examTerminated]);
+
+  // ============================================================
+  // Leave / Navigation Traps
+  // ============================================================
+
+  // Trap the browser back button
+  useEffect(() => {
+    if (currentView === 'exam' && !examTerminated) {
+      window.history.pushState(null, '', window.location.href);
+      const handlePopState = () => {
+        setShowLeaveWarning(true);
+        window.history.pushState(null, '', window.location.href);
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, [currentView, examTerminated]);
+
+  // Trap tab close / refresh
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (currentView === 'exam' && !examTerminated) {
+        e.preventDefault();
+        e.returnValue = ''; // Prompts the user with the browser's generic warning
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [currentView, examTerminated]);
+
+  const handleLeaveAndSubmit = async () => {
+    isTerminatedRef.current = true;
+    await submitExam(true, violationScore);
+    setShowLeaveWarning(false);
+    navigate('/classes');
+  };
 
   // ============================================================
   // Violation Persistence Helpers
@@ -278,6 +414,7 @@ const ExamInterface: React.FC = () => {
     scorePoints: number,
     cumulativeScore: number,
     details: string,
+    snapshotBase64?: string
   ) => {
     if (!examId) return;
     fetch(`${DJANGO_BASE}/api/violations/behavior/`, {
@@ -292,6 +429,7 @@ const ExamInterface: React.FC = () => {
         score_points:     scorePoints,
         cumulative_score: cumulativeScore,
         details,
+        snapshot:         snapshotBase64 || '',
       }),
     }).catch(err => console.warn('postBehaviorViolation failed:', err));
   }, [examId, token]);
@@ -301,6 +439,7 @@ const ExamInterface: React.FC = () => {
     cheating_reason:   string | null;
     head_direction:    string;
     head_suspicious:   boolean;
+    multiple_faces:    boolean;
     yolo_suspicious:   boolean;
     yolo_labels:       string[];
     h_ratio:           number;
@@ -319,6 +458,7 @@ const ExamInterface: React.FC = () => {
         cheating_reason:   result.cheating_reason ?? '',
         head_direction:    result.head_direction,
         head_suspicious:   result.head_suspicious,
+        multiple_faces:    result.multiple_faces,
         yolo_suspicious:   result.yolo_suspicious,
         yolo_labels:       result.yolo_labels,
         h_ratio:           result.h_ratio,
@@ -330,19 +470,20 @@ const ExamInterface: React.FC = () => {
   // ============================================================
   // Violation & Termination
   // ============================================================
-  const addViolation = useCallback((points: number, reason: string, eventType = 'other') => {
-    setViolationScore(prev => {
-      const newScore = prev + points;
-      violationScoreRef.current = newScore;
-      setProctorAlerts(prevAlerts => [reason, ...prevAlerts].slice(0, 3));
-      // Persist to Django asynchronously
-      postBehaviorViolation(eventType, points, newScore, reason);
-      if (newScore >= 10 && !examTerminated && currentView === 'exam') {
-        terminateExam(`Excessive violations: ${reason}`, newScore);
-      }
-      return newScore;
-    });
-  }, [examTerminated, currentView, postBehaviorViolation]);
+  const addViolation = useCallback((points: number, reason: string, eventType = 'other', snapshotBase64?: string) => {
+    const newScore = violationScoreRef.current + points;
+    violationScoreRef.current = newScore;
+    setViolationScore(newScore);
+
+    setProctorAlerts(prevAlerts => [reason, ...prevAlerts].slice(0, 3));
+    
+    // Persist to Django asynchronously
+    postBehaviorViolation(eventType, points, newScore, reason, snapshotBase64);
+    
+    if (newScore >= 20 && !isTerminatedRef.current && currentViewRef.current === 'exam') {
+      terminateExam(`Excessive violations: ${reason}`, newScore);
+    }
+  }, [postBehaviorViolation]);
 
   const terminateExam = (reason: string, score?: number) => {
     isTerminatedRef.current = true; // set sync ref FIRST so fullscreenchange handler sees it immediately
@@ -386,7 +527,9 @@ const ExamInterface: React.FC = () => {
       console.log('[AI] WebSocket connected');
       setAiStatus('connected');
 
-      // Send one frame every 800ms while exam is active
+      // Send one frame every 400ms (2.5 fps).
+      // At 400ms × CONFIRM_FRAMES(3) the tracker fires within ~1.2 s of looking away.
+      // This prevents the WebSocket buffer from backing up on the Python server.
       aiIntervalRef.current = setInterval(() => {
         if (!videoRef.current || ws.readyState !== WebSocket.OPEN) return;
         const ctx = canvas.getContext('2d');
@@ -397,7 +540,7 @@ const ExamInterface: React.FC = () => {
             blob.arrayBuffer().then(buf => ws.send(buf));
           }
         }, 'image/jpeg', 0.75);
-      }, 800);
+      }, 400);
     };
 
     ws.onmessage = (event) => {
@@ -405,6 +548,14 @@ const ExamInterface: React.FC = () => {
       try {
         const result = JSON.parse(event.data as string);
         if (result.error) return;
+
+        // ── Update head-pose overlay state (mirrors test_head_pose.py) ────────
+        setHeadDirection(result.head_direction ?? '');
+        setHeadHRatio(result.h_ratio ?? 0);
+        setHeadVRatio(result.v_ratio ?? 0);
+        setHeadSuspicious(result.head_suspicious ?? false);
+        setYoloSuspicious(result.yolo_suspicious ?? false);
+        setYoloLabels((result.detections ?? []).map((d: {label: string}) => d.label));
 
         if (result.cheating_detected) {
           const reason = result.cheating_reason ?? 'AI: suspicious behaviour';
@@ -416,15 +567,48 @@ const ExamInterface: React.FC = () => {
 
         if (result.new_violation) {
           const reason = result.cheating_reason ?? 'AI: suspicious behaviour';
-          // Map AI reason → violation type string for the DB
-          const eventType = result.yolo_suspicious ? 'ai_object_detected' : 'ai_head_pose';
-          addViolation(1.5, `⚠ AI: ${reason}`, eventType);
+          let eventType = 'ai_head_pose';
+          let aiPoints = 1.0;
+
+          if (result.yolo_suspicious) {
+            eventType = 'ai_object_detected';
+            aiPoints = 2.0;
+          } else if (result.multiple_faces) {
+            eventType = 'ai_multiple_faces';
+            aiPoints = 2.0;
+          } else if (result.head_direction === 'NO FACE') {
+            if (result.is_critical_no_face) {
+              aiPoints = 2.0; // Missing for > 2 seconds
+            } else {
+              aiPoints = 0.5; // Brief missing face
+            }
+          }
+
+          let snapshotBase64: string | undefined;
+          if (aiPoints >= 2.0 && videoRef.current) {
+            try {
+              const snapCanvas = document.createElement('canvas');
+              snapCanvas.width = 640;
+              snapCanvas.height = 480;
+              const ctx = snapCanvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(videoRef.current, 0, 0, 640, 480);
+                snapshotBase64 = snapCanvas.toDataURL('image/jpeg', 0.5);
+              }
+            } catch (e) {
+              console.warn('Failed to capture snapshot', e);
+            }
+          }
+
+          addViolation(aiPoints, `⚠ AI: ${reason}`, eventType, snapshotBase64);
+          setAiAlertCount(prev => prev + 1);
 
           // Persist full AI event details
           postAIViolation({
             cheating_reason:  result.cheating_reason,
             head_direction:   result.head_direction  ?? '',
             head_suspicious:  result.head_suspicious ?? false,
+            multiple_faces:   result.multiple_faces  ?? false,
             yolo_suspicious:  result.yolo_suspicious ?? false,
             yolo_labels:      (result.detections ?? []).map((d: {label: string}) => d.label),
             h_ratio:          result.h_ratio ?? 0,
@@ -514,11 +698,11 @@ const ExamInterface: React.FC = () => {
     if (!examData) return;
     setSubmitLoading(true);
 
-    // Build answers array using question id and selected choice id
+    // Build answers array using question id and selected choice id from the ref to avoid stale closures
     const answersPayload = examData.questions
       .map((q, index) => {
-        const selectedIndex = answers[index];
-        if (selectedIndex === null) return null;
+        const selectedIndex = answersRef.current[index];
+        if (selectedIndex === null || selectedIndex === undefined) return null;
         const selectedChoice = q.choices[selectedIndex];
         return {
           question_id: q.id,
@@ -540,6 +724,13 @@ const ExamInterface: React.FC = () => {
           violation_score: finalViolationScore,
         }),
       });
+      // Clear persistence so it doesn't resume if they re-enter later
+      sessionStorage.removeItem(`exam_${examId}_currentView`);
+      sessionStorage.removeItem(`exam_${examId}_agreed`);
+      sessionStorage.removeItem(`exam_${examId}_currentQuestion`);
+      sessionStorage.removeItem(`exam_${examId}_answers`);
+      sessionStorage.removeItem(`exam_${examId}_flagged`);
+      sessionStorage.removeItem(`exam_${examId}_endTime`);
     } catch (err) {
       console.error('Submit failed:', err);
     } finally {
@@ -644,6 +835,26 @@ const ExamInterface: React.FC = () => {
       startAIProctoring();
     }, 100);
   };
+
+  // Restore camera and AI proctoring if the page was refreshed during an exam
+  useEffect(() => {
+    if (currentView === 'exam' && !examTerminated) {
+      const initWebcamAndAI = async () => {
+        if (videoRef.current && !videoRef.current.srcObject) {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+            if (videoRef.current) videoRef.current.srcObject = stream;
+          } catch { console.error('Camera access denied on refresh'); }
+        }
+        if (!aiWsRef.current && aiStatus === 'idle') {
+          startAIProctoring();
+        }
+      };
+      
+      // Delay slightly to ensure videoRef is mounted
+      setTimeout(initWebcamAndAI, 500);
+    }
+  }, [currentView, examTerminated, startAIProctoring, aiStatus]);
 
   // ============================================================
   // Face Recognition
@@ -1181,7 +1392,7 @@ const ExamInterface: React.FC = () => {
               </button>
               <div className="bg-white/20 px-3 py-1 rounded-lg">
                 <span className="text-sm">Violations: </span>
-                <span className={`font-bold ${violationScore >= 8 ? 'text-yellow-300 animate-pulse' : ''}`}>{violationScore.toFixed(1)}/10</span>
+                <span className={`font-bold ${violationScore >= 16 ? 'text-yellow-300 animate-pulse' : ''}`}>{violationScore.toFixed(1)}/20</span>
               </div>
             </div>
           </div>
@@ -1298,7 +1509,7 @@ const ExamInterface: React.FC = () => {
                   })}
                 </div>
 
-                {/* Camera Preview */}
+                {/* Camera Preview with head-pose overlay (mirrors test_head_pose.py) */}
                 <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden bg-black aspect-video relative">
                   <video
                     ref={videoRef}
@@ -1307,15 +1518,70 @@ const ExamInterface: React.FC = () => {
                     playsInline
                     className="w-full h-full object-cover"
                   />
+
+                  {/* ── Direction label (top-left, like cv2.putText in test_head_pose.py) ── */}
+                  {aiStatus === 'connected' && (
+                    <div
+                      className="absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded-md shadow"
+                      style={{
+                        color: headSuspicious ? '#ff3b3b' : '#00e676',
+                        background: 'rgba(0,0,0,0.55)',
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      {headDirection || 'FORWARD'}
+                    </div>
+                  )}
+
+                  {/* ── h/v ratio readout (like second putText in test_head_pose.py) ── */}
+                  {aiStatus === 'connected' && (
+                    <div
+                      className="absolute top-9 left-2 text-[10px] font-mono px-2 py-0.5 rounded shadow"
+                      style={{
+                        color: headSuspicious ? '#ff3b3b' : '#00e676',
+                        background: 'rgba(0,0,0,0.50)',
+                      }}
+                    >
+                      h={headHRatio >= 0 ? '+' : ''}{headHRatio.toFixed(3)}&nbsp;&nbsp;v={headVRatio >= 0 ? '+' : ''}{headVRatio.toFixed(3)}
+                    </div>
+                  )}
+
+                  {/* ── Alert count (like third putText in test_head_pose.py) ── */}
+                  {aiStatus === 'connected' && (
+                    <div
+                      className="absolute top-16 left-2 text-[10px] font-mono px-2 py-0.5 rounded shadow"
+                      style={{ color: '#ffeb3b', background: 'rgba(0,0,0,0.50)' }}
+                    >
+                      alerts: {aiAlertCount}
+                    </div>
+                  )}
+
+                  {/* ── YOLO detection badge ── */}
+                  {yoloSuspicious && yoloLabels.length > 0 && (
+                    <div className="absolute bottom-8 left-2 right-2">
+                      <div className="bg-red-600/90 text-white text-[10px] font-bold px-2 py-1 rounded-md text-center">
+                        ⚠ OBJECT: {yoloLabels.join(', ')}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Bottom-left camera label ── */}
                   <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
                     <Camera size={12} />
                     <span>Camera Active</span>
                   </div>
-                  <div className="absolute top-2 right-2">
+
+                  {/* ── LIVE / AI status pill ── */}
+                  <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
                     <div className="flex items-center gap-1 bg-green-500/80 text-white text-xs px-2 py-1 rounded-full">
                       <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
                       LIVE
                     </div>
+                    {aiStatus === 'connected' && headSuspicious && (
+                      <div className="flex items-center gap-1 bg-red-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                        AI ALERT
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1324,10 +1590,10 @@ const ExamInterface: React.FC = () => {
                   <div className="flex justify-between"><span className="text-gray-600">Flagged:</span><span className="font-semibold text-yellow-600">{flaggedCount}</span></div>
                   <div className="flex justify-between"><span className="text-gray-600">Unanswered:</span><span className="font-semibold text-red-600">{unansweredCount}</span></div>
                 </div>
-                {violationScore >= 8 && (
+                {violationScore >= 16 && (
                   <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                     <div className="flex items-center gap-2 mb-1"><AlertTriangle className="w-4 h-4 text-red-600" /><span className="text-sm font-medium text-red-800">High Violation Score</span></div>
-                    <p className="text-xs text-red-700">{Math.max(0, 10 - violationScore).toFixed(1)} points before termination</p>
+                    <p className="text-xs text-red-700">{Math.max(0, 20 - violationScore).toFixed(1)} points before termination</p>
                   </div>
                 )}
               </div>
@@ -1352,7 +1618,7 @@ const ExamInterface: React.FC = () => {
                 <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Answered:</span><span className="font-semibold text-green-600">{answeredCount}/{examData.questions.length}</span></div>
                 <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Unanswered:</span><span className="font-semibold text-red-600">{unansweredCount}</span></div>
                 <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Flagged:</span><span className="font-semibold text-yellow-600">{flaggedCount}</span></div>
-                <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Violation Score:</span><span className={`font-semibold ${violationScore >= 7 ? 'text-red-600' : 'text-gray-900'}`}>{violationScore.toFixed(1)}/10</span></div>
+                <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Violation Score:</span><span className={`font-semibold ${violationScore >= 14 ? 'text-red-600' : 'text-gray-900'}`}>{violationScore.toFixed(1)}/20</span></div>
               </div>
               {unansweredCount > 0 && (
                 <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4 flex items-start gap-2">
@@ -1367,6 +1633,29 @@ const ExamInterface: React.FC = () => {
                   className="flex-1 px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-medium flex items-center justify-center gap-2 disabled:opacity-60">
                   {submitLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send className="w-4 h-4" />}
                   {submitLoading ? 'Submitting...' : 'Submit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Leave Exam Warning Modal */}
+        {showLeaveWarning && (
+          <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+              <div className="flex items-center gap-3 text-red-600 mb-4">
+                <AlertTriangle className="w-8 h-8" />
+                <h2 className="text-xl font-bold">Warning: Leaving Exam</h2>
+              </div>
+              <p className="text-gray-700 mb-6">
+                If you leave this page, your exam will be <strong>automatically submitted</strong> and you will not be able to re-enter. Are you sure you want to leave?
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setShowLeaveWarning(false)} disabled={submitLoading} className="px-5 py-2.5 rounded-xl font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors disabled:opacity-50">
+                  Cancel, stay in exam
+                </button>
+                <button onClick={handleLeaveAndSubmit} disabled={submitLoading} className="px-5 py-2.5 rounded-xl font-medium bg-red-600 hover:bg-red-700 text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                  {submitLoading ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Submitting...</> : 'Yes, leave & submit'}
                 </button>
               </div>
             </div>
@@ -1388,7 +1677,7 @@ const ExamInterface: React.FC = () => {
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
             <p className="text-lg text-gray-800 mb-4">Your exam has been automatically terminated due to multiple security violations.</p>
             <div className="space-y-3 text-left bg-white p-4 rounded-lg">
-              <div className="flex justify-between"><span className="text-gray-600">Violation Score:</span><span className="font-bold text-red-600">{violationScore.toFixed(1)}/10</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Violation Score:</span><span className="font-bold text-red-600">{violationScore.toFixed(1)}/20</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Reason:</span><span className="font-bold text-gray-800">{terminationReason}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Questions Answered:</span><span className="font-bold text-blue-600">{answeredCount}/{examData?.questions.length}</span></div>
             </div>

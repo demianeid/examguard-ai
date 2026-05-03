@@ -7,7 +7,7 @@ class ViolationBehaviorSerializer(serializers.ModelSerializer):
         model  = ViolationBehavior
         fields = [
             'id', 'student', 'exam', 'event_type',
-            'score_points', 'cumulative_score', 'details', 'occurred_at',
+            'score_points', 'cumulative_score', 'details', 'snapshot', 'occurred_at',
         ]
         read_only_fields = ['id', 'occurred_at', 'student']
 

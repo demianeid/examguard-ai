@@ -11,6 +11,7 @@ class Detection(BaseModel):
 class AnalysisResult(BaseModel):
     # ── Head-pose ────────────────────────────────────────
     face_detected:  bool
+    multiple_faces: bool = False
     h_ratio:        float
     v_ratio:        float
     head_direction: str            # e.g. "LOOKING LEFT + DOWN"
@@ -23,6 +24,7 @@ class AnalysisResult(BaseModel):
     # ── Combined verdict ─────────────────────────────────
     cheating_detected: bool
     new_violation: bool = False
+    is_critical_no_face: bool = False
     cheating_reason:   Optional[str] = None  # human-readable reason
 
 

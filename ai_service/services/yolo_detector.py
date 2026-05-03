@@ -14,6 +14,50 @@ def _get_model() -> YOLO:
         _model = YOLO(_MODEL_PATH)
     return _model
 
+# ── Tunable constants ──────────────────────────────────────────────────────────
+FRAME_INTERVAL = 3      # run inference only every N frames
+CONFIRM_FRAMES = 1      # consecutive suspicious frames to confirm an alert
+
+class YoloTracker:
+    def __init__(self, frame_interval: int = FRAME_INTERVAL):
+        self.frame_interval = frame_interval
+        self._frame_counter = 0
+        self._cached_result = None
+        self._suspicious_count = 0
+        self._is_violating = False
+
+    def update(self, bgr_frame: np.ndarray, conf: float = 0.5) -> dict:
+        self._frame_counter += 1
+        
+        # Frame-skipping: reuse cached result
+        if self._frame_counter % self.frame_interval != 0 and self._cached_result is not None:
+            result = self._cached_result
+        else:
+            result = analyze_frame(bgr_frame, conf)
+            self._cached_result = result
+
+        suspicious = result["suspicious"]
+        should_alert = False
+        alert_cleared = False
+
+        if suspicious:
+            self._suspicious_count += 1
+            if self._suspicious_count >= CONFIRM_FRAMES and not self._is_violating:
+                self._is_violating = True
+                should_alert = True
+        else:
+            if self._is_violating:
+                alert_cleared = True
+            self._is_violating = False
+            self._suspicious_count = 0
+
+        # Inject state tracking into the returned dictionary
+        final_result = dict(result)
+        final_result["should_alert"] = should_alert
+        final_result["alert_cleared"] = alert_cleared
+        final_result["is_violating"] = self._is_violating
+        return final_result
+
 
 def analyze_frame(bgr_frame: np.ndarray, conf: float = 0.5) -> dict:
     """
@@ -43,8 +87,11 @@ def analyze_frame(bgr_frame: np.ndarray, conf: float = 0.5) -> dict:
         label      = model.names[cls_id]
         confidence = float(box.conf[0])
         
-        # Increased confidence threshold for specific classes to reduce false positives
-        if label.lower() in ["earphone", "phone"] and confidence < 0.75:
+        # Custom confidence thresholds per class to balance detection vs false positives
+        label_lower = label.lower()
+        if label_lower == "phone" and confidence < 0.60:
+            continue
+        elif label_lower in ["earphone", "headphones", "headphone"] and confidence < 0.75:
             continue
             
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
