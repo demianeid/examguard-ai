@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ViolationBehavior, AIEventViolation
+from .models import ViolationBehavior, AIEventViolation, AudioViolation
 
 
 class ViolationBehaviorSerializer(serializers.ModelSerializer):
@@ -21,5 +21,15 @@ class AIEventViolationSerializer(serializers.ModelSerializer):
             'head_direction', 'head_suspicious',
             'yolo_suspicious', 'yolo_labels',
             'h_ratio', 'v_ratio', 'occurred_at',
+        ]
+        read_only_fields = ['id', 'occurred_at', 'student']
+
+
+class AudioViolationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = AudioViolation
+        fields = [
+            'id', 'student', 'exam',
+            'event_type', 'db_level', 'reason', 'occurred_at',
         ]
         read_only_fields = ['id', 'occurred_at', 'student']

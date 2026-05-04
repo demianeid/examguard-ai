@@ -96,6 +96,12 @@ const ExamInterface: React.FC = () => {
   const [aiStatus, setAiStatus] = useState<'idle' | 'connected' | 'error'>('idle');
   const [lastAiAlert, setLastAiAlert] = useState<string | null>(null);
 
+  // --- Audio Proctoring State ---
+  const [audioStatus, setAudioStatus] = useState<'idle' | 'connected' | 'error'>('idle');
+  const [lastAudioAlert, setLastAudioAlert] = useState<string | null>(null);
+  const [micDbLevel, setMicDbLevel] = useState<number>(-96);
+  const [audioAlertCount, setAudioAlertCount] = useState<number>(0);
+
   // --- Head-Pose Overlay State (mirrors test_head_pose.py terminal output) ---
   const [headDirection, setHeadDirection] = useState<string>('');
   const [headSuspicious, setHeadSuspicious] = useState<boolean>(false);
@@ -112,9 +118,13 @@ const ExamInterface: React.FC = () => {
   const faceCanvasRef = useRef<HTMLCanvasElement>(null);
   const faceStreamRef = useRef<MediaStream | null>(null);
   const isTerminatedRef = useRef(false); // sync ref — event listeners always see latest value
-  const aiWsRef = useRef<WebSocket | null>(null);          // AI service WebSocket
+  const aiWsRef = useRef<WebSocket | null>(null);          // AI service WebSocket (video)
   const aiCanvasRef = useRef<HTMLCanvasElement | null>(null); // off-screen canvas for frame capture
   const aiIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null); // frame-send interval
+  const audioWsRef = useRef<WebSocket | null>(null);         // AI service WebSocket (audio)
+  const audioCtxRef = useRef<AudioContext | null>(null);     // Web Audio context
+  const audioStreamRef = useRef<MediaStream | null>(null);   // microphone stream
+  const audioProcessorRef = useRef<ScriptProcessorNode | null>(null); // PCM processor node
   const violationScoreRef = useRef(0);  // sync mirror of violationScore for WS closure
   const currentViewRef = useRef(currentView);
   const answersRef = useRef<(number | null)[]>([]);
@@ -467,6 +477,28 @@ const ExamInterface: React.FC = () => {
     }).catch(err => console.warn('postAIViolation failed:', err));
   }, [examId, token]);
 
+  /** POST an audio anomaly event to Django */
+  const postAudioViolation = useCallback((audio: {
+    event_type: string;
+    db_level:   number;
+    reason:     string | null;
+  }) => {
+    if (!examId) return;
+    fetch(`${DJANGO_BASE}/api/violations/audio/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        exam_id:    parseInt(examId),
+        event_type: audio.event_type,
+        db_level:   audio.db_level,
+        reason:     audio.reason ?? '',
+      }),
+    }).catch(err => console.warn('postAudioViolation failed:', err));
+  }, [examId, token]);
+
   // ============================================================
   // Violation & Termination
   // ============================================================
@@ -489,11 +521,16 @@ const ExamInterface: React.FC = () => {
     isTerminatedRef.current = true; // set sync ref FIRST so fullscreenchange handler sees it immediately
     setExamTerminated(true);
     setTerminationReason(reason);
-    setCurrentView('terminated');
+    setCurrentView('time-up');
     exitFullScreen();
-    stopAIProctoring();           // close WebSocket
+    stopAIProctoring();
+    stopAudioProctoring();        // close audio WebSocket + mic stream
     // Auto-submit on termination
-    submitExam(true, score ?? violationScore);
+    const doAutoSubmit = async () => {
+      await submitExam(true, score ?? violationScore);
+      setTimeout(() => navigate('/classes'), 5000);
+    };
+    doAutoSubmit();
   };
 
   // ============================================================
@@ -644,6 +681,134 @@ const ExamInterface: React.FC = () => {
     }
     setAiStatus('idle');
   }, []);
+
+  // ============================================================
+  // Audio WebSocket Proctoring
+  // ============================================================
+  const AUDIO_SAMPLE_RATE = 16000;
+  const AUDIO_BUFFER_SIZE = 8192; // ~0.5 s at 16 kHz
+
+  /** Start capturing mic and streaming Float32 PCM to /ws/audio */
+  const startAudioProctoring = useCallback(() => {
+    if (audioWsRef.current) return; // already running
+
+    let studentId = 'unknown';
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        studentId = payload.user_id || 'unknown';
+      } catch (e) {}
+    }
+
+    const host = window.location.hostname;
+    const ws = new WebSocket(`ws://${host}:8001/ws/audio/${examId}/${studentId}`);
+    ws.binaryType = 'arraybuffer';
+    audioWsRef.current = ws;
+
+    ws.onopen = async () => {
+      console.log('[Audio] WebSocket connected');
+      setAudioStatus('connected');
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { sampleRate: AUDIO_SAMPLE_RATE, channelCount: 1, echoCancellation: false },
+        });
+        audioStreamRef.current = stream;
+
+        const ctx = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
+        audioCtxRef.current = ctx;
+
+        const source = ctx.createMediaStreamSource(stream);
+        const processor = ctx.createScriptProcessor(AUDIO_BUFFER_SIZE, 1, 1);
+        audioProcessorRef.current = processor;
+
+        processor.onaudioprocess = (e) => {
+          const pcm = e.inputBuffer.getChannelData(0); // Float32Array
+          setMicDbLevel(() => {
+            const rms = Math.sqrt(pcm.reduce((s, v) => s + v * v, 0) / pcm.length);
+            return rms < 1e-10 ? -96 : Math.max(-96, 20 * Math.log10(rms));
+          });
+          if (audioWsRef.current?.readyState === WebSocket.OPEN) {
+            audioWsRef.current.send(pcm.buffer);
+          }
+        };
+
+        source.connect(processor);
+        processor.connect(ctx.destination);
+      } catch (err) {
+        console.warn('[Audio] Microphone access denied:', err);
+        setAudioStatus('error');
+      }
+    };
+
+    ws.onmessage = (event) => {
+      if (isTerminatedRef.current) return;
+      try {
+        const result = JSON.parse(event.data as string);
+        if (result.error) return;
+
+        setMicDbLevel(result.db_level ?? -96);
+
+        if (result.should_alert) {
+          const reason = result.reason ?? 'AI: Abnormal sound detected';
+          setLastAudioAlert(reason);
+          setAudioAlertCount(prev => prev + 1);
+          // 1 point for audio violations (medium severity)
+          addViolation(1.0, `🔊 ${reason}`, 'ai_audio_violation');
+          postAudioViolation({
+            event_type: result.event_type ?? 'loud_noise',
+            db_level:   result.db_level   ?? 0,
+            reason:     result.reason,
+          });
+        } else if (!result.suspicious) {
+          setLastAudioAlert(null);
+        }
+      } catch (e) {
+        console.warn('[Audio] Failed to parse message', e);
+      }
+    };
+
+    ws.onerror = () => {
+      console.warn('[Audio] WebSocket error — audio proctoring unavailable');
+      setAudioStatus('error');
+    };
+
+    ws.onclose = () => {
+      console.log('[Audio] WebSocket closed');
+      setAudioStatus('idle');
+      audioWsRef.current = null;
+    };
+  }, [examId, token, addViolation, postAudioViolation]);
+
+  /** Stop audio capture and close the audio WebSocket */
+  const stopAudioProctoring = useCallback(() => {
+    if (audioProcessorRef.current) {
+      audioProcessorRef.current.disconnect();
+      audioProcessorRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(t => t.stop());
+      audioStreamRef.current = null;
+    }
+    if (audioWsRef.current) {
+      audioWsRef.current.close();
+      audioWsRef.current = null;
+    }
+    setAudioStatus('idle');
+    setMicDbLevel(-96);
+  }, []);
+
+  // Stop audio proctoring when exam ends for any reason
+  useEffect(() => {
+    if (examTerminated || currentView === 'time-up') stopAudioProctoring();
+  }, [examTerminated, currentView, stopAudioProctoring]);
+
+  // Clean up audio on unmount
+  useEffect(() => () => stopAudioProctoring(), [stopAudioProctoring]);
 
   // Stop AI proctoring when exam ends for any reason
   useEffect(() => {
@@ -831,8 +996,9 @@ const ExamInterface: React.FC = () => {
         if (videoRef.current) videoRef.current.srcObject = stream;
       } catch { console.error('Camera access denied'); }
 
-      // Connect to AI proctoring service
+      // Connect to AI proctoring services
       startAIProctoring();
+      startAudioProctoring();
     }, 100);
   };
 
@@ -849,12 +1015,15 @@ const ExamInterface: React.FC = () => {
         if (!aiWsRef.current && aiStatus === 'idle') {
           startAIProctoring();
         }
+        if (!audioWsRef.current && audioStatus === 'idle') {
+          startAudioProctoring();
+        }
       };
       
       // Delay slightly to ensure videoRef is mounted
       setTimeout(initWebcamAndAI, 500);
     }
-  }, [currentView, examTerminated, startAIProctoring, aiStatus]);
+  }, [currentView, examTerminated, startAIProctoring, aiStatus, startAudioProctoring, audioStatus]);
 
   // ============================================================
   // Face Recognition
@@ -1386,6 +1555,16 @@ const ExamInterface: React.FC = () => {
                 }`} />
                 AI {aiStatus === 'connected' ? 'Monitoring' : aiStatus === 'error' ? 'Unavailable' : 'Connecting...'}
               </div>
+              
+              {/* Audio Proctoring status badge */}
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                audioStatus === 'connected' ? 'bg-green-500/30 text-green-200'
+                : audioStatus === 'error'   ? 'bg-yellow-500/30 text-yellow-200'
+                : 'bg-white/10 text-white/50'
+              }`}>
+                <Mic className="w-3 h-3" />
+                {audioStatus === 'connected' ? `${Math.round(micDbLevel)} dBFS` : audioStatus === 'error' ? 'Audio Err' : 'Mic...'}
+              </div>
               <button onClick={toggleFullScreen} className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg flex items-center gap-2">
                 {fullScreenActive ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 <span className="text-sm">{fullScreenActive ? 'Exit' : 'Enter'} Fullscreen</span>
@@ -1398,10 +1577,12 @@ const ExamInterface: React.FC = () => {
           </div>
 
           {/* AI Alert Banner — shown when AI detects suspicious behaviour */}
-          {lastAiAlert && (
+          {(lastAiAlert || lastAudioAlert) && (
             <div className="bg-orange-500 text-white px-6 py-2 flex items-center gap-2 text-sm border-x border-orange-600 animate-pulse">
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-              <span><strong>AI Alert:</strong> {lastAiAlert}</span>
+              <span>
+                <strong>AI Alert:</strong> {lastAiAlert ? lastAiAlert : lastAudioAlert}
+              </span>
             </div>
           )}
 
@@ -1577,6 +1758,12 @@ const ExamInterface: React.FC = () => {
                       <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
                       LIVE
                     </div>
+                    {audioStatus === 'connected' && (
+                      <div className="flex items-center gap-1 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        <Mic size={10} className={micDbLevel > -40 ? 'text-green-400' : 'text-gray-400'} />
+                        {Math.round(micDbLevel)} dB
+                      </div>
+                    )}
                     {aiStatus === 'connected' && headSuspicious && (
                       <div className="flex items-center gap-1 bg-red-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
                         AI ALERT

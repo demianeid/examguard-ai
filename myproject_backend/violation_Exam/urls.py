@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     PostBehaviorViolationView,
     PostAIViolationView,
+    PostAudioViolationView,
     ExamViolationSummaryView,
     StudentViolationSummaryView,
     ExamLiveStatusView,
@@ -13,6 +14,7 @@ from .views import (
 urlpatterns = [
     path('behavior/',                                      PostBehaviorViolationView.as_view(),   name='violation-behavior-post'),
     path('ai/',                                            PostAIViolationView.as_view(),         name='violation-ai-post'),
+    path('audio/',                                         PostAudioViolationView.as_view(),      name='violation-audio-post'),
     path('exam/<int:exam_id>/',                            ExamViolationSummaryView.as_view(),    name='violation-exam-summary'),
     path('exam/<int:exam_id>/student/<int:student_id>/',   StudentViolationSummaryView.as_view(), name='violation-student-summary'),
     # Phase 2

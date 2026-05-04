@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Eye, AlertCircle, Info, Clock, Users, FileText, Video,
   Calendar, BarChart3, ChevronLeft, CheckCircle, RefreshCw, ShieldAlert,
-  Search, SlidersHorizontal, AlertTriangle, CheckCircle2, TrendingUp, X, UserCheck,
+  Search, SlidersHorizontal, AlertTriangle, CheckCircle2, TrendingUp, X, UserCheck, Mic,
 } from 'lucide-react';
 
 const DJANGO = 'http://127.0.0.1:8000';
@@ -125,6 +125,10 @@ const ProctoringPage = () => {
     yolo_labels: string[];
     head_suspicious: boolean;
     yolo_suspicious: boolean;
+    is_audio: boolean;
+    audio_event_type: string | null;
+    audio_db_level: number | null;
+    audio_reason: string | null;
     new_violation: boolean;
     time: string;
   }
@@ -211,7 +215,7 @@ const ProctoringPage = () => {
             setLiveFrames(prev => ({ ...prev, [Number(data.student_id)]: data.frame }));
           }
 
-          if (data.type === 'alert' && data.student_id) {
+          if ((data.type === 'alert' || data.type === 'audio_alert') && data.student_id) {
             setLiveAlerts(prev => {
               // Use the always-fresh ref (liveStatus via closure would be stale)
               const matched = liveStatusRef.current?.students?.find(
@@ -229,6 +233,10 @@ const ProctoringPage = () => {
                 yolo_labels:     data.yolo_labels     ?? [],
                 head_suspicious: data.head_suspicious ?? false,
                 yolo_suspicious: data.yolo_suspicious ?? false,
+                is_audio:        data.type === 'audio_alert',
+                audio_event_type: data.event_type     ?? null,
+                audio_db_level:  data.db_level        ?? null,
+                audio_reason:    data.reason          ?? null,
                 new_violation:   data.new_violation   ?? false,
                 time:            new Date().toLocaleTimeString(),
               };
@@ -432,10 +440,18 @@ const ProctoringPage = () => {
                   {(student.status === 'flagged' || hasLiveAlert) && (
                     <div className="absolute inset-0 border-2 border-orange-400 rounded-xl animate-pulse pointer-events-none" />
                   )}
-                  {/* Live head-pose direction overlay on camera tile */}
+                  {/* Live alert overlay on camera tile */}
                   {(() => {
                     const latestAlert = liveAlerts.find(a => a.student_id === student.db_id);
                     if (!latestAlert) return null;
+                    if (latestAlert.is_audio) {
+                      return (
+                        <div className="absolute top-1 left-1 bg-black/70 text-[9px] font-bold px-1.5 py-0.5 rounded text-orange-300 leading-tight">
+                          🔊 {latestAlert.audio_event_type === 'speech_detected' ? 'SPEECH' : 'LOUD NOISE'}
+                          {latestAlert.audio_db_level && ` (${Math.round(latestAlert.audio_db_level)}dB)`}
+                        </div>
+                      );
+                    }
                     return (
                       <div className="absolute top-1 left-1 bg-black/70 text-[9px] font-bold px-1.5 py-0.5 rounded text-orange-300 leading-tight">
                         {latestAlert.head_suspicious && (latestAlert.head_direction?.includes('LOOKING') ? 'LOOKING AWAY' : latestAlert.head_direction || 'HEAD')}
@@ -500,7 +516,8 @@ const ProctoringPage = () => {
         <div>
           <p className="font-semibold text-gray-800 text-sm">{item.student_name}</p>
           <p className={`text-${color}-600 text-xs mt-0.5 flex items-center gap-1`}>
-            <AlertCircle size={11} />{item.event.includes('LOOKING') ? item.event.replace(/LOOKING.*/, 'Looking away') : item.event}
+            {item.event_type === 'ai_audio_violation' ? <Mic size={11} /> : <AlertCircle size={11} />}
+            {item.event.includes('LOOKING') ? item.event.replace(/LOOKING.*/, 'Looking away') : item.event.replace('🔊 ', '')}
             {item.yolo_labels && item.yolo_labels.length > 0 && (
               <span className="ml-1 text-gray-500">({item.yolo_labels.join(', ')})</span>
             )}
@@ -525,7 +542,7 @@ const ProctoringPage = () => {
   // ── Activity Tab — sidebar + cards layout ────────────────────────────────────
   const ActivityTab = () => {
     const [actSearch, setActSearch] = React.useState('');
-    const [actStatus, setActStatus] = React.useState<'All' | 'flagged' | 'warning' | 'online' | 'terminated' | 'submitted'>('All');
+    const [actStatus, setActStatus] = React.useState<'All' | 'flagged' | 'warning' | 'online' | 'submitted'>('All');
     const [actSeverity, setActSeverity] = React.useState<'All' | 'high' | 'medium' | 'low'>('All');
 
     if (dataLoading) {
@@ -550,7 +567,7 @@ const ProctoringPage = () => {
       high: GroupedIncident[];
       medium: GroupedIncident[];
       low: GroupedIncident[];
-      status: 'flagged' | 'warning' | 'online' | 'terminated' | 'submitted';
+      status: 'flagged' | 'warning' | 'online' | 'submitted';
       score: number;
     }
     const studentMap = new Map<string, StudentSummary>();
@@ -600,7 +617,6 @@ const ProctoringPage = () => {
       flagged:    { label: 'Flagged',    color: 'bg-red-100 text-red-700 border-red-200',       bar: 'bg-red-500',    icon: <AlertTriangle size={13} className="text-red-500" /> },
       warning:    { label: 'Warning',    color: 'bg-orange-100 text-orange-700 border-orange-200', bar: 'bg-orange-500', icon: <AlertCircle    size={13} className="text-orange-500" /> },
       online:     { label: 'Clear',      color: 'bg-green-100 text-green-700 border-green-200',   bar: 'bg-green-500',  icon: <CheckCircle2   size={13} className="text-green-500" /> },
-      terminated: { label: 'Terminated', color: 'bg-gray-100 text-gray-700 border-gray-300',      bar: 'bg-gray-600',   icon: <Info           size={13} className="text-gray-600" /> },
       submitted:  { label: 'Submitted',  color: 'bg-blue-100 text-blue-700 border-blue-200',      bar: 'bg-blue-500',   icon: <CheckCircle2   size={13} className="text-blue-500" /> },
     };
 

@@ -20,6 +20,7 @@ class ViolationBehavior(models.Model):
         ('ai_head_pose',       'AI: Suspicious Head Movement'),
         ('ai_multiple_faces',  'AI: Multiple Faces Detected'),
         ('ai_object_detected', 'AI: Unauthorized Object Detected'),
+        ('ai_audio_violation', 'AI: Abnormal Sound Detected'),
         ('other',              'Other'),
     ]
 
@@ -85,3 +86,45 @@ class AIEventViolation(models.Model):
 
     def __str__(self):
         return f"{self.student} | {self.exam.title} | {self.cheating_reason} @ {self.occurred_at:%H:%M:%S}"
+
+
+class AudioViolation(models.Model):
+    """
+    Records every abnormal sound event detected by the FastAPI AI audio service.
+    Posted to Django after the frontend receives the AudioResult over WebSocket.
+    """
+
+    AUDIO_EVENT_TYPES = [
+        ('loud_noise',         'Loud Noise Detected'),
+        ('speech_detected',    'Speech / Talking Detected'),
+        ('multiple_speakers',  'Multiple Speakers Detected'),
+    ]
+
+    student     = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='audio_violations',
+    )
+    exam        = models.ForeignKey(
+        Exam,
+        on_delete=models.CASCADE,
+        related_name='audio_violations',
+    )
+    event_type  = models.CharField(
+        max_length=30,
+        choices=AUDIO_EVENT_TYPES,
+        default='loud_noise',
+    )
+    db_level    = models.FloatField(
+        default=0.0,
+        help_text='Sound level in dBFS at the time of the event',
+    )
+    reason      = models.CharField(max_length=255, blank=True, null=True)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'audio_violation'
+        ordering = ['-occurred_at']
+
+    def __str__(self):
+        return f"{self.student} | {self.exam.title} | {self.event_type} ({self.db_level:.1f} dBFS) @ {self.occurred_at:%H:%M:%S}"

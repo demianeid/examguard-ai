@@ -89,7 +89,9 @@ def analyze_frame(bgr_frame: np.ndarray, conf: float = 0.5) -> dict:
         
         # Custom confidence thresholds per class to balance detection vs false positives
         label_lower = label.lower()
-        if label_lower == "phone" and confidence < 0.60:
+        if label_lower == "book":
+            continue  # Ignore books to prevent false positives on desks/shelves
+        elif label_lower == "phone" and confidence < 0.60:
             continue
         elif label_lower in ["earphone", "headphones", "headphone"] and confidence < 0.75:
             continue

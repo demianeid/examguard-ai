@@ -8,7 +8,8 @@ from typing import Dict, List
 
 from ai_service.services import yolo_detector
 from ai_service.services.head_pose import HeadPoseTracker
-from ai_service.schemas.schema import AnalysisResult, Detection, ErrorMessage
+from ai_service.services.audio_detector import AudioDetector
+from ai_service.schemas.schema import AnalysisResult, Detection, ErrorMessage, AudioResult
 
 router = APIRouter()
 
@@ -168,7 +169,7 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str):
                         reasons.append("MULTIPLE FACES DETECTED")
                     else:
                         reasons.append("Looking away" if "LOOKING" in direction else direction)
-                if yolo["suspicious"]:
+                if yolo["suspicious"] and head["face_detected"]:
                     labels = [d["label"] for d in yolo["detections"]]
                     reasons.append("OBJECT: " + ", ".join(labels))
 
@@ -212,6 +213,61 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str):
         print(f"WebSocket disconnected  exam={exam_id} student={student_id}")
     except Exception as e:
         print(f"WebSocket error: {e}")
+        try:
+            await websocket.send_text(ErrorMessage(error=str(e)).model_dump_json())
+        except Exception:
+            pass
+
+
+@router.websocket("/ws/audio/{exam_id}/{student_id}")
+async def audio_stream(websocket: WebSocket, exam_id: str, student_id: str):
+    """
+    Audio anomaly detection WebSocket endpoint.
+
+    Client sends:  raw binary Float32LE PCM at 16 kHz mono
+                   (each message = one 0.5 s window = 8 000 × 4 bytes)
+    Server sends:  JSON AudioResult
+    """
+    await websocket.accept()
+    print(f"[Audio] WebSocket connected  exam={exam_id} student={student_id}")
+
+    detector = AudioDetector()
+    loop = asyncio.get_running_loop()
+
+    try:
+        while True:
+            raw = await websocket.receive_bytes()
+
+            # Decode Float32LE PCM
+            pcm = np.frombuffer(raw, dtype=np.float32).copy()
+
+            # Run detector off the event loop thread
+            audio = await loop.run_in_executor(None, detector.update, pcm)
+
+            result = AudioResult(
+                suspicious=audio["suspicious"],
+                should_alert=audio["should_alert"],
+                db_level=audio["db_level"],
+                event_type=audio["event_type"],
+                reason=audio["reason"],
+            )
+
+            await websocket.send_text(result.model_dump_json())
+
+            # Broadcast audio alert to instructor WS room
+            if audio["should_alert"]:
+                await manager.broadcast_alert(exam_id, student_id, {
+                    "type":        "audio_alert",
+                    "event_type":  audio["event_type"],
+                    "db_level":    audio["db_level"],
+                    "reason":      audio["reason"],
+                    "new_violation": True,
+                })
+
+    except WebSocketDisconnect:
+        print(f"[Audio] WebSocket disconnected  exam={exam_id} student={student_id}")
+    except Exception as e:
+        print(f"[Audio] WebSocket error: {e}")
         try:
             await websocket.send_text(ErrorMessage(error=str(e)).model_dump_json())
         except Exception:

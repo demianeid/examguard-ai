@@ -6,8 +6,8 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db.models import Sum, Count
 
 from exam.models import Exam, ExamSession, ExamResult
-from .models import ViolationBehavior, AIEventViolation
-from .serializers import ViolationBehaviorSerializer, AIEventViolationSerializer
+from .models import ViolationBehavior, AIEventViolation, AudioViolation
+from .serializers import ViolationBehaviorSerializer, AIEventViolationSerializer, AudioViolationSerializer
 from .risk_engine import compute_risk_score, risk_band, risk_color
 
 
@@ -74,6 +74,35 @@ class PostAIViolationView(APIView):
         return Response(AIEventViolationSerializer(event).data, status=status.HTTP_201_CREATED)
 
 
+class PostAudioViolationView(APIView):
+    """POST /api/violations/audio/ — student sends an audio anomaly event."""
+    authentication_classes = [JWTAuthentication]
+    permission_classes     = [IsAuthenticated]
+
+    def post(self, request):
+        exam_id = request.data.get('exam_id')
+        if not exam_id:
+            return Response({'error': 'exam_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            exam = Exam.objects.get(pk=exam_id)
+        except Exam.DoesNotExist:
+            return Response({'error': 'Exam not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        event = AudioViolation.objects.create(
+            student    = request.user,
+            exam       = exam,
+            event_type = request.data.get('event_type', 'loud_noise'),
+            db_level   = request.data.get('db_level', 0.0),
+            reason     = request.data.get('reason', ''),
+        )
+
+
+
+        _refresh_risk_score(request.user, exam)
+
+        return Response(AudioViolationSerializer(event).data, status=status.HTTP_201_CREATED)
+
+
 # ── Internal helper ───────────────────────────────────────────────────────────
 def _refresh_risk_score(student, exam):
     """If an ExamResult already exists, recompute + save its risk_score."""
@@ -98,10 +127,12 @@ class ExamViolationSummaryView(APIView):
 
         behaviors = ViolationBehavior.objects.filter(exam=exam).order_by('-occurred_at')
         ai_events = AIEventViolation.objects.filter(exam=exam).order_by('-occurred_at')
+        audio_events = AudioViolation.objects.filter(exam=exam).order_by('-occurred_at')
         return Response({
-            'exam_id':   exam_id,
-            'behaviors': ViolationBehaviorSerializer(behaviors, many=True).data,
-            'ai_events': AIEventViolationSerializer(ai_events, many=True).data,
+            'exam_id':     exam_id,
+            'behaviors':   ViolationBehaviorSerializer(behaviors, many=True).data,
+            'ai_events':   AIEventViolationSerializer(ai_events, many=True).data,
+            'audio_events': AudioViolationSerializer(audio_events, many=True).data,
         })
 
 
@@ -117,15 +148,20 @@ class StudentViolationSummaryView(APIView):
         ai_events = AIEventViolation.objects.filter(
             exam_id=exam_id, student_id=student_id
         ).order_by('-occurred_at')
+        audio_events = AudioViolation.objects.filter(
+            exam_id=exam_id, student_id=student_id
+        ).order_by('-occurred_at')
 
         behavior_score = sum(float(v.score_points) for v in behaviors)
         return Response({
-            'exam_id':        exam_id,
-            'student_id':     student_id,
-            'behavior_score': round(behavior_score, 1),
-            'ai_event_count': ai_events.count(),
-            'behaviors':      ViolationBehaviorSerializer(behaviors, many=True).data,
-            'ai_events':      AIEventViolationSerializer(ai_events, many=True).data,
+            'exam_id':          exam_id,
+            'student_id':       student_id,
+            'behavior_score':   round(behavior_score, 1),
+            'ai_event_count':   ai_events.count(),
+            'audio_event_count': audio_events.count(),
+            'behaviors':        ViolationBehaviorSerializer(behaviors, many=True).data,
+            'ai_events':        AIEventViolationSerializer(ai_events, many=True).data,
+            'audio_events':     AudioViolationSerializer(audio_events, many=True).data,
         })
 
 
@@ -180,6 +216,15 @@ class ExamLiveStatusView(APIView):
                 .annotate(total=Count('id'))
         }
 
+        # Audio event count per student
+        audio_map = {
+            row['student_id']: row['total']
+            for row in AudioViolation.objects
+                .filter(exam=exam)
+                .values('student_id')
+                .annotate(total=Count('id'))
+        }
+
         # Progress from ExamResult
         progress_map = {}
         for r in ExamResult.objects.filter(exam=exam).select_related('student'):
@@ -204,7 +249,7 @@ class ExamLiveStatusView(APIView):
             # Determine status based on ExamResult first, then current score
             res = results_map.get(sid)
             if res:
-                status_val = 'terminated' if res.is_terminated else 'submitted'
+                status_val = 'submitted'
             else:
                 status_val = _student_status(v_score)
 
@@ -220,6 +265,7 @@ class ExamLiveStatusView(APIView):
                 'is_active':      session.is_active,
                 'violation_score': round(v_score, 1),
                 'ai_event_count': ai_map.get(sid, 0),
+                'audio_event_count': audio_map.get(sid, 0),
                 'status':         status_val,
                 'progress':       progress_map.get(sid, 0),
                 'started_at':     session.started_at.isoformat(),
@@ -257,7 +303,7 @@ class ExamIncidentsView(APIView):
     permission_classes     = [IsAuthenticated]
 
     HIGH_EVENTS   = {'devtools', 'ai_object_detected', 'ai_multiple_faces'}
-    MEDIUM_EVENTS = {'tab_switch', 'ai_head_pose', 'fullscreen_exit'}
+    MEDIUM_EVENTS = {'tab_switch', 'ai_head_pose', 'fullscreen_exit', 'ai_audio_violation'}
 
     def _severity(self, event_type: str, score_points: float) -> str:
         if event_type in self.HIGH_EVENTS or score_points >= 2:

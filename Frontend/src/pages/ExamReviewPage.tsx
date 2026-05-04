@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, AlertCircle, AlertTriangle, Info, User, Calendar, Clock,
   FileText, ShieldAlert, Loader2, Search, SlidersHorizontal, Download,
-  CheckCircle2, TrendingUp,
+  CheckCircle2, TrendingUp, Mic
 } from "lucide-react";
 
 const BASE_URL = "http://127.0.0.1:8000/api";
@@ -83,7 +83,7 @@ interface StudentSummary {
   medium: GroupedIncident[];
   low: GroupedIncident[];
   totalScore: number;
-  status: "flagged" | "warning" | "online" | "terminated" | "submitted";
+  status: "flagged" | "warning" | "online" | "submitted";
 }
 
 function buildStudentSummaries(buckets: IncidentBuckets, liveStudents: LiveStudent[]): StudentSummary[] {
@@ -135,7 +135,7 @@ export default function ExamReviewPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | "flagged" | "warning" | "online" | "terminated" | "submitted">("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | "flagged" | "warning" | "online" | "submitted">("All");
   const [severityFilter, setSeverityFilter] = useState<"All" | "high" | "medium" | "low">("All");
 
   useEffect(() => {
@@ -217,7 +217,6 @@ export default function ExamReviewPage() {
     flagged:    { label: "Flagged",    color: "bg-red-100 text-red-700 border-red-200",      topBar: "bg-red-500",    icon: <AlertTriangle size={14} className="text-red-500" /> },
     warning:    { label: "Warning",    color: "bg-orange-100 text-orange-700 border-orange-200", topBar: "bg-orange-500", icon: <AlertCircle   size={14} className="text-orange-500" /> },
     online:     { label: "Clear",      color: "bg-green-100 text-green-700 border-green-200",  topBar: "bg-green-500",  icon: <CheckCircle2  size={14} className="text-green-500" /> },
-    terminated: { label: "Terminated", color: "bg-gray-100 text-gray-700 border-gray-300",     topBar: "bg-gray-600",   icon: <Info          size={14} className="text-gray-600" /> },
     submitted:  { label: "Submitted",  color: "bg-blue-100 text-blue-700 border-blue-200",     topBar: "bg-blue-500",   icon: <CheckCircle2  size={14} className="text-blue-500" /> },
   };
 
@@ -293,7 +292,7 @@ export default function ExamReviewPage() {
               <div className="mb-6">
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Status</label>
                 <div className="space-y-1">
-                  {(["All", "flagged", "warning", "online", "terminated", "submitted"] as const).map((s) => (
+                  {(["All", "flagged", "warning", "online", "submitted"] as const).map((s) => (
                     <label key={s} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors group">
                       <div className="flex items-center gap-3">
                         <input type="radio" name="status" checked={statusFilter === s} onChange={() => setStatusFilter(s)} className="w-4 h-4 text-orange-600" />
@@ -409,11 +408,12 @@ export default function ExamReviewPage() {
                             const isHigh = student.high.some((h) => h.event_type === ev.event_type);
                             const isMed  = !isHigh && student.medium.some((m) => m.event_type === ev.event_type);
                             const evColor = isHigh ? "text-red-600 bg-red-50" : isMed ? "text-orange-600 bg-orange-50" : "text-yellow-700 bg-yellow-50";
-                            const displayEvent = ev.event.includes('LOOKING') ? ev.event.replace(/LOOKING.*/, 'Looking away') : ev.event;
+                            const displayEvent = ev.event.includes('LOOKING') ? ev.event.replace(/LOOKING.*/, 'Looking away') : ev.event.replace('🔊 ', '');
                             return (
                               <div key={`${ev.student_id}-${ev.event_type}-${ev.event}`} className="flex flex-col gap-1">
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className={`text-[11px] font-medium truncate flex-1 px-2 py-1 rounded-lg ${evColor}`}>
+                                  <span className={`text-[11px] font-medium truncate flex-1 px-2 py-1 rounded-lg flex items-center gap-1 ${evColor}`}>
+                                    {ev.event_type === 'ai_audio_violation' ? <Mic size={10} /> : null}
                                     {displayEvent}
                                   </span>
                                   <div className="flex items-center gap-2 flex-shrink-0">

@@ -28,5 +28,14 @@ class AnalysisResult(BaseModel):
     cheating_reason:   Optional[str] = None  # human-readable reason
 
 
+class AudioResult(BaseModel):
+    """Verdict returned by the /ws/audio endpoint after each PCM chunk."""
+    suspicious:   bool
+    should_alert: bool
+    db_level:     float          # dBFS (≤ 0)
+    event_type:   str            # 'loud_noise' | 'speech_detected' | 'clean'
+    reason:       Optional[str] = None
+
+
 class ErrorMessage(BaseModel):
     error: str

@@ -38,6 +38,7 @@ EVENT_WEIGHTS: dict[str, float] = {
     'tab_switch':          8.0,
     'ai_object_detected': 10.0,
     'ai_head_pose':        5.0,
+    'ai_audio_violation':  4.0,
     'fullscreen_exit':     5.0,
     'copy_paste':          3.0,
     'keyboard_shortcut':   2.0,
@@ -48,9 +49,13 @@ EVENT_WEIGHTS: dict[str, float] = {
 # Each raw AI event (cheating_detected=True) contributes this many risk points
 AI_EVENT_WEIGHT: float = 6.0
 
+# Each audio violation contributes this many risk points
+AUDIO_EVENT_WEIGHT: float = 3.0
+
 # Maximum contribution from each source
 MAX_BEHAVIOR_RISK: float = 70.0
-MAX_AI_RISK: float = 30.0
+MAX_AI_RISK: float       = 25.0
+MAX_AUDIO_RISK: float    = 15.0
 
 
 def compute_risk_score(student, exam) -> float:
@@ -58,7 +63,7 @@ def compute_risk_score(student, exam) -> float:
     Compute and return the risk score (0–100) for a student in an exam.
     Imports are deferred to avoid circular imports at module load time.
     """
-    from violation_Exam.models import ViolationBehavior, AIEventViolation
+    from violation_Exam.models import ViolationBehavior, AIEventViolation, AudioViolation
 
     # ── Behavior risk ─────────────────────────────────────────────────────────
     behaviors = ViolationBehavior.objects.filter(student=student, exam=exam)
@@ -76,8 +81,12 @@ def compute_risk_score(student, exam) -> float:
     ).count()
     ai_risk   = min(MAX_AI_RISK, ai_count * AI_EVENT_WEIGHT)
 
+    # ── Audio risk ────────────────────────────────────────────────────────────
+    audio_count = AudioViolation.objects.filter(student=student, exam=exam).count()
+    audio_risk  = min(MAX_AUDIO_RISK, audio_count * AUDIO_EVENT_WEIGHT)
+
     # ── Combined ──────────────────────────────────────────────────────────────
-    score = round(behavior_risk + ai_risk, 1)
+    score = round(behavior_risk + ai_risk + audio_risk, 1)
     return min(100.0, score)
 
 
