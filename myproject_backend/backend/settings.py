@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'hardware.frame_dispatcher',
     'face',
     'violation_Exam',              # Phase 1 — violation tracking
+    'notifications',
 ]
 
 # ─── Middleware ───────────────────────────────────────────────────
@@ -187,10 +188,7 @@ ASGI_APPLICATION = 'backend.asgi.application'
 
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [config('REDIS_URL', default='redis://localhost:6379/1')],
-        },
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
     },
 }
 

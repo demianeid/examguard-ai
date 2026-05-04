@@ -9,7 +9,8 @@ import os
 from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
-from hardware.ai_detection.routing import websocket_urlpatterns
+import hardware.ai_detection.routing
+import notifications.routing
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 
@@ -19,6 +20,9 @@ application = ProtocolTypeRouter({
 
     # WebSocket connections — JWT auth middleware wraps the router
     "websocket": AuthMiddlewareStack(
-        URLRouter(websocket_urlpatterns)
+        URLRouter(
+            hardware.ai_detection.routing.websocket_urlpatterns +
+            notifications.routing.websocket_urlpatterns
+        )
     ),
 })

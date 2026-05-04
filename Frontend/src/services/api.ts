@@ -441,4 +441,35 @@ export const hallEnrollmentApi = {
 export const studentListApi = {
   getAll: (): Promise<{id: number, name: string, email: string}[]> =>
     request('/api/hardware/monitoring/students/list/'),
+};
+
+// ============================================================
+// Notifications API
+// ============================================================
+export interface NotificationItemBackend {
+  id: number;
+  type: "exam" | "grade" | "system" | "announcement";
+  title: string;
+  content: string;
+  priority?: "low" | "medium" | "high" | "critical";
+  is_read: boolean;
+  metadata?: any;
+  created_at: string;
 }
+
+export const notificationApi = {
+  getAll: (): Promise<NotificationItemBackend[]> =>
+    request<NotificationItemBackend[]>("/api/notifications/"),
+
+  markAsRead: (id: number): Promise<{ status: string }> =>
+    request<{ status: string }>(`/api/notifications/${id}/read/`, { method: "POST" }),
+
+  markAllAsRead: (): Promise<{ status: string }> =>
+    request<{ status: string }>("/api/notifications/read-all/", { method: "POST" }),
+
+  delete: (id: number): Promise<void> =>
+    request<void>(`/api/notifications/${id}/`, { method: "DELETE" }),
+
+  clearAll: (): Promise<void> =>
+    request<void>("/api/notifications/clear/", { method: "DELETE" }),
+};

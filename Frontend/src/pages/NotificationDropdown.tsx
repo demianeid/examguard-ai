@@ -1,110 +1,137 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Bell,
-  Calendar,
-  CheckCircle,
-  AlertCircle,
-  Megaphone,
-  X,
-  Check,
-  ChevronDown,
-  Trash2
+  Bell, Calendar, CheckCircle, AlertCircle, Megaphone,
+  X, Check, ChevronDown, Trash2
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { notificationApi } from '../services/api';
+import type { NotificationItemBackend } from '../services/api';
 
-interface NotificationItem {
-  id: number;
-  type: "exam" | "grade" | "system" | "announcement";
-  title: string;
-  content: string;
-  time: string;
-  isRead: boolean;
-  priority?: "low" | "medium" | "high" | "critical";
-  metadata?: {
-    classId?: number;
-    className?: string;
-    examId?: number;
-    assignmentId?: number;
-    studentId?: string;
-    incidentId?: number;
-    score?: number;
-    maxScore?: number;
-    percentage?: number;
-    classAverage?: number;
-    examTime?: string;
-    examDate?: string;
-    duration?: string;
-    deadline?: string;
-    submissionsStatus?: string;
-    feedback?: string;
-    instructor?: string;
-    originalTime?: string;
-    newTime?: string;
-    type?: string;
-    estimatedTime?: string;
-    resources?: number;
-    severity?: string;
-    maintenanceStart?: string;
-    startsIn?: string;
-  };
-}
-
-// 🔴 أضفنا isScrolled prop
 interface NotificationDropdownProps {
   userType?: 'student' | 'instructor';
   isScrolled?: boolean;
 }
 
 const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled = false }) => {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
   const [showAll, setShowAll] = useState(false);
-  
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    { 
-      id: 1, 
-      type: "exam", 
-      title: "Midterm Exam Scheduled", 
-      content: "Software Engineering - Midterm exam scheduled for Oct 15 at 10:00 AM.", 
-      time: "1 hour ago", 
-      isRead: false, 
-      priority: "high", 
-      metadata: { classId: 1, className: "Software Engineering", examId: 101 } 
-    },
-    { 
-      id: 2, 
-      type: "system", 
-      title: "Flagged Incident Detected", 
-      content: "Student suspicious behavior detected during Quiz 3 in Computer Networks.", 
-      time: "3 hours ago", 
-      isRead: false, 
-      priority: "critical", 
-      metadata: { classId: 2, className: "Computer Networks", studentId: "2025045", incidentId: 345 } 
-    },
-    { 
-      id: 3, 
-      type: "grade", 
-      title: "Bulk Grading Complete", 
-      content: "All 45 submissions for Data Structures Quiz 2 have been automatically graded.", 
-      time: "1 day ago", 
-      isRead: true, 
-      priority: "medium", 
-      metadata: { classId: 3, className: "Data Structures", examId: 202 } 
-    },
-  ]);
+  const [notifications, setNotifications] = useState<NotificationItemBackend[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  const markAsRead = (id: number) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+  useEffect(() => {
+    fetchNotifications();
+    setupWebSocket();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const data = await notificationApi.getAll();
+      if (Array.isArray(data)) {
+        setNotifications(data);
+      } else if (data && typeof data === 'object' && 'results' in data) {
+        // Handle DRF paginated response
+        setNotifications((data as any).results || []);
+      } else {
+        setNotifications([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+      setNotifications([]);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  const setupWebSocket = () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    const wsUrl = `ws://localhost:8000/ws/notifications/?token=${token}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const newNotif = JSON.parse(event.data) as NotificationItemBackend;
+        setNotifications(prev => {
+          const safePrev = Array.isArray(prev) ? prev : [];
+          return [newNotif, ...safePrev];
+        });
+      } catch (err) {
+        console.error("Failed to parse websocket message", err);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error", error);
+    };
+
+    wsRef.current = ws;
   };
 
-  const deleteNotification = (id: number, e: React.MouseEvent) => {
+  const markAsRead = async (id: number) => {
+    try {
+      await notificationApi.markAsRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch (err) {
+      console.error("Error marking as read", err);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await notificationApi.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch (err) {
+      console.error("Error marking all as read", err);
+    }
+  };
+
+  const deleteNotification = async (id: number, e: React.MouseEvent) => {
     e.preventDefault(); 
     e.stopPropagation(); 
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    try {
+      await notificationApi.delete(id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (err) {
+      console.error("Error deleting notification", err);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      await notificationApi.clearAll();
+      setNotifications([]);
+    } catch (err) {
+      console.error("Error clearing notifications", err);
+    }
+  };
+
+  const handleNotificationClick = async (notification: NotificationItemBackend) => {
+    if (!notification.is_read) {
+      markAsRead(notification.id);
+    }
+    
+    setIsOpen(false);
+    
+    const { type, metadata } = notification;
+    if (!metadata) return;
+
+    if (type === 'system') {
+      if (metadata.examId) navigate(`/review-incidents/${metadata.examId}`);
+      else navigate(`/review-incidents`);
+    } else if (type === 'exam') {
+      if (metadata.classId) navigate(`/classes/${metadata.classId}`);
+      else if (metadata.examId) navigate(`/exam/${metadata.examId}`);
+    } else if (type === 'grade') {
+      if (metadata.examId) navigate(`/exam-results/${metadata.examId}`);
+    }
   };
 
   const getFilteredNotifications = () => {
@@ -135,11 +162,21 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const formatTime = (isoString: string) => {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hour(s) ago`;
+    return `${Math.floor(diffInSeconds / 86400)} day(s) ago`;
+  };
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
     <div className="relative inline-block">
-      {/* 🔴 الزرار بيتغير لونه حسب isScrolled */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`relative p-2.5 rounded-lg transition-all duration-200 ${
@@ -220,9 +257,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
                   <div
                     key={notification.id}
                     className={`relative px-5 py-4 hover:bg-gray-50 cursor-pointer transition-all duration-200 ${
-                      !notification.isRead ? 'bg-blue-50/50' : ''
+                      !notification.is_read ? 'bg-blue-50/50' : ''
                     }`}
-                    onClick={() => markAsRead(notification.id)}
+                    onClick={() => handleNotificationClick(notification)}
                   >
                     {notification.priority && ['critical', 'high'].includes(notification.priority) && (
                       <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 ${getPriorityColor(notification.priority)} rounded-r-full`}></div>
@@ -234,14 +271,14 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <h4 className="font-semibold text-gray-900 text-sm">{notification.title}</h4>
-                              {!notification.isRead && (
+                              {!notification.is_read && (
                                 <span className="bg-[#1A80F6] text-white text-[10px] px-2 py-0.5 rounded-full">New</span>
                               )}
                             </div>
                             <p className="text-gray-600 text-sm mt-1 line-clamp-2">{notification.content}</p>
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            <span className="text-xs text-gray-400 whitespace-nowrap">{notification.time}</span>
+                            <span className="text-xs text-gray-400 whitespace-nowrap">{formatTime(notification.created_at)}</span>
                             <button
                               onClick={(e) => deleteNotification(notification.id, e)}
                               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -274,7 +311,11 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
                   <ChevronDown size={14} className={`transition-transform ${showAll ? 'rotate-180' : ''}`} />
                 </button>
                 <button
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (window.confirm('Clear all notifications?')) setNotifications([]); }}
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    e.stopPropagation(); 
+                    if (window.confirm('Clear all notifications?')) clearAllNotifications(); 
+                  }}
                   className="text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors flex items-center gap-1"
                 >
                   <Trash2 size={12} />Clear all

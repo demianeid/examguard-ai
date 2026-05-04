@@ -3,7 +3,9 @@ head_pose.py – lightweight, low-latency head-pose service.
 
 Key design decisions
 ────────────────────
-• A single FaceMesh instance is reused for the lifetime of the process
+• Uses mediapipe.tasks.vision.FaceLandmarker (compatible with mediapipe 0.10.30+).
+  The legacy mp.solutions API was removed in these versions.
+• A single FaceLandmarker instance is reused for the lifetime of the process
   (no per-call model construction overhead).
 • Frame-skipping: `analyze_frame` only runs inference every
   `FRAME_INTERVAL` calls; in-between calls return the cached result.
@@ -14,16 +16,33 @@ Key design decisions
   from natural head movement.
 """
 
+import os
 import mediapipe as mp
+from mediapipe.tasks.python import vision as mp_vision
+from mediapipe.tasks.python.core import base_options as mp_base
 
-# ── Singleton FaceMesh (created once, reused forever) ─────────────────────────
-_face_mesh = mp.solutions.face_mesh.FaceMesh(
-    static_image_mode=False,
-    max_num_faces=3,
-    refine_landmarks=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5,
+# ── Model path ────────────────────────────────────────────────────────────────
+_MODEL_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "models",
+    "face_landmarker.task",
 )
+_MODEL_PATH = os.path.abspath(_MODEL_PATH)
+
+# ── Singleton FaceLandmarker (created once, reused forever) ──────────────────
+_base_options = mp_base.BaseOptions(model_asset_path=_MODEL_PATH)
+_options = mp_vision.FaceLandmarkerOptions(
+    base_options=_base_options,
+    output_face_blendshapes=False,
+    output_facial_transformation_matrixes=False,
+    num_faces=3,
+    min_face_detection_confidence=0.5,
+    min_face_presence_confidence=0.5,
+    min_tracking_confidence=0.5,
+    running_mode=mp_vision.RunningMode.IMAGE,
+)
+_face_landmarker = mp_vision.FaceLandmarker.create_from_options(_options)
 
 # ── Tunable constants ──────────────────────────────────────────────────────────
 HORIZONTAL_THRESHOLD = 0.35   # ratio – increased from 0.18 for less strictness
@@ -35,7 +54,11 @@ FRAME_INTERVAL       = 3      # run inference only every N frames
 
 # ── Pure geometry helper ───────────────────────────────────────────────────────
 def get_head_pose(landmarks, w: int, h: int) -> tuple[float, float]:
-    """Return (h_ratio, v_ratio) in the range roughly [-0.5, +0.5]."""
+    """Return (h_ratio, v_ratio) in the range roughly [-0.5, +0.5].
+
+    Works with both the new NormalizedLandmark objects (from FaceLandmarker)
+    which expose .x / .y attributes in [0, 1].
+    """
     nose       = landmarks[1]
     chin       = landmarks[152]
     forehead   = landmarks[10]
@@ -56,6 +79,20 @@ def get_head_pose(landmarks, w: int, h: int) -> tuple[float, float]:
     return h_ratio, v_ratio
 
 
+def _run_inference(rgb_frame):
+    """Run FaceLandmarker inference on an RGB numpy array.
+
+    Returns a list of face landmark lists (one per face), or an empty list.
+    Each face landmark list is a list of NormalizedLandmark with .x/.y/.z.
+    """
+    mp_image = mp.Image(
+        image_format=mp.ImageFormat.SRGB,
+        data=rgb_frame,
+    )
+    detection_result = _face_landmarker.detect(mp_image)
+    return detection_result.face_landmarks  # list[list[NormalizedLandmark]]
+
+
 # ── Stateless single-frame analyser (for API / one-shot usage) ────────────────
 _frame_counter  = 0
 _cached_result: dict | None = None
@@ -65,7 +102,7 @@ def analyze_frame(rgb_frame) -> dict:
     """
     Analyse *rgb_frame* and return a result dict.
 
-    Runs FaceMesh inference only every ``FRAME_INTERVAL`` frames;
+    Runs FaceLandmarker inference only every ``FRAME_INTERVAL`` frames;
     otherwise returns the previous result unchanged (cheap path).
     """
     global _frame_counter, _cached_result
@@ -75,9 +112,9 @@ def analyze_frame(rgb_frame) -> dict:
         return _cached_result
 
     h, w = rgb_frame.shape[:2]
-    result = _face_mesh.process(rgb_frame)
+    all_face_landmarks = _run_inference(rgb_frame)
 
-    if not result.multi_face_landmarks:
+    if not all_face_landmarks:
         _cached_result = {
             "face_detected": False,
             "multiple_faces": False,
@@ -88,9 +125,9 @@ def analyze_frame(rgb_frame) -> dict:
         }
         return _cached_result
 
-    multiple_faces = len(result.multi_face_landmarks) > 1
+    multiple_faces = len(all_face_landmarks) > 1
 
-    lm = result.multi_face_landmarks[0].landmark
+    lm = all_face_landmarks[0]
     h_ratio, v_ratio = get_head_pose(lm, w, h)
 
     suspicious = False
@@ -179,9 +216,9 @@ class HeadPoseTracker:
 
         # ── Run inference ─────────────────────────────────────────────────────
         h, w = rgb_frame.shape[:2]
-        result = _face_mesh.process(rgb_frame)
+        all_face_landmarks = _run_inference(rgb_frame)
 
-        if not result.multi_face_landmarks:
+        if not all_face_landmarks:
             base = {
                 "face_detected": False,
                 "multiple_faces": False,
@@ -191,9 +228,9 @@ class HeadPoseTracker:
                 "suspicious":    True,
             }
         else:
-            multiple_faces = len(result.multi_face_landmarks) > 1
+            multiple_faces = len(all_face_landmarks) > 1
 
-            lm = result.multi_face_landmarks[0].landmark
+            lm = all_face_landmarks[0]
             h_ratio, v_ratio = get_head_pose(lm, w, h)
 
             suspicious = False

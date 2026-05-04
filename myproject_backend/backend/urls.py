@@ -26,6 +26,7 @@ urlpatterns = [
     path('api/exam/', include('exam.urls')),
     path('api/student/', include('student.urls')),
     path('api/violations/', include('violation_Exam.urls')),   # Phase 1
+    path('api/notifications/', include('notifications.urls')),
 
     # Hardware
     path('api/hardware/monitoring/', include('hardware.offline_monitoring.urls')),
