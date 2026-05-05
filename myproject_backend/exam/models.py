@@ -30,6 +30,11 @@ class Exam(models.Model):
         blank=True,
         related_name='assigned_exams'
     )
+    security_settings = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Per-exam proctoring module settings (behavior_detection, audio_detection, etc.)"
+    )
     created_at        = models.DateTimeField(auto_now_add=True)
     updated_at        = models.DateTimeField(auto_now=True)
 

@@ -278,6 +278,7 @@ class StudentExamDetailView(APIView):
             'end_datetime': exam.end_datetime.isoformat(),
             'questions': questions,
             'violation_score': v_score,
+            'security_settings': exam.security_settings or {},
         })
 
 

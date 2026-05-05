@@ -10,9 +10,7 @@ import {
   Users,
   Mic,
   Lock,
-  Video,
   AlertCircle,
-  Wifi,
   CheckCircle,
   UserPlus,
   UserMinus,
@@ -169,14 +167,13 @@ export default function CreateExam() {
   }, [searchParams, STORAGE_KEY]);
 
   const baseSecuritySettings: SecurityFeature[] = [
-    { id: "1",  name: "AI Proctoring",          description: "Automated behavior analysis and anomaly detection",   recommended: true,  enabled: true,  icon: <Shield      className="w-5 h-5 text-blue-500" /> },
-    { id: "2",  name: "Live Proctoring",         description: "Real-time human monitoring during the exam",           recommended: true,  enabled: true,  icon: <Eye         className="w-5 h-5 text-blue-500" /> },
-    { id: "4",  name: "Multiple Face Detection", description: "Alert if multiple people are detected",                recommended: true,  enabled: true,  icon: <Users       className="w-5 h-5 text-blue-500" /> },
-    { id: "6",  name: "Lockdown Browser",        description: "Restrict access to other applications",               recommended: true,  enabled: true,  icon: <Lock        className="w-5 h-5 text-blue-500" /> },
-    { id: "7",  name: "Record & Review",         description: "Record entire session for later review",              recommended: false, enabled: false, icon: <Video       className="w-5 h-5 text-gray-400" /> },
-    { id: "8",  name: "Object Detection",        description: "Detect phones, notes, or unauthorized materials",     recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
-    { id: "9",  name: "Real-Time Alerts",        description: "Instant notifications for suspicious activity",       recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
-    { id: "10", name: "Offline Exam Mode",       description: "Allow exams without internet connection",             recommended: false, enabled: false, icon: <Wifi        className="w-5 h-5 text-gray-400" /> },
+    { id: "behavior",    name: "Behavior Detection",       description: "Head pose tracking and anomaly behavior analysis",     recommended: true,  enabled: true,  icon: <Shield      className="w-5 h-5 text-blue-500" /> },
+    { id: "audio",       name: "Audio Detection",          description: "Detect speech or suspicious sounds via microphone",    recommended: true,  enabled: true,  icon: <Mic         className="w-5 h-5 text-blue-500" /> },
+    { id: "live",        name: "Live Proctoring",          description: "Real-time human monitoring during the exam",           recommended: true,  enabled: true,  icon: <Eye         className="w-5 h-5 text-blue-500" /> },
+    { id: "multiface",   name: "Multiple Face Detection",  description: "Alert if multiple people are detected",                recommended: true,  enabled: true,  icon: <Users       className="w-5 h-5 text-blue-500" /> },
+    { id: "lockdown",    name: "Lockdown Browser",         description: "Restrict copy, paste, shortcuts and other applications",recommended: true,  enabled: true,  icon: <Lock        className="w-5 h-5 text-blue-500" /> },
+    { id: "object",      name: "Object Detection",         description: "Detect phones, notes, or unauthorized materials",     recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
+    { id: "alerts",      name: "Real-Time Alerts",         description: "Instant notifications for suspicious activity",       recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
   ];
 
   const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>(() => {
@@ -495,6 +492,8 @@ export default function CreateExam() {
         .map((opt, idx) => ({ choice_text: opt, is_correct: q.correctAnswer === idx }));
     };
 
+    const getEnabled = (id: string) => securitySettings.find(s => s.id === id)?.enabled ?? true;
+
     const body = {
       title:          formData.examTitle,
       description:    formData.description,
@@ -513,6 +512,15 @@ export default function CreateExam() {
       assigned_students:
         formData.studentSelectionType === "all" ? null : selectedStudents.map((s) => s.id),
       student_selection_type: formData.studentSelectionType,
+      security_settings: {
+        behavior_detection:      getEnabled('behavior'),
+        audio_detection:         getEnabled('audio'),
+        live_proctoring:         getEnabled('live'),
+        multiple_face_detection: getEnabled('multiface'),
+        lockdown_browser:        getEnabled('lockdown'),
+        object_detection:        getEnabled('object'),
+        real_time_alerts:        getEnabled('alerts'),
+      },
     };
 
     try {
@@ -525,7 +533,14 @@ export default function CreateExam() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.detail || data?.message || `Server error (${res.status})`);
+        // DRF returns field errors as {field: ["message"]} — extract the first one
+        let errorMsg = data?.detail || data?.message;
+        if (!errorMsg && data && typeof data === 'object') {
+          const firstKey = Object.keys(data)[0];
+          const firstVal = data[firstKey];
+          errorMsg = Array.isArray(firstVal) ? `${firstKey}: ${firstVal[0]}` : String(firstVal);
+        }
+        throw new Error(errorMsg || `Server error (${res.status})`);
       }
 
       clearDraft();

@@ -32,6 +32,7 @@ interface ExamData {
   end_datetime?: string;
   questions: Question[];
   violation_score?: number;
+  security_settings?: Record<string, boolean>;
 }
 
 const ExamInterface: React.FC = () => {
@@ -128,6 +129,7 @@ const ExamInterface: React.FC = () => {
   const violationScoreRef = useRef(0);  // sync mirror of violationScore for WS closure
   const currentViewRef = useRef(currentView);
   const answersRef = useRef<(number | null)[]>([]);
+  const secSettingsRef = useRef<Record<string, boolean>>({}); // always-fresh security settings
 
   // Keep refs in sync
   useEffect(() => {
@@ -137,6 +139,21 @@ const ExamInterface: React.FC = () => {
   useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
+
+  // ── Derive security flags from examData (default ALL TRUE if not set) ──────
+  const sec = examData?.security_settings ?? {};
+  const behaviorEnabled   = sec.behavior_detection      !== false;
+  const audioEnabled      = sec.audio_detection         !== false;
+  const liveEnabled       = sec.live_proctoring         !== false;
+  const multiFaceEnabled  = sec.multiple_face_detection !== false;
+  const lockdownEnabled   = sec.lockdown_browser        !== false;
+  const objectEnabled     = sec.object_detection        !== false;
+  const alertsEnabled     = sec.real_time_alerts        !== false;
+
+  // Keep secSettingsRef in sync so callbacks/closures always see current values
+  useEffect(() => {
+    secSettingsRef.current = examData?.security_settings ?? {};
+  }, [examData]);
 
   // Session Storage Persistence
   useEffect(() => { sessionStorage.setItem(`exam_${examId}_currentView`, currentView); }, [currentView, examId]);
@@ -244,6 +261,7 @@ const ExamInterface: React.FC = () => {
   // ============================================================
   useEffect(() => {
     const handler = (e: MouseEvent) => {
+      if (!lockdownEnabled) return;
       if (currentView === 'exam' && !examTerminated) {
         e.preventDefault();
         addViolation(0.2, 'Right-click attempt', 'right_click');
@@ -251,10 +269,11 @@ const ExamInterface: React.FC = () => {
     };
     document.addEventListener('contextmenu', handler);
     return () => document.removeEventListener('contextmenu', handler);
-  }, [currentView, examTerminated]);
+  }, [currentView, examTerminated, lockdownEnabled]);
 
   useEffect(() => {
     const handler = (e: ClipboardEvent) => {
+      if (!lockdownEnabled) return;
       if (currentView === 'exam' && !examTerminated) {
         e.preventDefault();
         addViolation(0.5, 'Copy/Paste attempt detected', 'copy_paste');
@@ -268,10 +287,11 @@ const ExamInterface: React.FC = () => {
       document.removeEventListener('cut', handler);
       document.removeEventListener('paste', handler);
     };
-  }, [currentView, examTerminated]);
+  }, [currentView, examTerminated, lockdownEnabled]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (!lockdownEnabled) return;
       if (currentView !== 'exam' || examTerminated) return;
       const blocked = [
         e.ctrlKey && ['c','v','x','p','s','u','a','n','t','w'].includes(e.key),
@@ -289,10 +309,11 @@ const ExamInterface: React.FC = () => {
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [currentView, examTerminated]);
+  }, [currentView, examTerminated, lockdownEnabled]);
 
   useEffect(() => {
     const detect = () => {
+      if (!lockdownEnabled) return;
       if (currentView !== 'exam' || examTerminated) return;
       const detected = window.outerWidth - window.innerWidth > 160 || window.outerHeight - window.innerHeight > 160;
       if (detected && !devToolsOpen) { setDevToolsOpen(true); addViolation(2, 'Developer tools opened', 'devtools'); }
@@ -301,11 +322,11 @@ const ExamInterface: React.FC = () => {
     const interval = setInterval(detect, 1000);
     window.addEventListener('resize', detect);
     return () => { clearInterval(interval); window.removeEventListener('resize', detect); };
-  }, [currentView, examTerminated, devToolsOpen]);
+  }, [currentView, examTerminated, devToolsOpen, lockdownEnabled]);
 
   useEffect(() => {
     const handler = () => {
-      // Guard with both React state AND the sync ref to handle async state closure issue
+      if (!lockdownEnabled) return;
       if (currentView === 'exam' && !examTerminated && !isTerminatedRef.current) {
         const isFS = document.fullscreenElement !== null;
         setFullScreenActive(isFS);
@@ -319,10 +340,11 @@ const ExamInterface: React.FC = () => {
     };
     document.addEventListener('fullscreenchange', handler);
     return () => document.removeEventListener('fullscreenchange', handler);
-  }, [currentView, examTerminated]);
+  }, [currentView, examTerminated, lockdownEnabled]);
 
   useEffect(() => {
     const handler = () => {
+      if (!lockdownEnabled) return;
       if (currentView === 'exam' && !examTerminated) {
         const focused = document.visibilityState === 'visible';
         setTabFocus(focused);
@@ -331,51 +353,21 @@ const ExamInterface: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
-  }, [currentView, examTerminated]);
+  }, [currentView, examTerminated, lockdownEnabled]);
 
   useEffect(() => {
-    const handler = (e: Event) => { if (currentView === 'exam' && !examTerminated) e.preventDefault(); };
+    const handler = (e: Event) => {
+      if (!lockdownEnabled) return;
+      if (currentView === 'exam' && !examTerminated) e.preventDefault();
+    };
     document.addEventListener('selectstart', handler);
     document.addEventListener('dragstart', handler);
-    // Disable right click context menu
-    document.addEventListener('contextmenu', handler);
-    return () => { 
-      document.removeEventListener('selectstart', handler); 
-      document.removeEventListener('dragstart', handler); 
-      document.removeEventListener('contextmenu', handler);
+    return () => {
+      document.removeEventListener('selectstart', handler);
+      document.removeEventListener('dragstart', handler);
     };
-  }, [currentView, examTerminated]);
+  }, [currentView, examTerminated, lockdownEnabled]);
 
-  // Keyboard shortcut tracking & prevention
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (currentView !== 'exam' || examTerminated) return;
-
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
-
-      // Prevent Copy / Paste / Cut / Print / Save / Find
-      if (cmdOrCtrl && ['c', 'v', 'x', 'p', 's', 'f'].includes(e.key.toLowerCase())) {
-        e.preventDefault();
-        addViolation(1, `Keyboard shortcut blocked (Ctrl+${e.key.toUpperCase()})`, 'shortcut_used');
-        return;
-      }
-
-      // Prevent Developer Tools & View Source
-      // F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U
-      if (
-        e.key === 'F12' || 
-        (cmdOrCtrl && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase())) ||
-        (cmdOrCtrl && e.key.toLowerCase() === 'u')
-      ) {
-        e.preventDefault();
-        addViolation(2, 'Developer tools shortcut blocked', 'devtools');
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [currentView, examTerminated]);
 
   // ============================================================
   // Leave / Navigation Traps
@@ -550,7 +542,8 @@ const ExamInterface: React.FC = () => {
     }
 
     const host = window.location.hostname;
-    const ws = new WebSocket(`ws://${host}:8001/ws/analyze/${examId}/${studentId}`);
+    const liveParam = (secSettingsRef.current.live_proctoring !== false) ? '1' : '0';
+    const ws = new WebSocket(`ws://${host}:8001/ws/analyze/${examId}/${studentId}?live=${liveParam}`);
     ws.binaryType = 'arraybuffer';
     aiWsRef.current = ws;
 
@@ -607,10 +600,10 @@ const ExamInterface: React.FC = () => {
           let eventType = 'ai_head_pose';
           let aiPoints = 1.0;
 
-          if (result.yolo_suspicious) {
+          if (result.yolo_suspicious && secSettingsRef.current.object_detection !== false) {
             eventType = 'ai_object_detected';
             aiPoints = 2.0;
-          } else if (result.multiple_faces) {
+          } else if (result.multiple_faces && secSettingsRef.current.multiple_face_detection !== false) {
             eventType = 'ai_multiple_faces';
             aiPoints = 2.0;
           } else if (result.head_direction === 'NO FACE') {
@@ -619,6 +612,9 @@ const ExamInterface: React.FC = () => {
             } else {
               aiPoints = 0.5; // Brief missing face
             }
+          } else if (result.yolo_suspicious || result.multiple_faces) {
+            // These detections are disabled by settings — skip the violation
+            return;
           }
 
           let snapshotBase64: string | undefined;
@@ -971,7 +967,9 @@ const ExamInterface: React.FC = () => {
       });
     } catch { console.error('Failed to register exam session'); }
 
-    await requestFullScreen();
+    if (lockdownEnabled) {
+      await requestFullScreen();
+    }
 
     if (examData?.start_datetime) {
       const startTimeMs = new Date(examData.start_datetime).getTime();
@@ -991,14 +989,15 @@ const ExamInterface: React.FC = () => {
 
     // Wait for React to render the exam view so videoRef.current is available
     setTimeout(async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-        if (videoRef.current) videoRef.current.srcObject = stream;
-      } catch { console.error('Camera access denied'); }
-
-      // Connect to AI proctoring services
-      startAIProctoring();
-      startAudioProctoring();
+      // Only start camera if behavior detection is enabled
+      if (behaviorEnabled) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+          if (videoRef.current) videoRef.current.srcObject = stream;
+        } catch { console.error('Camera access denied'); }
+        startAIProctoring();
+      }
+      if (audioEnabled) startAudioProctoring();
     }, 100);
   };
 
@@ -1012,10 +1011,10 @@ const ExamInterface: React.FC = () => {
             if (videoRef.current) videoRef.current.srcObject = stream;
           } catch { console.error('Camera access denied on refresh'); }
         }
-        if (!aiWsRef.current && aiStatus === 'idle') {
+        if (behaviorEnabled && !aiWsRef.current && aiStatus === 'idle') {
           startAIProctoring();
         }
-        if (!audioWsRef.current && audioStatus === 'idle') {
+        if (audioEnabled && !audioWsRef.current && audioStatus === 'idle') {
           startAudioProctoring();
         }
       };
@@ -1599,21 +1598,21 @@ const ExamInterface: React.FC = () => {
           </div>
 
           {/* Alerts */}
-          {(proctorAlerts.length > 0 || !fullScreenActive || !tabFocus) && (
+          {((alertsEnabled && proctorAlerts.length > 0) || (lockdownEnabled && !fullScreenActive) || (lockdownEnabled && !tabFocus)) && (
             <div className="bg-white border-x border-gray-200 px-6 py-3">
               <div className="flex flex-wrap gap-3">
-                {proctorAlerts.slice(0, 2).map((alert, i) => (
+                {(alertsEnabled ? proctorAlerts.slice(0, 2) : []).map((alert, i) => (
                   <div key={i} className="bg-red-100 border border-red-300 text-red-800 px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
                     <AlertTriangle className="w-4 h-4" /> ⚠️ {alert}
                   </div>
                 ))}
-                {!fullScreenActive && (
+                {(lockdownEnabled && !fullScreenActive) && (
                   <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 px-4 py-2 rounded-lg flex items-center gap-2 text-sm animate-pulse">
                     <Maximize2 className="w-4 h-4" /> Full-screen exited —
                     <button onClick={requestFullScreen} className="font-bold underline">Click to re-enter</button>
                   </div>
                 )}
-                {!tabFocus && (
+                {(lockdownEnabled && !tabFocus) && (
                   <div className="bg-yellow-100 border border-yellow-300 text-yellow-800 px-4 py-2 rounded-lg flex items-center gap-2 text-sm animate-pulse">
                     <Eye className="w-4 h-4" /> Tab focus lost — Return to exam window
                   </div>

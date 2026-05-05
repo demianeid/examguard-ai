@@ -90,19 +90,23 @@ async def instructor_stream(websocket: WebSocket, exam_id: str):
 
 
 @router.websocket("/ws/analyze/{exam_id}/{student_id}")
-async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str):
+async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str, live: str = "1"):
     """
     WebSocket endpoint.
 
     Client sends:  raw JPEG bytes  (one frame per message)
     Server sends:  JSON AnalysisResult
 
+    Query params:
+      live  "1" (default) — relay annotated frames to instructor room
+            "0"           — AI analysis only, no live relay
+
     HeadPoseTracker is instantiated **per connection** so each student
-    has independent debouncing state.  head_suspicious is True only on
-    the first frame of a new looking-away event (edge-triggered).
+    has independent debouncing state.
     """
     await websocket.accept()
-    print(f"WebSocket connected  exam={exam_id} student={student_id}")
+    print(f"WebSocket connected  exam={exam_id} student={student_id}  live_relay={live}")
+    do_live_relay = (live == "1")
 
     # One tracker per student connection – gives independent debounce state.
     # frame_interval=1 because the browser already throttles the frame rate;
@@ -149,7 +153,8 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str):
             cv2.putText(annotated, direction_text, (10, 15 + th), cv2.FONT_HERSHEY_SIMPLEX, 0.6, text_color, 2)
 
             _, buffer = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-            await manager.broadcast_frame(exam_id, student_id, buffer.tobytes())
+            if do_live_relay:
+                await manager.broadcast_frame(exam_id, student_id, buffer.tobytes())
 
             # ── 6. Build combined verdict ────────────────────────────────
             # Both trackers now emit `should_alert` exactly once per violation event

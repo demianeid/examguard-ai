@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from .models import Exam, Question, Choice
-from django.utils import timezone
 
 # ============================================================
 # CHOICE
@@ -69,18 +68,14 @@ class ExamSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'duration', 'total_marks',
             'start_datetime', 'end_datetime', 'instructions',
-            'status', 'created_at', 'questions', 'class_id', 'assigned_students'
+            'status', 'created_at', 'questions', 'class_id',
+            'assigned_students', 'security_settings'
         ]
         read_only_fields = ['id', 'created_at', 'status', 'assigned_students', 'class_id']
 
     def validate(self, data):
-        now = timezone.now()
         start = data.get('start_datetime')
         end = data.get('end_datetime')
-        if start and start < now:
-            raise serializers.ValidationError({"start_datetime": "Start datetime cannot be in the past."})
-        if end and end < now:
-            raise serializers.ValidationError({"end_datetime": "End datetime cannot be in the past."})
         if start and end and end <= start:
             raise serializers.ValidationError({"end_datetime": "End datetime must be after start datetime."})
         return data
