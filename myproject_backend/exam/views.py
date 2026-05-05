@@ -178,6 +178,7 @@ class ExamResultsView(APIView):
         data = []
         for r in results:
             data.append({
+                'id': r.student.id,
                 'student_id': r.student.custom_id,
                 'student_name': r.student.get_full_name(),
                 'profile_image': r.student.profile_image.url if r.student.profile_image else None,

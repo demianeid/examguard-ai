@@ -90,3 +90,37 @@ class JoinClassView(APIView):
             'class_code': cls.code,
             'instructor': cls.instructor.get_full_name(),
         }, status=status.HTTP_201_CREATED)
+
+
+class StudentPerformanceView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, student_id):
+        # Verify student exists
+        try:
+            student = BaseUser.objects.get(id=student_id, role=BaseUser.Role.STUDENT)
+        except BaseUser.DoesNotExist:
+            return Response({'detail': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        from exam.models import ExamResult, Exam
+        from django.db.models import Avg, Q
+
+        overall_avg = ExamResult.objects.filter(student=student).aggregate(Avg('percentage'))['percentage__avg']
+        completed_count = ExamResult.objects.filter(student=student).count()
+        
+        # Get all classes the student is in to count total assigned exams
+        enrollments = ClassEnrollment.objects.filter(student=student)
+        class_ids = [e.class_enrolled.id for e in enrollments]
+        
+        total_exams = Exam.objects.filter(
+            class_id__in=class_ids
+        ).filter(
+            Q(assigned_students__isnull=True) | Q(assigned_students=student)
+        ).distinct().count()
+        
+        return Response({
+            'average_score': round(overall_avg) if overall_avg is not None else 0,
+            'completed_exams': completed_count,
+            'total_exams': total_exams,
+            'attendance_rate': 85, # Placeholder for Phase 4
+        })

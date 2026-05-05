@@ -5,9 +5,10 @@ import { ArrowLeft, Calendar, Users, Award, BarChart3, Download, Clock, AlertCir
 import Header from '../components/Header';
 
 interface StudentResult {
+  id: number;
   student_id: string;
   student_name: string;
-   profile_image: string | null;  
+  profile_image: string | null;  
   total_marks_obtained: number;
   total_marks: number;
   percentage: number;
@@ -57,15 +58,16 @@ const ExamResults: React.FC = () => {
 
 const handleViewProfile = (student: StudentResult) => {
   navigate(`/instructor/student-profile/${student.student_id}`, {
-   state: {
-  studentData: {
-    full_name: student.student_name,
-    student_custom_id: student.student_id,
-    profile_image: student.profile_image
-      ? `http://localhost:8000${student.profile_image}`
-      : null,
-  }
-}
+    state: {
+      studentData: {
+        id: student.id,
+        full_name: student.student_name,
+        student_custom_id: student.student_id,
+        profile_image: student.profile_image
+          ? `http://localhost:8000${student.profile_image}`
+          : null,
+      }
+    }
   });
 };
   const handleExportResults = () => {
