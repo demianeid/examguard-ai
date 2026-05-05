@@ -5,28 +5,24 @@ const HowWork = () => {
   const steps = [
     {
       number: 1,
-      icon: "👤",
       title: "Identity Verification",
       description:
         "Student registers and activates camera to verify identity using facial recognition technology",
     },
     {
       number: 2,
-      icon: "📹",
       title: "Start Monitoring",
       description:
         "All monitoring systems are activated: camera, microphone, screen recording, and eye tracking",
     },
     {
       number: 3,
-      icon: "⚠️",
       title: "Detection & Alerts",
       description:
         "System continuously monitors behavior and sends instant alerts when suspicious activity is detected",
     },
     {
       number: 4,
-      icon: "📄",
       title: "Final Report",
       description:
         "After exam completion, a comprehensive report is generated containing all events and alerts",
@@ -79,7 +75,6 @@ const HowWork = () => {
                 {/* Content */}
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl">{step.icon}</span>
                     <h5 className="text-gray-900 font-semibold text-lg">
                       {step.title}
                     </h5>

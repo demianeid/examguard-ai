@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 const Footer = () => {
   return (
@@ -100,14 +101,14 @@ const Footer = () => {
                 </svg>
                 01210770521
               </a>
-              <a href="#" className="text-white/70 text-sm hover:underline">More options...</a>
+              <Link to="/contact" className="text-white/70 text-sm hover:underline">More options...</Link>
             </div>
           </div>
         </div>
 
         {/* Bottom Bar */}
         <div className="border-t border-white/25 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left">
-          <p className="text-white/70 text-sm mb-2 md:mb-0">© 2024 ExamGuard. All rights reserved.</p>
+          <p className="text-white/70 text-sm mb-2 md:mb-0">© 2026 ExamGuard. All rights reserved.</p>
           <div className="flex flex-wrap gap-3 justify-center md:justify-end">
             {["Privacy Policy", "Terms of Service", "Cookie Policy"].map((item, idx) => (
               <a key={idx} href="#" className="text-white/70 text-sm hover:underline">

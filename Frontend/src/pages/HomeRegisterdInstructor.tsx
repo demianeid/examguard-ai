@@ -567,7 +567,7 @@ const HeroSection: React.FC = () => {
       {/* Bottom Bar */}
       <div className="border-t border-[#1d1d1d]/20 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-[#E3F0FE] px-6 pb-4">
         <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">
-          © 2024 ExamGuard. All rights reserved.
+          © 2026 ExamGuard. All rights reserved.
         </p>
 
         <div className="flex flex-wrap gap-3 justify-center md:justify-end">
