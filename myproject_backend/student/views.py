@@ -77,6 +77,18 @@ class JoinClassView(APIView):
 
         ClassEnrollment.objects.create(student=request.user, class_enrolled=cls)
 
+        # Notify the professor that a new student joined
+        from notifications.models import Notification
+        student_name = request.user.get_full_name() or request.user.username
+        Notification.objects.create(
+            recipient=cls.instructor,
+            type='announcement',
+            title='New Student Joined',
+            content=f'{student_name} has joined your class "{cls.name}".',
+            priority='low',
+            metadata={'classId': cls.id}
+        )
+
         return Response({
             'detail': 'Joined successfully!',
             'class_id': cls.id,

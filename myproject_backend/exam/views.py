@@ -62,6 +62,33 @@ class ExamListCreateView(APIView):
             else:
                 exam.assigned_students.clear()
 
+            # Count question types for format summary
+            questions = exam.questions.all()
+            q_count = questions.count()
+            mc_count = questions.filter(question_type='multiple_choice').count()
+            tf_count = questions.filter(question_type='true_false').count()
+            essay_count = questions.filter(question_type='essay').count()
+            type_parts = []
+            if mc_count: type_parts.append(f"{mc_count} MCQ")
+            if tf_count: type_parts.append(f"{tf_count} T/F")
+            if essay_count: type_parts.append(f"{essay_count} Essay")
+            format_summary = f"{q_count} question{'s' if q_count != 1 else ''}" + (f" ({', '.join(type_parts)})" if type_parts else "")
+            start_str = exam.start_datetime.strftime('%b %d at %I:%M %p')
+
+            from notifications.models import Notification
+            Notification.objects.create(
+                recipient=request.user,
+                type='exam',
+                title='Exam Created Successfully',
+                content=(
+                    f"'{exam.title}' has been published to {class_obj.name}. "
+                    f"Format: {format_summary}, {exam.duration} min, {exam.total_marks} marks. "
+                    f"Starts {start_str}."
+                ),
+                priority='medium',
+                metadata={'examId': exam.id, 'classId': class_obj.id}
+            )
+
             return Response({
                 "message": "Exam created successfully.",
                 "data": serializer.data

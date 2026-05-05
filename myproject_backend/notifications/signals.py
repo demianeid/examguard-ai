@@ -42,13 +42,49 @@ def notify_students_exam_assigned(sender, instance, action, pk_set, **kwargs):
 @receiver(post_save, sender=ExamResult)
 def notify_grade_published(sender, instance, created, **kwargs):
     if created:
+        class_id = instance.exam.class_id.id if instance.exam.class_id else None
+        is_terminated = instance.is_terminated
+
+        # --- Notify the student ---
+        student_title = 'Exam Terminated' if is_terminated else 'Exam Submitted'
+        student_content = (
+            f'Your exam "{instance.exam.title}" was terminated due to violations. Score: {instance.percentage:.1f}%.'
+            if is_terminated else
+            f'Your submission for "{instance.exam.title}" is recorded. Score: {instance.percentage:.1f}%.'
+        )
         Notification.objects.create(
             recipient=instance.student,
             type='grade',
-            title='Grade Published',
-            content=f'Your grade for {instance.exam.title} is available.',
-            priority='medium',
-            metadata={'examId': instance.exam.id, 'score': str(instance.total_marks_obtained), 'percentage': str(instance.percentage)}
+            title=student_title,
+            content=student_content,
+            priority='high' if is_terminated else 'medium',
+            metadata={
+                'examId': instance.exam.id,
+                'classId': class_id,
+                'score': str(instance.total_marks_obtained),
+                'percentage': str(instance.percentage)
+            }
+        )
+
+        # --- Notify the professor ---
+        student_name = instance.student.get_full_name() or instance.student.username
+        prof_title = '⚠ Exam Terminated — Violations' if is_terminated else 'Student Submitted Exam'
+        prof_content = (
+            f'{student_name} was terminated from "{instance.exam.title}" due to violations. Score: {instance.percentage:.1f}%.'
+            if is_terminated else
+            f'{student_name} submitted "{instance.exam.title}" — Score: {instance.percentage:.1f}%.'
+        )
+        Notification.objects.create(
+            recipient=instance.exam.professor,
+            type='grade',
+            title=prof_title,
+            content=prof_content,
+            priority='high' if is_terminated else 'medium',
+            metadata={
+                'examId': instance.exam.id,
+                'classId': class_id,
+                'studentId': instance.student.id
+            }
         )
 
 @receiver(post_save, sender=AIEventViolation)

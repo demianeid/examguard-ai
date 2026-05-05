@@ -123,14 +123,42 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
     const { type, metadata } = notification;
     if (!metadata) return;
 
+    const role = localStorage.getItem('role'); // 'student' or 'professor'
+    const isInstructor = role === 'professor';
+
     if (type === 'system') {
+      // Flagged incidents — instructor only
       if (metadata.examId) navigate(`/review-incidents/${metadata.examId}`);
       else navigate(`/review-incidents`);
     } else if (type === 'exam') {
-      if (metadata.classId) navigate(`/classes/${metadata.classId}`);
-      else if (metadata.examId) navigate(`/exam/${metadata.examId}`);
+      // Exam reminders — navigate to the exams tab
+      if (isInstructor) {
+        if (metadata.classId) navigate(`/classes-instructor/${metadata.classId}/exams`);
+        else navigate(`/classes-instructor`);
+      } else {
+        // Student: go to /classes/:classId/exams tab
+        if (metadata.classId) navigate(`/classes/${metadata.classId}/exams`);
+        else if (metadata.examId) navigate(`/exam/${metadata.examId}`);
+        else navigate(`/classes`);
+      }
     } else if (type === 'grade') {
-      if (metadata.examId) navigate(`/exam-results/${metadata.examId}`);
+      if (isInstructor) {
+        // Professor: go to exam results page
+        if (metadata.examId) navigate(`/exam-results/${metadata.examId}`);
+        else navigate(`/classes-instructor`);
+      } else {
+        // Student: go to their classes page (grades tab)
+        if (metadata.classId) navigate(`/classes/${metadata.classId}/grades`);
+        else navigate(`/classes`);
+      }
+    } else if (type === 'announcement') {
+      if (isInstructor) {
+        if (metadata.classId) navigate(`/classes-instructor/${metadata.classId}/overview`);
+        else navigate(`/classes-instructor`);
+      } else {
+        if (metadata.classId) navigate(`/classes/${metadata.classId}/overview`);
+        else navigate(`/classes`);
+      }
     }
   };
 
