@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { HashLink } from "react-router-hash-link";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Link } from "react-router-dom";
-import { LogOut, Settings, User, WifiOff } from "lucide-react";
+import { LogOut, Settings, User, UserCircle, WifiOff } from "lucide-react";
 import { useUser } from '../context/UserContext';
 import NotificationDropdown from "../pages/NotificationDropdown";
 
@@ -296,19 +296,10 @@ const Header: React.FC<HeaderProps> = ({
             <>
               <Link
                 to={getAccountPath()}
-                className={`hidden lg:flex px-4 py-2 font-semibold rounded-lg border-2 transition-all ${
-                  isScrolled
-                    ? "bg-transparent text-white border-white/50 hover:bg-white hover:text-primary hover:border-white"
-                    : "bg-transparent text-primary border-primary/50 hover:bg-primary hover:text-white hover:border-primary"
-                }`}
-              >
-                Account
-              </Link>
-
-              <Link
-                to={getAccountPath()}
-                className={`lg:hidden p-2 font-semibold rounded-lg transition-all ${
-                  isScrolled ? "text-white hover:text-gray-300" : "text-gray-700 hover:text-gray-900"
+                className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300 shadow-sm hover:shadow-md ${
+                  isScrolled 
+                    ? "border-white/30 bg-white/10 text-white hover:bg-white hover:text-[#3F72B7] hover:scale-105" 
+                    : "border-blue-100 bg-blue-50 text-[#3F72B7] hover:bg-[#3F72B7] hover:text-white hover:scale-105 hover:border-[#3F72B7]"
                 }`}
                 title="Account"
               >

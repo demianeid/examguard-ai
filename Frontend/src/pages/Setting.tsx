@@ -119,7 +119,7 @@ const SettingsPage: React.FC = () => {
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal]     = useState(false);
-  const [show2FAModal, setShow2FAModal]           = useState(false);
+
 
   const [currentPassword, setCurrentPassword]   = useState("");
   const [newPassword, setNewPassword]           = useState("");
@@ -532,20 +532,6 @@ const SettingsPage: React.FC = () => {
           </Modal>
         )}
 
-        {/* 2FA Modal */}
-        {show2FAModal && (
-          <Modal isOpen={show2FAModal} onClose={() => setShow2FAModal(false)} title="Two-Factor Authentication">
-            <div className="space-y-4">
-              <p className="text-slate-600">Two-factor authentication adds an extra layer of security to your account.</p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800"><strong>Note:</strong> You'll need an authenticator app like Google Authenticator or Authy.</p>
-              </div>
-              <button onClick={() => navigate('/setup-2fa')} className="w-full bg-[#3F72B7] hover:bg-[#3565A3] text-white font-semibold py-3 rounded-lg transition-all">
-                Continue to Setup
-              </button>
-            </div>
-          </Modal>
-        )}
       </AnimatePresence>
 
       {/* Profile Update Success */}
@@ -657,12 +643,9 @@ const SettingsPage: React.FC = () => {
               <label htmlFor="email" className="block text-sm font-semibold text-slate-700 mb-2">Email Address</label>
               <input
                 id="email" name="email" type="email" value={email}
-                onChange={(e) => { setEmail(e.target.value); setEmailError(null); }}
-                placeholder="Enter your email address"
-                disabled={isSaving} autoComplete="email"
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] transition-all ${emailError ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}
+                disabled autoComplete="email"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg bg-slate-50 cursor-not-allowed text-slate-500"
               />
-              {emailError && <p className="text-red-500 text-sm mt-1">{emailError}</p>}
             </div>
 
             {/* ID (read-only) */}
@@ -716,16 +699,6 @@ const SettingsPage: React.FC = () => {
               </div>
               <ChevronRight className="w-5 h-5 text-slate-400" />
             </button>
-            <div className="w-full flex items-center justify-between p-4 rounded-lg border border-slate-200">
-              <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5 text-slate-600" />
-                <div className="text-left">
-                  <p className="font-semibold text-slate-900">Two-Factor Authentication</p>
-                  <p className="text-sm text-slate-500">Add an extra layer of security</p>
-                </div>
-              </div>
-              <button onClick={() => setShow2FAModal(true)} className="bg-[#3F72B7] hover:bg-[#3565A3] text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition-all">Enable</button>
-            </div>
           </div>
         </div>
 

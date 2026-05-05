@@ -354,6 +354,7 @@ const HeroSection: React.FC = () => {
               whileHover={{ scale: 1.05, boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}
               whileTap={{ scale: 0.95 }}
               type="button"
+              onClick={() => navigate('/OfflineMode')}
             >
               Explore Offline Mode
               <motion.div

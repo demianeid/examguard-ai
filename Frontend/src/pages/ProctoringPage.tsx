@@ -542,7 +542,7 @@ const ProctoringPage = () => {
   // ── Activity Tab — sidebar + cards layout ────────────────────────────────────
   const ActivityTab = () => {
     const [actSearch, setActSearch] = React.useState('');
-    const [actStatus, setActStatus] = React.useState<'All' | 'flagged' | 'warning' | 'online' | 'submitted'>('All');
+    const [actStatus, setActStatus] = React.useState<'All' | 'flagged' | 'warning' | 'online' | 'submitted' | 'terminated'>('All');
     const [actSeverity, setActSeverity] = React.useState<'All' | 'high' | 'medium' | 'low'>('All');
 
     if (dataLoading) {
@@ -567,7 +567,7 @@ const ProctoringPage = () => {
       high: GroupedIncident[];
       medium: GroupedIncident[];
       low: GroupedIncident[];
-      status: 'flagged' | 'warning' | 'online' | 'submitted';
+      status: 'flagged' | 'warning' | 'online' | 'submitted' | 'terminated';
       score: number;
     }
     const studentMap = new Map<string, StudentSummary>();
@@ -618,6 +618,7 @@ const ProctoringPage = () => {
       warning:    { label: 'Warning',    color: 'bg-orange-100 text-orange-700 border-orange-200', bar: 'bg-orange-500', icon: <AlertCircle    size={13} className="text-orange-500" /> },
       online:     { label: 'Clear',      color: 'bg-green-100 text-green-700 border-green-200',   bar: 'bg-green-500',  icon: <CheckCircle2   size={13} className="text-green-500" /> },
       submitted:  { label: 'Submitted',  color: 'bg-blue-100 text-blue-700 border-blue-200',      bar: 'bg-blue-500',   icon: <CheckCircle2   size={13} className="text-blue-500" /> },
+      terminated: { label: 'Terminated', color: 'bg-gray-100 text-gray-700 border-gray-200',      bar: 'bg-gray-500',   icon: <Info           size={13} className="text-gray-500" /> },
     };
 
     const buckets: Array<{ key: 'high' | 'medium' | 'low'; label: string; color: string; Icon: any; grouped: GroupedIncident[] }> = [

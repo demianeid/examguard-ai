@@ -64,6 +64,7 @@ interface Student {
 }
 
 interface LiveStudent {
+  db_id: number;
   name: string;
   examTitle: string;
   className: string;
@@ -88,6 +89,7 @@ interface Incident {
 }
 
 interface AlertItem {
+  uniqueId?: string;
   type: 'warning' | 'info';
   message: string;
   details: string;
@@ -209,7 +211,7 @@ const ExamRow = ({
 const ClassExamCard = ({
   data, onNavigate,
 }: { data: ClassWithExams; onNavigate: (path: string) => void }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const { cls, exams, colorIndex } = data;
   const pal = OCEAN[colorIndex % OCEAN.length];
 
@@ -336,6 +338,77 @@ const AccountInstructor: React.FC = () => {
   const [alertItems, setAlertItems]               = useState<AlertItem[]>([]);
   const [monitoringLoading, setMonitoringLoading] = useState(false);
   const [showAllMonitoring, setShowAllMonitoring] = useState(false);
+  
+  const liveStudentsRef = React.useRef<LiveStudent[]>([]);
+  useEffect(() => { liveStudentsRef.current = liveStudents; }, [liveStudents]);
+
+  // ── WebSocket Live Alerts ──
+  useEffect(() => {
+    const activeClassExams = classesWithExams.flatMap(c => 
+      c.exams.filter(e => (e.status ?? computeStatus(e)) === 'active')
+        .map(e => ({ cls: c.cls, exam: e }))
+    );
+
+    if (activeClassExams.length === 0) return;
+
+    const sockets: WebSocket[] = [];
+
+    activeClassExams.forEach(({ cls, exam }) => {
+      const ws = new WebSocket(`ws://127.0.0.1:8001/ws/instructor/${exam.id}`);
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if ((data.type === 'alert' || data.type === 'audio_alert') && data.student_id) {
+            const isViolation = data.new_violation ?? false;
+            
+            let msg = data.cheating_reason ?? 'Suspicious activity detected';
+            if (data.type === 'audio_alert') {
+                msg = data.event_type === 'speech_detected' ? 'Speech detected' : 'Loud noise detected';
+            } else {
+                if (data.head_suspicious && data.head_direction) {
+                    msg = data.head_direction.includes('LOOKING') ? 'Looking away' : data.head_direction;
+                } else if (data.yolo_suspicious && data.yolo_labels?.length > 0) {
+                    msg = `Object detected: ${data.yolo_labels.join(', ')}`;
+                }
+            }
+
+            const matchedStudent = liveStudentsRef.current.find(s => s.db_id === Number(data.student_id));
+            const studentName = matchedStudent?.name ?? `Student #${data.student_id}`;
+
+            const newAlert: AlertItem = {
+              uniqueId: Math.random().toString(36).substring(2, 9),
+              type: isViolation ? 'warning' : 'info',
+              message: msg,
+              details: `${studentName} | ${cls.name} – ${exam.title}`,
+              time: new Date().toLocaleTimeString(),
+              examId: exam.id,
+              classId: cls.id,
+              className: cls.name,
+            };
+
+            setAlertItems(prev => [newAlert, ...prev].slice(0, 50));
+            
+            if (isViolation) {
+              setLiveStudents(prev => prev.map(s => 
+                s.db_id === Number(data.student_id) ? { ...s, status: 'warning' } : s
+              ));
+            }
+          }
+        } catch (e) {}
+      };
+
+      sockets.push(ws);
+    });
+
+    return () => {
+      sockets.forEach(ws => {
+        ws.onclose = null;
+        ws.close();
+      });
+    };
+  }, [classesWithExams]);
 
   // ── fetch profile ──
   useEffect(() => {
@@ -444,6 +517,7 @@ const AccountInstructor: React.FC = () => {
       const endMs = start.getTime() + exam.duration * 60_000;
       const remaining = Math.max(0, Math.round((endMs - Date.now()) / 60_000));
       return students.map(s => ({
+        db_id:         s.id,
         name:          s.full_name,
         examTitle:     exam.title,
         className:     cls.name,
@@ -469,6 +543,7 @@ const AccountInstructor: React.FC = () => {
           incidents.forEach(inc => {
             const severity = inc.severity ?? 'medium';
             allAlerts.push({
+              uniqueId:  inc.id?.toString() || Math.random().toString(36).substring(2, 9),
               type:      ['high', 'critical'].includes(severity) ? 'warning' : 'info',
               message:   inc.description ?? inc.incident_type ?? 'Suspicious activity detected',
               details:   `${inc.student_name ?? inc.student ?? 'Unknown'} | ${cls.name} – ${exam.title}`,
@@ -827,7 +902,7 @@ const AccountInstructor: React.FC = () => {
                   </div>
                 ) : (
                   alertItems.map((alert, idx) => (
-                    <motion.div key={`alert-${alert.examId}-${idx}`}
+                    <motion.div key={alert.uniqueId || `alert-${alert.examId}-${idx}`}
                       initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: idx * 0.08 }}
                       className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all hover:shadow-sm cursor-pointer ${
