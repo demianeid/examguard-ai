@@ -78,6 +78,7 @@ const ExamInterface: React.FC = () => {
   const [terminationReason, setTerminationReason] = useState('');
   const [isRequestingFullScreen, setIsRequestingFullScreen] = useState(false);
   const [devToolsOpen, setDevToolsOpen] = useState(false);
+  const [showFsAlert, setShowFsAlert] = useState(false);
 
   // --- Face Recognition State ---
   type FaceStatus = 'idle' | 'requesting-camera' | 'scanning' | 'verifying' | 'success' | 'failed' | 'camera-error';
@@ -126,6 +127,7 @@ const ExamInterface: React.FC = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);     // Web Audio context
   const audioStreamRef = useRef<MediaStream | null>(null);   // microphone stream
   const audioProcessorRef = useRef<ScriptProcessorNode | null>(null); // PCM processor node
+  const fsRetryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null); // fullscreen retry loop
   const violationScoreRef = useRef(0);  // sync mirror of violationScore for WS closure
   const currentViewRef = useRef(currentView);
   const answersRef = useRef<(number | null)[]>([]);
@@ -234,14 +236,24 @@ const ExamInterface: React.FC = () => {
   // ============================================================
   // Fullscreen
   // ============================================================
-  const requestFullScreen = async () => {
-    if (isRequestingFullScreen) return;
+  /** Attempt to enter fullscreen. Returns true on success. */
+  const requestFullScreen = async (): Promise<boolean> => {
+    if (isRequestingFullScreen) return false;
     setIsRequestingFullScreen(true);
     try {
       await document.documentElement.requestFullscreen?.();
       setFullScreenActive(true);
+      setShowFsAlert(false);
+      // Clear any running retry loop
+      if (fsRetryIntervalRef.current) {
+        clearInterval(fsRetryIntervalRef.current);
+        fsRetryIntervalRef.current = null;
+      }
+      return true;
     } catch {
-      addViolation(0.5, 'Failed to enter full-screen mode');
+      // Show the persistent alert banner — do NOT add a score violation here
+      setShowFsAlert(true);
+      return false;
     } finally {
       setIsRequestingFullScreen(false);
     }
@@ -330,11 +342,37 @@ const ExamInterface: React.FC = () => {
       if (currentView === 'exam' && !examTerminated && !isTerminatedRef.current) {
         const isFS = document.fullscreenElement !== null;
         setFullScreenActive(isFS);
-        if (!isFS) {
+
+        if (isFS) {
+          // ── Student returned to fullscreen ──────────────────────────────
+          setShowFsAlert(false);
+          if (fsRetryIntervalRef.current) {
+            clearInterval(fsRetryIntervalRef.current);
+            fsRetryIntervalRef.current = null;
+          }
+        } else {
+          // ── Student exited fullscreen ───────────────────────────────────
           addViolation(1, 'Exited full-screen mode', 'fullscreen_exit');
-          setTimeout(() => {
-            if (!document.fullscreenElement && !isTerminatedRef.current) requestFullScreen();
-          }, 2000);
+
+          // Immediately try to re-enter; if it fails, start 3-second retry loop
+          const attemptReenter = async () => {
+            if (document.fullscreenElement || isTerminatedRef.current) return;
+            const success = await requestFullScreen();
+            if (!success && !fsRetryIntervalRef.current && !isTerminatedRef.current) {
+              // Start a 3-second loop: show alert + +1 violation point + retry
+              fsRetryIntervalRef.current = setInterval(async () => {
+                if (document.fullscreenElement || isTerminatedRef.current) {
+                  clearInterval(fsRetryIntervalRef.current!);
+                  fsRetryIntervalRef.current = null;
+                  return;
+                }
+                setShowFsAlert(true);
+                addViolation(1, 'Failed to enter full-screen mode', 'fullscreen_exit');
+                await requestFullScreen();
+              }, 3000);
+            }
+          };
+          attemptReenter();
         }
       }
     };
@@ -542,8 +580,14 @@ const ExamInterface: React.FC = () => {
     }
 
     const host = window.location.hostname;
-    const liveParam = (secSettingsRef.current.live_proctoring !== false) ? '1' : '0';
-    const ws = new WebSocket(`ws://${host}:8001/ws/analyze/${examId}/${studentId}?live=${liveParam}`);
+    const sec = secSettingsRef.current;
+    const liveParam     = sec.live_proctoring         !== false ? '1' : '0';
+    const behaviorParam = sec.behavior_detection      !== false ? '1' : '0';
+    const objectParam   = sec.object_detection        !== false ? '1' : '0';
+    const multiFaceParam= sec.multiple_face_detection !== false ? '1' : '0';
+    const wsUrl = `ws://${host}:8001/ws/analyze/${examId}/${studentId}` +
+      `?live=${liveParam}&behavior_detection=${behaviorParam}&object_detection=${objectParam}&multi_face=${multiFaceParam}`;
+    const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
     aiWsRef.current = ws;
 
@@ -697,7 +741,8 @@ const ExamInterface: React.FC = () => {
     }
 
     const host = window.location.hostname;
-    const ws = new WebSocket(`ws://${host}:8001/ws/audio/${examId}/${studentId}`);
+    const audioParam = secSettingsRef.current.audio_detection !== false ? '1' : '0';
+    const ws = new WebSocket(`ws://${host}:8001/ws/audio/${examId}/${studentId}?audio_detection=${audioParam}`);
     ws.binaryType = 'arraybuffer';
     audioWsRef.current = ws;
 
@@ -1527,6 +1572,27 @@ const ExamInterface: React.FC = () => {
     return (
       <div ref={examContainerRef} className="min-h-screen bg-gray-100 p-4 lg:p-8 select-none"
         style={{ userSelect: 'none', WebkitUserSelect: 'none' }} onContextMenu={e => e.preventDefault()}>
+
+        {/* ── Fullscreen alert banner (non-dismissible) ──────────────────── */}
+        {lockdownEnabled && showFsAlert && (
+          <div
+            className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-between gap-4 px-6 py-3 bg-red-600 text-white shadow-2xl animate-pulse"
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="flex items-center gap-3 font-semibold">
+              <Maximize2 className="w-5 h-5 flex-shrink-0" />
+              <span>⚠ Failed to enter full-screen mode — please click the button to return to full-screen to continue the exam.</span>
+            </div>
+            <button
+              onClick={() => requestFullScreen()}
+              className="flex-shrink-0 bg-white text-red-700 font-bold px-4 py-1.5 rounded-lg hover:bg-red-100 transition-colors text-sm"
+            >
+              Return to Full-Screen
+            </button>
+          </div>
+        )}
+
         <div className="max-w-7xl mx-auto">
 
           {/* Security Header */}

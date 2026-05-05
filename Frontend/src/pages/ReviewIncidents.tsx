@@ -21,6 +21,7 @@ interface Incident {
   occurred_at: string;
   severity: 'high' | 'medium' | 'low';
   yolo_labels?: string[];
+  snapshot?: string;
 }
 
 // ── Student db_id lookup from live-status ────────────────────────────────────
@@ -35,10 +36,10 @@ const ReviewIncidents: React.FC = () => {
   const [searchQuery, setSearchQuery]         = useState<string>("");
   const [selectedSeverity, setSelectedSeverity] = useState<string>("all");
   const [incidents, setIncidents]             = useState<Incident[]>([]);
-  const [studentDbMap, setStudentDbMap]       = useState<StudentDbMap>({});
   const [loading, setLoading]                 = useState(true);
   const [examTitle, setExamTitle]             = useState<string>('');
   const [error, setError]                     = useState<string | null>(null);
+  const [expandedSnapshots, setExpandedSnapshots] = useState<Record<string, boolean>>({});
 
   // ── Fetch real incidents from backend ────────────────────────────────────
   const fetchIncidents = useCallback(async () => {
@@ -48,24 +49,13 @@ const ReviewIncidents: React.FC = () => {
     try {
       const headers = { Authorization: `Bearer ${getToken()}` };
 
-      const [incidentRes, examRes, liveRes] = await Promise.all([
+      const [incidentRes, examRes] = await Promise.all([
         fetch(`${DJANGO}/api/violations/exam/${examId}/incidents/`,   { headers }),
         fetch(`${DJANGO}/api/exam/${examId}/`,                        { headers }),
-        fetch(`${DJANGO}/api/violations/exam/${examId}/live-status/`, { headers }),
       ]);
 
       if (!incidentRes.ok) throw new Error(`HTTP ${incidentRes.status}`);
       const data = await incidentRes.json();
-
-      // Build custom_id → db_id map from live-status
-      if (liveRes.ok) {
-        const liveData = await liveRes.json();
-        const map: StudentDbMap = {};
-        for (const s of liveData.students ?? []) {
-          map[s.student_id] = s.db_id;
-        }
-        setStudentDbMap(map);
-      }
 
       if (examRes.ok) {
         const examData = await examRes.json();
@@ -89,15 +79,8 @@ const ReviewIncidents: React.FC = () => {
 
   useEffect(() => { fetchIncidents(); }, [fetchIncidents]);
 
-  // ── Navigate to footage page using db_id (integer) ──────────────────────
-  const handleReviewFootage = (customId: string) => {
-    const dbId = studentDbMap[customId];
-    if (dbId) {
-      navigate(`/footage/${dbId}`);
-    } else {
-      // Fallback: navigate using custom_id if db_id is not yet available
-      navigate(`/footage/${customId}`);
-    }
+  const toggleSnapshot = (id: string | number) => {
+    setExpandedSnapshots(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   // ── Filters ───────────────────────────────────────────────────────────────
@@ -241,13 +224,14 @@ const ReviewIncidents: React.FC = () => {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.35, delay: Math.min(index * 0.05, 0.4) }}
-                      className={`${colors.bg} ${colors.border} border-l-4 rounded-lg p-4 flex items-center justify-between gap-4`}
+                      className={`${colors.bg} ${colors.border} border-l-4 rounded-lg p-4 flex flex-col gap-4`}
                     >
-                      <div className="flex items-start gap-4 flex-1 min-w-0">
-                        {/* Severity badge */}
-                        <span className={`${colors.badge} text-white text-xs font-bold px-3 py-1 rounded-full uppercase flex-shrink-0 mt-0.5`}>
-                          {incident.severity}
-                        </span>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4 flex-1 min-w-0">
+                          {/* Severity badge */}
+                          <span className={`${colors.badge} text-white text-xs font-bold px-3 py-1 rounded-full uppercase flex-shrink-0 mt-0.5`}>
+                            {incident.severity}
+                          </span>
 
                         {/* Details */}
                         <div className="flex-1 min-w-0">
@@ -277,15 +261,24 @@ const ReviewIncidents: React.FC = () => {
 
                           <p className="text-gray-400 text-xs mt-1">{incident.time}</p>
                         </div>
-                      </div>
 
-                      {/* Review Footage button — navigates to real footage page */}
-                      <button
-                        onClick={() => handleReviewFootage(incident.student_id)}
-                        className={`${colors.button} text-white px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap flex items-center gap-1.5 text-sm flex-shrink-0`}
-                      >
-                        <Eye size={14} /> Review Footage
-                      </button>
+                        {incident.severity === 'high' && incident.snapshot && (
+                          <button
+                            onClick={() => toggleSnapshot(incident.id)}
+                            className={`${colors.button} text-white px-4 py-2 rounded-lg font-semibold transition-colors whitespace-nowrap flex items-center gap-1.5 text-sm flex-shrink-0`}
+                          >
+                            <Eye size={14} /> {expandedSnapshots[incident.id] ? "Hide Snapshot" : "View Snapshot"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                      {/* Snapshot Expansion */}
+                      {incident.severity === 'high' && incident.snapshot && expandedSnapshots[incident.id] && (
+                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-2 border-t border-gray-200/50 pt-4 overflow-hidden rounded-xl bg-white shadow-inner p-2">
+                          <img src={incident.snapshot} alt="Violation Snapshot" className="w-full h-auto max-h-[500px] object-contain rounded-lg" />
+                        </motion.div>
+                      )}
                     </motion.div>
                   );
                 })

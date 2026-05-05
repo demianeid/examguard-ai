@@ -90,7 +90,15 @@ async def instructor_stream(websocket: WebSocket, exam_id: str):
 
 
 @router.websocket("/ws/analyze/{exam_id}/{student_id}")
-async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str, live: str = "1"):
+async def analyze_stream(
+    websocket: WebSocket,
+    exam_id: str,
+    student_id: str,
+    live: str = "1",
+    behavior_detection: str = "1",
+    object_detection: str = "1",
+    multi_face: str = "1",
+):
     """
     WebSocket endpoint.
 
@@ -98,23 +106,46 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str, li
     Server sends:  JSON AnalysisResult
 
     Query params:
-      live  "1" (default) — relay annotated frames to instructor room
-            "0"           — AI analysis only, no live relay
+      live               "1" (default) — relay annotated frames to instructor room
+                         "0"           — AI analysis only, no live relay
+      behavior_detection "1" (default) — run head-pose / face analysis
+                         "0"           — skip head-pose model entirely
+      object_detection   "1" (default) — run YOLO object detection
+                         "0"           — skip YOLO model entirely
+      multi_face         "1" (default) — flag multiple-face alerts
+                         "0"           — ignore multiple-face detections
 
     HeadPoseTracker is instantiated **per connection** so each student
     has independent debouncing state.
     """
     await websocket.accept()
-    print(f"WebSocket connected  exam={exam_id} student={student_id}  live_relay={live}")
-    do_live_relay = (live == "1")
+
+    do_live_relay       = (live               == "1")
+    do_behavior         = (behavior_detection  == "1")
+    do_object           = (object_detection    == "1")
+    do_multi_face       = (multi_face          == "1")
+
+    print(
+        f"WebSocket connected  exam={exam_id} student={student_id}  "
+        f"live={live} behavior={do_behavior} object={do_object} multi_face={do_multi_face}"
+    )
+
+    # ── Neutral/disabled results used when a model is turned off ────────────
+    _HEAD_DISABLED = {
+        "face_detected": True, "multiple_faces": False,
+        "h_ratio": 0.0, "v_ratio": 0.0, "direction": "FORWARD",
+        "suspicious": False, "should_alert": False,
+        "is_violating": False, "is_critical_no_face": False,
+    }
+    _YOLO_DISABLED = {
+        "detections": [], "suspicious": False,
+        "annotated_frame": None,
+        "should_alert": False, "alert_cleared": False, "is_violating": False,
+    }
 
     # One tracker per student connection – gives independent debounce state.
-    # frame_interval=1 because the browser already throttles the frame rate;
-    # we want every received frame to be evaluated so CONFIRM_FRAMES fires
-    # in wall-clock time equivalent to the browser send interval × CONFIRM_FRAMES
-    # (not frame_interval × browser_interval × CONFIRM_FRAMES).
-    tracker = HeadPoseTracker(frame_interval=1)
-    yolo_tracker = yolo_detector.YoloTracker(frame_interval=1)
+    tracker      = HeadPoseTracker(frame_interval=1) if do_behavior else None
+    yolo_tracker = yolo_detector.YoloTracker(frame_interval=1) if do_object else None
 
     try:
         while True:
@@ -134,20 +165,31 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str, li
             bgr = cv2.resize(bgr, (640, 480))
             rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
-            # ── 3. Run head-pose tracker (frame-skipping + debouncing) ───
             loop = asyncio.get_running_loop()
-            head = await loop.run_in_executor(None, tracker.update, rgb)
 
-            # ── 4. Run YOLO object detector (frame-skipping + debouncing) ───
-            # yolo_tracker must be initialized outside the loop, same as head pose tracker
-            yolo = await loop.run_in_executor(None, yolo_tracker.update, bgr)
+            # ── 3. Head-pose tracker (skipped if behavior_detection=0) ───
+            if do_behavior:
+                head = await loop.run_in_executor(None, tracker.update, rgb)
+                # If multiple-face detection is disabled, strip that signal
+                if not do_multi_face and head.get("multiple_faces"):
+                    head = dict(head)
+                    head["multiple_faces"] = False
+                    # Recalculate suspicious without multiple-faces contribution
+                    # (head_pose still checks look-away independently)
+            else:
+                head = dict(_HEAD_DISABLED)
+
+            # ── 4. YOLO object detector (skipped if object_detection=0) ─
+            if do_object:
+                yolo = await loop.run_in_executor(None, yolo_tracker.update, bgr)
+            else:
+                yolo = dict(_YOLO_DISABLED)
 
             # ── 5. Draw head pose on the annotated frame and broadcast ────
-            annotated = yolo.get("annotated_frame", bgr)
+            annotated = yolo.get("annotated_frame") or bgr
             direction_text = head.get("direction") or "FORWARD"
-            text_color = (0, 0, 255) if head.get("suspicious") else (0, 220, 90) # BGR (Red or Green)
-            
-            # Draw semi-transparent background for text (optional but good for visibility)
+            text_color = (0, 0, 255) if head.get("suspicious") else (0, 220, 90)  # BGR
+
             (tw, th), _ = cv2.getTextSize(direction_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
             cv2.rectangle(annotated, (8, 10), (12 + tw, 20 + th), (0, 0, 0), -1)
             cv2.putText(annotated, direction_text, (10, 15 + th), cv2.FONT_HERSHEY_SIMPLEX, 0.6, text_color, 2)
@@ -157,12 +199,11 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str, li
                 await manager.broadcast_frame(exam_id, student_id, buffer.tobytes())
 
             # ── 6. Build combined verdict ────────────────────────────────
-            # Both trackers now emit `should_alert` exactly once per violation event
             new_violation  = head.get("should_alert", False) or yolo.get("should_alert", False)
             cheating_state = head.get("is_violating", False) or yolo.get("is_violating", False)
 
             is_critical_no_face = head.get("is_critical_no_face", False)
-            if is_critical_no_face:
+            if is_critical_no_face and do_behavior:
                 new_violation = True
                 cheating_state = True
                 reasons = ["CRITICAL: Face missing > 2s"]
@@ -170,38 +211,35 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str, li
                 reasons: list[str] = []
                 if head["suspicious"]:
                     direction = head["direction"] or "NO FACE"
-                    if head.get("multiple_faces"):
+                    if head.get("multiple_faces") and do_multi_face:
                         reasons.append("MULTIPLE FACES DETECTED")
                     else:
                         reasons.append("Looking away" if "LOOKING" in direction else direction)
-                if yolo["suspicious"] and head["face_detected"]:
+                if yolo["suspicious"] and head["face_detected"] and do_object:
                     labels = [d["label"] for d in yolo["detections"]]
                     reasons.append("OBJECT: " + ", ".join(labels))
 
             cheating_reason = " | ".join(reasons) if reasons else None
 
             result = AnalysisResult(
-                face_detected     = head["face_detected"],
-                multiple_faces    = head.get("multiple_faces", False),
-                h_ratio           = head["h_ratio"],
-                v_ratio           = head["v_ratio"],
-                head_direction    = head["direction"],
-                head_suspicious   = head["suspicious"],
-                detections        = [Detection(**d) for d in yolo["detections"]],
-                yolo_suspicious   = yolo["suspicious"],
-                cheating_detected = cheating_state,
-                new_violation     = new_violation,
+                face_detected       = head["face_detected"],
+                multiple_faces      = head.get("multiple_faces", False),
+                h_ratio             = head["h_ratio"],
+                v_ratio             = head["v_ratio"],
+                head_direction      = head["direction"],
+                head_suspicious     = head["suspicious"],
+                detections          = [Detection(**d) for d in yolo["detections"]],
+                yolo_suspicious     = yolo["suspicious"],
+                cheating_detected   = cheating_state,
+                new_violation       = new_violation,
                 is_critical_no_face = is_critical_no_face,
-                cheating_reason   = cheating_reason,
+                cheating_reason     = cheating_reason,
             )
 
-            # ── 6. Send JSON result back to student frontend ──────────────
+            # ── 7. Send JSON result back to student frontend ──────────────
             await websocket.send_text(result.model_dump_json())
 
-            # ── 7. Push real-time alert to instructor WS room ─────────────
-            # Fire on new_violation (edge trigger) so short glances reach
-            # the instructor immediately, AND on cheating_state (persistent)
-            # so sustained violations keep the feed updated.
+            # ── 8. Push real-time alert to instructor WS room ─────────────
             if new_violation or cheating_state:
                 await manager.broadcast_alert(exam_id, student_id, {
                     "cheating_reason":  cheating_reason,
@@ -225,23 +263,45 @@ async def analyze_stream(websocket: WebSocket, exam_id: str, student_id: str, li
 
 
 @router.websocket("/ws/audio/{exam_id}/{student_id}")
-async def audio_stream(websocket: WebSocket, exam_id: str, student_id: str):
+async def audio_stream(
+    websocket: WebSocket,
+    exam_id: str,
+    student_id: str,
+    audio_detection: str = "1",
+):
     """
     Audio anomaly detection WebSocket endpoint.
 
     Client sends:  raw binary Float32LE PCM at 16 kHz mono
                    (each message = one 0.5 s window = 8 000 × 4 bytes)
     Server sends:  JSON AudioResult
+
+    Query params:
+      audio_detection  "1" (default) — run AudioDetector model
+                       "0"           — skip audio analysis entirely (returns clean)
     """
     await websocket.accept()
-    print(f"[Audio] WebSocket connected  exam={exam_id} student={student_id}")
+    do_audio = (audio_detection == "1")
+    print(f"[Audio] WebSocket connected  exam={exam_id} student={student_id}  audio_detection={do_audio}")
 
-    detector = AudioDetector()
+    detector = AudioDetector() if do_audio else None
     loop = asyncio.get_running_loop()
 
     try:
         while True:
             raw = await websocket.receive_bytes()
+
+            if not do_audio:
+                # Return a clean/disabled result without running any model
+                result = AudioResult(
+                    suspicious=False,
+                    should_alert=False,
+                    db_level=-96.0,
+                    event_type="disabled",
+                    reason=None,
+                )
+                await websocket.send_text(result.model_dump_json())
+                continue
 
             # Decode Float32LE PCM
             pcm = np.frombuffer(raw, dtype=np.float32).copy()
@@ -262,10 +322,10 @@ async def audio_stream(websocket: WebSocket, exam_id: str, student_id: str):
             # Broadcast audio alert to instructor WS room
             if audio["should_alert"]:
                 await manager.broadcast_alert(exam_id, student_id, {
-                    "type":        "audio_alert",
-                    "event_type":  audio["event_type"],
-                    "db_level":    audio["db_level"],
-                    "reason":      audio["reason"],
+                    "type":          "audio_alert",
+                    "event_type":    audio["event_type"],
+                    "db_level":      audio["db_level"],
+                    "reason":        audio["reason"],
                     "new_violation": True,
                 })
 

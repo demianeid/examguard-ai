@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, AlertCircle, AlertTriangle, Info, User, Calendar, Clock,
   FileText, ShieldAlert, Loader2, Search, SlidersHorizontal, Download,
-  CheckCircle2, TrendingUp, Mic
+  CheckCircle2, TrendingUp, Mic, Eye
 } from "lucide-react";
 
 const BASE_URL = "http://127.0.0.1:8000/api";
@@ -332,9 +332,14 @@ export default function ExamReviewPage() {
                 ))}
               </div>
 
-              <button onClick={handleExport} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white rounded-xl font-bold shadow-md shadow-orange-600/20 hover:bg-orange-700 transition-all">
-                <Download size={18} /> Export CSV
-              </button>
+              <div className="flex flex-col gap-3">
+                <button onClick={() => navigate(`/review-incidents/${id}`)} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-md shadow-blue-600/20 hover:bg-blue-700 transition-all">
+                  <Eye size={18} /> Detailed Incident Feed
+                </button>
+                <button onClick={handleExport} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 text-white rounded-xl font-bold shadow-md shadow-orange-600/20 hover:bg-orange-700 transition-all">
+                  <Download size={18} /> Export CSV
+                </button>
+              </div>
             </div>
           </div>
 
