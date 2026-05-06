@@ -6,7 +6,8 @@ import {
   BookOpen, Clock, Users, FileText, Bell, Calendar, X, AlertCircle,
   CheckCircle, Info, Megaphone, TrendingUp, Eye, Plus, BarChart3,
   School, Edit, Copy, Check, FileEdit, GraduationCap, Sparkles,
-  Trash2, Filter, MoreVertical, Download, Settings, ChevronDown, Search
+  Trash2, Filter, MoreVertical, Download, Settings, ChevronDown, Search,
+  ChevronRight, Activity
 } from "lucide-react";
 
 const BASE_URL = 'http://127.0.0.1:8000/api/instructors';
@@ -1156,13 +1157,276 @@ const ClassesInstructor = () => {
     );
   };
 
-  const AnalyticsTab = () => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-xl border border-blue-200 hover:shadow-lg transition-shadow"><div className="flex items-center gap-3 mb-4"><div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center"><TrendingUp className="text-[#1A80F6]" size={24} /></div><h3 className="text-sm font-medium text-gray-600">Average Score</h3></div><p className="text-4xl font-bold text-[#1A80F6]">78%</p><p className="text-sm text-gray-500 mt-2">↑ 5% from last exam</p></div>
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200 hover:shadow-lg transition-shadow"><div className="flex items-center gap-3 mb-4"><div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center"><CheckCircle className="text-green-600" size={24} /></div><h3 className="text-sm font-medium text-gray-600">Pass Rate</h3></div><p className="text-4xl font-bold text-green-600">92%</p><p className="text-sm text-gray-500 mt-2">35 out of 38 students</p></div>
-      <div className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-xl border border-red-200 hover:shadow-lg transition-shadow"><div className="flex items-center gap-3 mb-4"><div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center"><AlertCircle className="text-red-600" size={24} /></div><h3 className="text-sm font-medium text-gray-600">Cheating Reports</h3></div><p className="text-4xl font-bold text-red-600">3</p><p className="text-sm text-gray-500 mt-2">2 pending review</p></div>
-    </div>
-  );
+  const AnalyticsTab = () => {
+    const completedExams = exams.filter(e => e.status === "completed");
+    const upcomingExams = exams.filter(e => e.status === "upcoming");
+    
+    // State for real data
+    const [isLoadingStats, setIsLoadingStats] = useState(true);
+    const [scoreDistribution, setScoreDistribution] = useState([
+      { grade: '90-100%', count: 0, height: '0%' },
+      { grade: '80-89%', count: 0, height: '0%' },
+      { grade: '70-79%', count: 0, height: '0%' },
+      { grade: '60-69%', count: 0, height: '0%' },
+      { grade: '<60%', count: 0, height: '0%' },
+    ]);
+    const [passRate, setPassRate] = useState(0);
+    const [avgParticipation, setAvgParticipation] = useState('N/A');
+    const [integrityStats, setIntegrityStats] = useState<{label: string, safe: number, warning: number, danger: number}[]>([]);
+    
+    useEffect(() => {
+      const fetchAnalyticsData = async () => {
+        if (completedExams.length === 0) {
+          setIsLoadingStats(false);
+          return;
+        }
+        
+        try {
+          setIsLoadingStats(true);
+          // Fetch results for all completed exams concurrently
+          const resultsPromises = completedExams.map(exam => 
+            apiRequest(`http://127.0.0.1:8000/api/exam/${exam.id}/results/`)
+              .catch(err => ({ results: [] })) // Fallback on error
+          );
+          
+          const examsData = await Promise.all(resultsPromises);
+          
+          let totalStudentsAcrossExams = 0;
+          let totalPasses = 0;
+          let gradeCounts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+          
+          const newIntegrityStats: {label: string, safe: number, warning: number, danger: number}[] = [];
+          
+          examsData.forEach((data: any, index: number) => {
+            const results = data.results || [];
+            const examObj = completedExams[index];
+            totalStudentsAcrossExams += results.length;
+            
+            let safe = 0;
+            let warning = 0;
+            let danger = 0;
+            
+            results.forEach((r: any) => {
+              // Grade distribution
+              const pct = r.percentage || 0;
+              if (pct >= 90) gradeCounts.A++;
+              else if (pct >= 80) gradeCounts.B++;
+              else if (pct >= 70) gradeCounts.C++;
+              else if (pct >= 60) gradeCounts.D++;
+              else gradeCounts.F++;
+              
+              if (pct >= 60) totalPasses++;
+              
+              // Integrity (using risk_score or violation_score if available)
+              const risk = r.risk_score || r.violation_score || 0;
+              if (risk >= 70 || r.is_terminated) danger++;
+              else if (risk >= 30) warning++;
+              else safe++;
+            });
+            
+            // Calculate percentages for integrity bar
+            const totalInExam = results.length || 1; // prevent divide by zero
+            newIntegrityStats.push({
+              label: examObj.title,
+              safe: Math.round((safe / totalInExam) * 100),
+              warning: Math.round((warning / totalInExam) * 100),
+              danger: Math.round((danger / totalInExam) * 100)
+            });
+          });
+          
+          // Compute pass rate
+          const overallPassRate = totalStudentsAcrossExams > 0 
+            ? Math.round((totalPasses / totalStudentsAcrossExams) * 100) 
+            : 0;
+            
+          // Compute max for chart scaling
+          const maxCount = Math.max(gradeCounts.A, gradeCounts.B, gradeCounts.C, gradeCounts.D, gradeCounts.F) || 1;
+          
+          setScoreDistribution([
+            { grade: '90-100%', count: gradeCounts.A, height: maxCount > 0 ? `${(gradeCounts.A / maxCount) * 100}%` : '0%' },
+            { grade: '80-89%', count: gradeCounts.B, height: maxCount > 0 ? `${(gradeCounts.B / maxCount) * 100}%` : '0%' },
+            { grade: '70-79%', count: gradeCounts.C, height: maxCount > 0 ? `${(gradeCounts.C / maxCount) * 100}%` : '0%' },
+            { grade: '60-69%', count: gradeCounts.D, height: maxCount > 0 ? `${(gradeCounts.D / maxCount) * 100}%` : '0%' },
+            { grade: '<60%', count: gradeCounts.F, height: maxCount > 0 ? `${(gradeCounts.F / maxCount) * 100}%` : '0%' },
+          ]);
+          setPassRate(overallPassRate);
+          setIntegrityStats(newIntegrityStats.slice(0, 5).reverse()); // 5 most recent exams, ordered chronologically
+          
+          if (classStudents.length > 0) {
+            const expectedTotalSubmissions = completedExams.length * classStudents.length;
+            const avgPart = Math.round((totalStudentsAcrossExams / expectedTotalSubmissions) * 100);
+            setAvgParticipation(`${avgPart}%`);
+          } else {
+            setAvgParticipation('0%');
+          }
+          
+        } catch (error) {
+          console.error("Failed to load analytics stats:", error);
+        } finally {
+          setIsLoadingStats(false);
+        }
+      };
+      
+      fetchAnalyticsData();
+    }, [completedExams.length, classStudents.length]);
+
+    const dashArray = `${passRate}, 100`;
+
+    if (isLoadingStats) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="w-12 h-12 border-4 border-[#1A80F6] border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-gray-500 font-medium">Crunching class data...</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* Average Performance Chart */}
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Grade Distribution</h3>
+                <p className="text-sm text-gray-500">Across all completed exams</p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                <BarChart3 className="text-[#1A80F6]" size={20} />
+              </div>
+            </div>
+            
+            <div className="flex-1 flex items-end justify-between gap-2 h-48 mt-4 pt-4 border-t border-gray-100">
+              {scoreDistribution.map((item, index) => (
+                <div key={index} className="flex flex-col items-center gap-2 flex-1 group">
+                  <div className="w-full bg-blue-50 rounded-t-md relative flex items-end justify-center h-full group-hover:bg-blue-100 transition-colors">
+                    <div 
+                      className="w-full bg-gradient-to-t from-[#1A80F6] to-[#4A90E2] rounded-t-md transition-all duration-500 group-hover:opacity-90"
+                      style={{ height: item.height }}
+                    ></div>
+                    <span className="absolute -top-6 text-xs font-bold text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {item.count}
+                    </span>
+                  </div>
+                  <span className="text-xs font-medium text-gray-500 text-center">{item.grade}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Pass Rate Donut Chart */}
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+            <div className="flex justify-between items-center mb-2">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Pass Rate</h3>
+                <p className="text-sm text-gray-500">Students scoring above 60%</p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+                <CheckCircle className="text-green-600" size={20} />
+              </div>
+            </div>
+
+            <div className="flex-1 flex items-center justify-center mt-2 relative">
+              <svg viewBox="0 0 36 36" className="w-48 h-48 transform -rotate-90">
+                <path
+                  className="text-gray-100"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3.5"
+                />
+                <path
+                  className="text-green-500 drop-shadow-sm transition-all duration-1000 ease-out"
+                  strokeDasharray={dashArray}
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-4xl font-bold text-gray-800">{passRate}%</span>
+                <span className="text-xs font-medium text-gray-400 mt-1">Average</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Integrity Chart */}
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm lg:col-span-2">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Academic Integrity</h3>
+                <p className="text-sm text-gray-500">Proctoring alerts over last 5 exams</p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
+                <AlertCircle className="text-orange-500" size={20} />
+              </div>
+            </div>
+            
+            {integrityStats.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 border-l border-b border-gray-100">
+                <p className="text-gray-400 text-sm italic">Not enough data to show trends.</p>
+              </div>
+            ) : (
+              <div className="flex items-end justify-between gap-4 h-40 mt-4 border-l border-b border-gray-100 pb-2 pl-2">
+                {integrityStats.map((exam, idx) => (
+                  <div key={idx} className="flex flex-col items-center gap-2 flex-1 h-full justify-end group">
+                    <div className="w-10 flex flex-col justify-end h-full gap-0.5 relative">
+                      <div className="w-full bg-red-400 rounded-t-sm transition-all" style={{ height: `${exam.danger}%` }}></div>
+                      <div className="w-full bg-orange-400 transition-all" style={{ height: `${exam.warning}%` }}></div>
+                      <div className="w-full bg-green-400 rounded-b-sm transition-all" style={{ height: `${exam.safe}%` }}></div>
+                    </div>
+                    <span className="text-[10px] font-medium text-gray-500 truncate w-full text-center" title={exam.label}>{exam.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex justify-center gap-4 mt-6 text-xs text-gray-500">
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-green-400"></span>Safe</div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-orange-400"></span>Warnings</div>
+              <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-red-400"></span>Critical</div>
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="space-y-4">
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+               <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <Users className="text-[#1A80F6]" size={24} />
+               </div>
+               <div>
+                  <p className="text-2xl font-bold text-gray-800">{classStudents.length}</p>
+                  <p className="text-sm font-medium text-gray-500">Total Enrolled</p>
+               </div>
+            </div>
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+               <div className="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center flex-shrink-0">
+                  <FileText className="text-purple-600" size={24} />
+               </div>
+               <div>
+                  <p className="text-2xl font-bold text-gray-800">{completedExams.length}</p>
+                  <p className="text-sm font-medium text-gray-500">Exams Completed</p>
+               </div>
+            </div>
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
+               <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                  <TrendingUp className="text-emerald-600" size={24} />
+               </div>
+               <div>
+                  <p className="text-2xl font-bold text-gray-800">{avgParticipation}</p>
+                  <p className="text-sm font-medium text-gray-500">Avg Participation</p>
+               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderTabContent = () => {
     if (!selectedClass) return null;

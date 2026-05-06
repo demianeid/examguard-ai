@@ -186,7 +186,8 @@ async def analyze_stream(
                 yolo = dict(_YOLO_DISABLED)
 
             # ── 5. Draw head pose on the annotated frame and broadcast ────
-            annotated = yolo.get("annotated_frame") or bgr
+            yolo_frame = yolo.get("annotated_frame")
+            annotated = yolo_frame if yolo_frame is not None else bgr
             direction_text = head.get("direction") or "FORWARD"
             text_color = (0, 0, 255) if head.get("suspicious") else (0, 220, 90)  # BGR
 

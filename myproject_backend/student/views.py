@@ -592,5 +592,4 @@ class StudentDashboardView(APIView):
             'completed_exams': completed_count,
             'total_exams': total_exams,
             'enrolled_classes': enrolled_classes_data,
-        })  'enrolled_classes': enrolled_classes_data,
         })

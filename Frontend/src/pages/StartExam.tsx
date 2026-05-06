@@ -584,7 +584,11 @@ const ExamInterface: React.FC = () => {
     let studentId = "unknown";
     if (token) {
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const pad = base64.length % 4;
+        const padded = pad ? base64 + '='.repeat(4 - pad) : base64;
+        const payload = JSON.parse(atob(padded));
         studentId = payload.user_id || "unknown";
       } catch (e) { }
     }
@@ -745,7 +749,11 @@ const ExamInterface: React.FC = () => {
     let studentId = 'unknown';
     if (token) {
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const pad = base64.length % 4;
+        const padded = pad ? base64 + '='.repeat(4 - pad) : base64;
+        const payload = JSON.parse(atob(padded));
         studentId = payload.user_id || 'unknown';
       } catch (e) { }
     }
@@ -1051,10 +1059,13 @@ const ExamInterface: React.FC = () => {
   const startExamSession = async () => {
     setCurrentView('exam');
 
+    // Start camera + AI WS if ANY video-based security feature is enabled
+    // (behavior detection, object detection, multiple-face detection, or live relay)
+    const anyVideoEnabled = behaviorEnabled || objectEnabled || multiFaceEnabled || liveEnabled;
+
     // Wait for React to render the exam view so videoRef.current is available
     setTimeout(async () => {
-      // Only start camera if behavior detection is enabled
-      if (behaviorEnabled) {
+      if (anyVideoEnabled) {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
           if (videoRef.current) videoRef.current.srcObject = stream;
@@ -1068,14 +1079,17 @@ const ExamInterface: React.FC = () => {
   // Restore camera and AI proctoring if the page was refreshed during an exam
   useEffect(() => {
     if (currentView === 'exam' && !examTerminated) {
+      const anyVideoEnabled = behaviorEnabled || objectEnabled || multiFaceEnabled || liveEnabled;
+
       const initWebcamAndAI = async () => {
-        if (videoRef.current && !videoRef.current.srcObject) {
+        // Only init camera if at least one video-based feature is needed
+        if (anyVideoEnabled && videoRef.current && !videoRef.current.srcObject) {
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
             if (videoRef.current) videoRef.current.srcObject = stream;
           } catch { console.error('Camera access denied on refresh'); }
         }
-        if (behaviorEnabled && !aiWsRef.current && aiStatus === 'idle') {
+        if (anyVideoEnabled && !aiWsRef.current && aiStatus === 'idle') {
           startAIProctoring();
         }
         if (audioEnabled && !audioWsRef.current && audioStatus === 'idle') {

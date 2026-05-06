@@ -134,6 +134,7 @@ const ProctoringPage = () => {
   }
   const [liveAlerts, setLiveAlerts] = React.useState<LiveAlert[]>([]);
   const alertIdRef    = React.useRef(0);
+  const [hasPrePopulated, setHasPrePopulated] = React.useState(false);
   // Always-fresh ref so the WS closure can look up student names
   // even though useEffect([examId]) only runs once.
   const liveStatusRef = React.useRef(liveStatus);
@@ -197,6 +198,57 @@ const ProctoringPage = () => {
     return () => clearInterval(interval);
   }, [fetchLiveData]);
 
+  // Pre-populate Live Alerts on initial load
+  useEffect(() => {
+    if (!incidents || hasPrePopulated || !liveStatusRef.current?.students) return;
+
+    const allIncidents = [
+      ...(incidents.high || []),
+      ...(incidents.medium || []),
+      ...(incidents.low || [])
+    ].sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+
+    // Only mark as populated if we actually processed incidents, or if we confirmed there are zero total incidents
+    if (allIncidents.length === 0 && incidents.total === 0) {
+        setHasPrePopulated(true);
+        return;
+    }
+    if (allIncidents.length === 0) return;
+
+    const historicalAlerts: LiveAlert[] = allIncidents.slice(0, 50).map(inc => {
+      const isAudio = inc.event_type === 'ai_audio_violation';
+      const isYolo = inc.yolo_labels && inc.yolo_labels.length > 0;
+      const isHeadPose = inc.type === 'ai' && !isAudio && !isYolo;
+      const matched = liveStatusRef.current?.students?.find(s => s.student_id === inc.student_id);
+
+      return {
+        id:              typeof inc.id === 'number' ? inc.id : parseInt(inc.id) || ++alertIdRef.current,
+        student_id:      matched ? matched.db_id : -1,
+        student_name:    inc.student_name,
+        cheating_reason: inc.event,
+        head_direction:  isHeadPose ? inc.event : '',
+        h_ratio:         0,
+        v_ratio:         0,
+        yolo_labels:     inc.yolo_labels || [],
+        head_suspicious: isHeadPose,
+        yolo_suspicious: !!isYolo,
+        is_audio:        isAudio,
+        audio_event_type: isAudio ? inc.event : null,
+        audio_db_level:  null,
+        audio_reason:    null,
+        new_violation:   false,
+        time:            new Date(inc.occurred_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      };
+    });
+
+    setLiveAlerts(prev => {
+      const existingIds = new Set(prev.map(p => p.id));
+      const uniqueHistorical = historicalAlerts.filter(h => !existingIds.has(h.id));
+      return [...prev, ...uniqueHistorical].slice(0, 50);
+    });
+    setHasPrePopulated(true);
+  }, [incidents, hasPrePopulated]);
+
   // Connect to FastAPI Instructor WS
   useEffect(() => {
     if (!examId) return;
@@ -205,7 +257,8 @@ const ProctoringPage = () => {
     let reconnectTimeout: ReturnType<typeof setTimeout>;
 
     const connect = () => {
-      ws = new WebSocket(`ws://127.0.0.1:8001/ws/instructor/${examId}`);
+      const host = window.location.hostname;
+      ws = new WebSocket(`ws://${host}:8001/ws/instructor/${examId}`);
 
       ws.onmessage = (event) => {
         try {
@@ -321,11 +374,39 @@ const ProctoringPage = () => {
     return Math.min(100, Math.max(0, Math.round(((now - start) / (end - start)) * 100)));
   })();
 
-  const minsRemaining = (() => {
-    if (!exam) return 0;
-    const end = new Date(exam.start_datetime).getTime() + exam.duration * 60 * 1000;
-    return Math.max(0, Math.round((end - Date.now()) / 60_000));
-  })();
+  const [timeRemaining, setTimeRemaining] = React.useState<number>(0);
+
+  useEffect(() => {
+    if (!exam) return;
+    
+    // Match the exact same logic used in StartExam.tsx
+    let endMs: number;
+    if (exam.end_datetime) {
+      const endStr = exam.end_datetime;
+      endMs = Date.parse(/[Z+]|[+-]\d{2}:/.test(endStr) ? endStr : endStr + 'Z');
+    } else {
+      endMs = new Date(exam.start_datetime).getTime() + exam.duration * 60 * 1000;
+    }
+    
+    const updateTimer = () => {
+      const remaining = Math.max(0, Math.floor((endMs - Date.now()) / 1000));
+      setTimeRemaining(remaining);
+    };
+    
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [exam]);
+
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const minsRemaining = Math.ceil(timeRemaining / 60);
 
   // ── Live Monitor tab ─────────────────────────────────────────────────────
   const LiveMonitorTab = () => (
@@ -665,7 +746,7 @@ const ProctoringPage = () => {
                 <span className="text-white font-semibold text-sm flex items-center gap-2">
                   <AlertTriangle size={15} />
                   Live Alerts
-                  <span className="text-white/60 text-[10px] font-normal">head pose · object detection</span>
+                  <span className="text-white/60 text-[10px] font-normal">head pose · object detection · audio</span>
                   {liveAlerts.filter(a => a.new_violation).length > 0 && (
                     <span className="bg-white text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
                       {liveAlerts.filter(a => a.new_violation).length} violation{liveAlerts.filter(a => a.new_violation).length !== 1 ? 's' : ''}
@@ -692,6 +773,7 @@ const ProctoringPage = () => {
                   {liveAlerts.map(alert => {
                     const isHeadPose = alert.head_suspicious;
                     const isYolo    = alert.yolo_suspicious && alert.yolo_labels.length > 0;
+                    const isAudio   = alert.is_audio;
                     const isViolation = alert.new_violation;
 
                     return (
@@ -712,11 +794,17 @@ const ProctoringPage = () => {
                           )}
                           {isYolo && (
                             <span
-                              title="Object Detection (yolo_detector.py)"
+                              title="Object Detection"
                               className="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-[10px] font-black"
                             >📦</span>
                           )}
-                          {!isHeadPose && !isYolo && (
+                          {isAudio && (
+                            <span
+                              title="Audio Detection"
+                              className="w-6 h-6 rounded-full bg-teal-500 flex items-center justify-center text-white text-[10px] font-black"
+                            >🔊</span>
+                          )}
+                          {!isHeadPose && !isYolo && !isAudio && (
                             <div className="w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center text-white text-[9px] font-black">
                               {alert.student_name.charAt(0).toUpperCase()}
                             </div>
@@ -762,8 +850,18 @@ const ProctoringPage = () => {
                             </p>
                           )}
 
+                          {/* Audio detail */}
+                          {isAudio && (
+                            <p className="text-[11px] text-teal-700 font-semibold flex items-center gap-1 mt-0.5">
+                              <span className="text-[9px] bg-teal-100 text-teal-600 px-1 rounded font-bold uppercase">AUDIO</span>
+                              {isViolation && <span className="text-[9px] bg-red-100 text-red-600 px-1 rounded font-bold">+1.5 pts</span>}
+                              {alert.audio_event_type === 'speech_detected' ? 'Speech detected' : 'Loud noise detected'}
+                              {alert.audio_db_level && <span className="text-teal-500 font-mono text-[10px] ml-1">({alert.audio_db_level.toFixed(1)} dB)</span>}
+                            </p>
+                          )}
+
                           {/* Fallback */}
-                          {!isHeadPose && !isYolo && (
+                          {!isHeadPose && !isYolo && !isAudio && (
                             <p className="text-[11px] text-gray-600">
                               {alert.cheating_reason ?? 'Suspicious behaviour'}
                             </p>
@@ -1076,22 +1174,46 @@ const ProctoringPage = () => {
               </div>
             </div>
 
-            {/* Summary badges */}
-            <div className="flex items-center gap-3">
-              {[
-                { count: online,  label: 'online',   color: 'green',  Icon: Users      },
-                { count: warning, label: 'warnings',  color: 'orange', Icon: AlertCircle },
-                { count: flagged, label: 'flagged',   color: 'red',    Icon: AlertCircle },
-                { count: totalIncidents, label: 'incidents', color: 'purple', Icon: BarChart3 },
-                ...(riskData?.critical_count ? [{ count: riskData.critical_count, label: 'critical', color: 'red', Icon: ShieldAlert }] : []),
-              ].map(({ count, label, color, Icon }) => (
-                <div key={label} className={`flex items-center gap-1.5 bg-${color}-50 border border-${color}-200 px-3 py-2 rounded-lg`}>
-                  <Icon size={15} className={`text-${color}-600`} />
-                  <span className={`text-sm font-bold text-${color}-700`}>{count}</span>
-                  <span className={`text-xs text-${color}-500`}>{label}</span>
+            <div className="flex flex-wrap items-center gap-6 lg:gap-10">
+              {/* Total Students (Large) */}
+              <div className="text-right">
+                <div className="flex items-center gap-2 justify-end text-gray-700">
+                  <Users className="w-5 h-5" />
+                  <span className="text-sm font-semibold">Total Students</span>
                 </div>
-              ))}
+                <div className="text-3xl lg:text-4xl font-bold text-gray-900">
+                  {students.length}
+                </div>
+              </div>
+
+              {/* Time Remaining (Large, matches StartExam) */}
+              <div className="text-right">
+                <div className="flex items-center gap-2 justify-end text-gray-700">
+                  <Clock className="w-5 h-5" />
+                  <span className="text-sm font-semibold">Time Remaining</span>
+                </div>
+                <div className={`text-3xl lg:text-4xl font-mono font-bold ${timeRemaining < 300 && timeRemaining > 0 ? 'text-red-600 animate-pulse' : timeRemaining === 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                  {formatTime(timeRemaining)}
+                </div>
+              </div>
             </div>
+          </div>
+          
+          {/* Summary badges moved below */}
+          <div className="mt-4 flex flex-wrap items-center gap-3 pt-4 border-t border-gray-100">
+            {[
+              { count: online,  label: 'online',   color: 'green',  Icon: Users      },
+              { count: warning, label: 'warnings',  color: 'orange', Icon: AlertCircle },
+              { count: flagged, label: 'flagged',   color: 'red',    Icon: AlertCircle },
+              { count: totalIncidents, label: 'incidents', color: 'purple', Icon: BarChart3 },
+              ...(riskData?.critical_count ? [{ count: riskData.critical_count, label: 'critical', color: 'red', Icon: ShieldAlert }] : []),
+            ].map(({ count, label, color, Icon }) => (
+              <div key={label} className={`flex items-center gap-1.5 bg-${color}-50 border border-${color}-200 px-3 py-2 rounded-lg`}>
+                <Icon size={15} className={`text-${color}-600`} />
+                <span className={`text-sm font-bold text-${color}-700`}>{count}</span>
+                <span className={`text-xs text-${color}-500`}>{label}</span>
+              </div>
+            ))}
           </div>
         </div>
 

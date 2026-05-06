@@ -354,7 +354,8 @@ const AccountInstructor: React.FC = () => {
     const sockets: WebSocket[] = [];
 
     activeClassExams.forEach(({ cls, exam }) => {
-      const ws = new WebSocket(`ws://127.0.0.1:8001/ws/instructor/${exam.id}`);
+      const host = window.location.hostname;
+      const ws = new WebSocket(`ws://${host}:8001/ws/instructor/${exam.id}`);
       
       ws.onmessage = (event) => {
         try {
@@ -537,18 +538,22 @@ const AccountInstructor: React.FC = () => {
     await Promise.allSettled(
       activeClassExams.map(async ({ cls, exam }) => {
         try {
-          const res = await authFetch(`${BASE}/api/exam/${exam.id}/incidents/`);
+          const res = await authFetch(`${BASE}/api/violations/exam/${exam.id}/incidents/`);
           if (!res.ok) return;
-          const incidents: Incident[] = await res.json();
-          incidents.forEach(inc => {
-            const severity = inc.severity ?? 'medium';
+          const incidentsData = await res.json();
+          const allIncidents = [
+            ...(incidentsData.high || []).map((inc: any) => ({ ...inc, severity: 'high' })),
+            ...(incidentsData.medium || []).map((inc: any) => ({ ...inc, severity: 'medium' })),
+            ...(incidentsData.low || []).map((inc: any) => ({ ...inc, severity: 'low' }))
+          ];
+          allIncidents.forEach(inc => {
             allAlerts.push({
               uniqueId:  inc.id?.toString() || Math.random().toString(36).substring(2, 9),
-              type:      ['high', 'critical'].includes(severity) ? 'warning' : 'info',
-              message:   inc.description ?? inc.incident_type ?? 'Suspicious activity detected',
-              details:   `${inc.student_name ?? inc.student ?? 'Unknown'} | ${cls.name} – ${exam.title}`,
-              time:      inc.created_at ?? inc.timestamp
-                ? formatRelativeTime(new Date((inc.created_at ?? inc.timestamp)!))
+              type:      ['high', 'critical'].includes(inc.severity) ? 'warning' : 'info',
+              message:   inc.event ?? 'Suspicious activity detected',
+              details:   `${inc.student_name ?? 'Unknown'} | ${cls.name} – ${exam.title}`,
+              time:      inc.occurred_at
+                ? formatRelativeTime(new Date(inc.occurred_at))
                 : 'Just now',
               examId:    exam.id,
               classId:   cls.id,
