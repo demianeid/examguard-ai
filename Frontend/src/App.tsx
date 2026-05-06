@@ -19,6 +19,7 @@ import ClassesInstructor from "./pages/ClassesInstructor";
 import AccountInstructor from "./pages/AccountInstructor";
 import CreateExam from "./pages/CreateExam";
 import ExamResults from "./pages/ExamResults";
+import EssayGrading from "./pages/EssayGrading";
 import StartExam from "./pages/StartExam";
 import Settings from "./pages/Setting";
 import AccountStudentInstructorView from "./pages/AccountStudentInstructorView";
@@ -196,6 +197,7 @@ function App() {
       <Route path="/CreateExam" element={<CreateExam />} />
       <Route path="/edit-exam/:examId" element={<EditExam />} />
       <Route path="/exam-results/:examId" element={<ExamResults />} />
+      <Route path="/exam/:examId/grade-essays" element={<EssayGrading />} />
       <Route path="/review-incidents/:examId" element={<ReviewIncidents />} />
       <Route path="/review-incidents" element={<ReviewIncidents />} />
       <Route path="/live-proctoring/:examId" element={<LiveProctoring />} />

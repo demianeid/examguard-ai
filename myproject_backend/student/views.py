@@ -462,6 +462,10 @@ class StudentExamSubmitView(APIView):
         # Phase 3 — Compute risk score before saving
         computed_risk = compute_risk_score(request.user, exam)
 
+        # Determine grading status: if the exam has any essay questions, result is 'pending'
+        has_essays = exam.questions.filter(question_type='essay').exists()
+        grading_status = 'pending' if has_essays else 'auto'
+
         ExamResult.objects.create(
             student=request.user,
             exam=exam,
@@ -471,6 +475,7 @@ class StudentExamSubmitView(APIView):
             is_terminated=is_terminated,
             violation_score=violation_score,
             risk_score=computed_risk,
+            grading_status=grading_status,
         )
 
         # أغلق الـ session بعد الـ submit
@@ -482,6 +487,7 @@ class StudentExamSubmitView(APIView):
             'total_marks_obtained': total_marks_obtained,
             'total_marks': exam.total_marks,
             'percentage': round(percentage, 2),
+            'grading_status': grading_status,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -586,4 +592,5 @@ class StudentDashboardView(APIView):
             'completed_exams': completed_count,
             'total_exams': total_exams,
             'enrolled_classes': enrolled_classes_data,
+        })  'enrolled_classes': enrolled_classes_data,
         })

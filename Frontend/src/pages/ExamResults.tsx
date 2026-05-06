@@ -15,6 +15,7 @@ interface StudentResult {
   submitted_at: string;
   is_terminated: boolean;
   risk_score: number;
+  grading_status: 'auto' | 'pending' | 'graded';
 }
 
 interface ExamResultData {
@@ -22,6 +23,7 @@ interface ExamResultData {
   exam_title: string;
   total_students: number;
   results: StudentResult[];
+  has_essay_questions: boolean;
 }
 
 const ExamResults: React.FC = () => {
@@ -252,13 +254,14 @@ const handleViewProfile = (student: StudentResult) => {
                   <Download size={18} />
                   Export Grades
                 </button>
-                <button
-                  onClick={handleExportAuditTrail}
-                  className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium shadow-sm"
-                >
-                  <Download size={18} />
-                  Export Audit Trail
-                </button>
+                {examData.has_essay_questions && (
+                  <button
+                    onClick={() => navigate(`/exam/${examId}/grade-essays`)}
+                    className="bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 transition-colors flex items-center gap-2 font-medium shadow-sm"
+                  >
+                    ✍️ Grade Essays
+                  </button>
+                )}
               </div>
             </div>
 
@@ -330,7 +333,7 @@ const handleViewProfile = (student: StudentResult) => {
                             </div>
                           </td>
                           <td className="py-4 px-4">
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                               student.percentage >= 60
                                 ? 'bg-green-100 text-green-800'
                                 : 'bg-red-100 text-red-800'

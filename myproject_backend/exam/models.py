@@ -117,6 +117,12 @@ class StudentAnswer(models.Model):
 
 # --- Stores the final result for a student in an exam ---
 class ExamResult(models.Model):
+    GRADING_STATUS_CHOICES = [
+        ('auto',    'Auto Graded'),  # no essay questions — graded instantly
+        ('pending', 'Pending'),      # has essays, awaiting instructor grading
+        ('graded',  'Graded'),       # instructor has submitted all essay marks
+    ]
+
     student              = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -136,6 +142,12 @@ class ExamResult(models.Model):
     risk_score           = models.DecimalField(
         max_digits=5, decimal_places=1, default=0,
         help_text='Normalised risk score 0-100 computed by RiskEngine at submit time'
+    )
+    grading_status       = models.CharField(
+        max_length=10,
+        choices=GRADING_STATUS_CHOICES,
+        default='auto',
+        help_text='auto = fully auto-graded; pending = has ungraded essays; graded = instructor finished'
     )
 
     class Meta:

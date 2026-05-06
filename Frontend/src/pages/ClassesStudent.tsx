@@ -141,8 +141,8 @@ const ClassesStudent = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
- 
- 
+
+
   const [studentClasses, setStudentClasses] = useState<ClassType[]>([]);
   const [joinMessage, setJoinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [leaveConfirm, setLeaveConfirm] = useState<ClassType | null>(null);
@@ -197,7 +197,7 @@ const ClassesStudent = () => {
     };
   }, []);
 
-  
+
   const handleClassClick = (cls: ClassType) => {
     navigate(`/classes/${cls.id}/overview`);
   };
@@ -284,19 +284,19 @@ const ClassesStudent = () => {
     const [examLoading, setExamLoading] = useState(true);
     const [overallGrade, setOverallGrade] = useState<number | null>(null);
 
-useEffect(() => {
-  fetch(`http://127.0.0.1:8000/api/student/classes/${cls.id}/grades/`, {
-    headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
-  })
-    .then(r => r.json())
-    .then(data => {
-      if (data.length > 0) {
-        const avg = data.reduce((s: number, g: any) => s + parseFloat(g.percentage), 0) / data.length;
-        setOverallGrade(Math.round(avg));
-      }
-    })
-    .catch(() => {});
-}, [cls.id]);
+    useEffect(() => {
+      fetch(`http://127.0.0.1:8000/api/student/classes/${cls.id}/grades/`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.length > 0) {
+            const avg = data.reduce((s: number, g: any) => s + parseFloat(g.percentage), 0) / data.length;
+            setOverallGrade(Math.round(avg));
+          }
+        })
+        .catch(() => { });
+    }, [cls.id]);
 
     useEffect(() => {
       const fetchNextExam = async () => {
@@ -396,10 +396,10 @@ useEffect(() => {
               </div>
               <h3 className="font-semibold text-gray-800">Overall Grades</h3>
             </div>
-           {overallGrade !== null
-  ? <p className={`text-2xl font-bold ${getTextColorFromGradient(cls.color)}`}>{overallGrade}%</p>
-  : <p className="text-gray-500 text-sm">No grades available yet</p>
-}
+            {overallGrade !== null
+              ? <p className={`text-2xl font-bold ${getTextColorFromGradient(cls.color)}`}>{overallGrade}%</p>
+              : <p className="text-gray-500 text-sm">No grades available yet</p>
+            }
             <button
               type="button"
               className={`mt-4 text-sm font-medium flex items-center gap-1 group ${getTextColorFromGradient(cls.color)}`}
@@ -538,14 +538,14 @@ useEffect(() => {
           if (!res.ok) throw new Error('Failed');
           const data = await res.json();
           setExams(data.map((e: any) => ({
-              id: e.id,
-              name: e.title,
-              date: e.start_datetime ? new Date(e.start_datetime).toLocaleDateString('en-CA') : '',
-              duration: `${e.duration} min`,
-              status: e.status,
-              score: e.score ?? null,
-              start_datetime: e.start_datetime,
-              end_datetime: e.end_datetime,
+            id: e.id,
+            name: e.title,
+            date: e.start_datetime ? new Date(e.start_datetime).toLocaleDateString('en-CA') : '',
+            duration: `${e.duration} min`,
+            status: e.status,
+            score: e.score ?? null,
+            start_datetime: e.start_datetime,
+            end_datetime: e.end_datetime,
           })));
         } catch {
           setExams([]);
@@ -609,30 +609,30 @@ useEffect(() => {
                       <span className="px-3 py-1 bg-blue-100 text-[#1A80F6] rounded-full text-sm font-medium">Upcoming</span>
                       <span className="text-xs text-gray-500">
                         Starts: {exam.start_datetime ? (() => {
-  const d = new Date(exam.start_datetime);
-  const h = d.getHours();
-  const min = String(d.getMinutes()).padStart(2, '0');
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 || 12;
-  return `${d.toLocaleDateString('en-CA')} at ${h12}:${min} ${ampm}`;
-})() : ''}
+                          const d = new Date(exam.start_datetime);
+                          const h = d.getHours();
+                          const min = String(d.getMinutes()).padStart(2, '0');
+                          const ampm = h >= 12 ? 'PM' : 'AM';
+                          const h12 = h % 12 || 12;
+                          return `${d.toLocaleDateString('en-CA')} at ${h12}:${min} ${ampm}`;
+                        })() : ''}
                       </span>
                     </>
-                 ) : exam.status === "missed" ? (
-    <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm font-medium">Missed</span>
- ) : exam.status === "submitted" ? (
-    <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">Submitted</span>
-  ) : (
-    <>
-      <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span>
-      {exam.score != null && (
-        <div className="text-right">
-          <span className="text-sm text-gray-500">Score</span>
-          <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>{exam.score}%</p>
-        </div>
-      )}
-    </>
-  )}
+                  ) : exam.status === "missed" ? (
+                    <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm font-medium">Missed</span>
+                  ) : exam.status === "submitted" ? (
+                    <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">Submitted</span>
+                  ) : (
+                    <>
+                      <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-sm font-medium">Completed</span>
+                      {exam.score != null && (
+                        <div className="text-right">
+                          <span className="text-sm text-gray-500">Score</span>
+                          <p className={`text-2xl font-bold ${getTextColorFromGradient(selectedClass?.color || '')}`}>{exam.score}%</p>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -645,7 +645,7 @@ useEffect(() => {
   interface GradeResult {
     exam_title: string;
     percentage: number;
-    total_marks_obtained: number; 
+    total_marks_obtained: number;
     total_marks: number;
     submitted_at: string;
   }
@@ -791,11 +791,10 @@ useEffect(() => {
               key={id}
               type="button"
               onClick={() => handleTabChange(id)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-200 ${
-                activeTab === id
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-200 ${activeTab === id
                   ? selectedClass.color + ' text-white shadow-md'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <Icon size={18} />{label}
             </button>
@@ -807,20 +806,20 @@ useEffect(() => {
     );
   };
 
-const ClassesList = () => (
-  <>
-    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 relative" style={{ zIndex: 1 }}>
-      {studentClasses.map((cls) => (
-        <div
-          key={cls.id}
-          onClick={() => handleClassClick(cls)}
-          className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer hover:scale-[1.02] relative"
-          style={{ zIndex: 1 }}
-        >
-          <div className="overflow-hidden rounded-t-xl">
-            <div className={`h-2 ${cls.color}`}></div>
-          </div>
-          <div className="p-6">
+  const ClassesList = () => (
+    <>
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 relative" style={{ zIndex: 1 }}>
+        {studentClasses.map((cls) => (
+          <div
+            key={cls.id}
+            onClick={() => handleClassClick(cls)}
+            className="bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer hover:scale-[1.02] relative"
+            style={{ zIndex: 1 }}
+          >
+            <div className="overflow-hidden rounded-t-xl">
+              <div className={`h-2 ${cls.color}`}></div>
+            </div>
+            <div className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="text-xl font-bold text-gray-800 mb-2">{cls.name}</h3>
@@ -901,7 +900,7 @@ const ClassesList = () => (
                     <p className="text-sm sm:text-base text-gray-600">Student Dashboard</p>
                   </div>
                 </div>
-                
+
               </div>
 
               {/* ── Join Class Input + Inline Message ── */}
@@ -930,11 +929,10 @@ const ClassesList = () => (
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -6 }}
                       transition={{ duration: 0.2 }}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium ${
-                        joinMessage.type === 'success'
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium ${joinMessage.type === 'success'
                           ? 'bg-green-50 text-green-700 border border-green-200'
                           : 'bg-red-50 text-red-700 border border-red-200'
-                      }`}
+                        }`}
                     >
                       {joinMessage.type === 'success'
                         ? <CheckCircle size={16} className="shrink-0" />

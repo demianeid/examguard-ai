@@ -52,8 +52,12 @@ const ExamInterface: React.FC = () => {
   const [waitCountdown, setWaitCountdown] = useState(0);
   const [agreedToRules, setAgreedToRules] = useState(() => sessionStorage.getItem(`exam_${examId}_agreed`) === 'true');
   const [currentQuestion, setCurrentQuestion] = useState(() => parseInt(sessionStorage.getItem(`exam_${examId}_currentQuestion`) || '0', 10));
-  const [answers, setAnswers] = useState<(number | null)[]>(() => {
+  const [answers, setAnswers] = useState<(number | string | null)[]>(() => {
     const saved = sessionStorage.getItem(`exam_${examId}_answers`);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [essayAnswers, setEssayAnswers] = useState<string[]>(() => {
+    const saved = sessionStorage.getItem(`exam_${examId}_essayAnswers`);
     return saved ? JSON.parse(saved) : [];
   });
   const [flagged, setFlagged] = useState<boolean[]>(() => {
@@ -130,7 +134,7 @@ const ExamInterface: React.FC = () => {
   const fsRetryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null); // fullscreen retry loop
   const violationScoreRef = useRef(0);  // sync mirror of violationScore for WS closure
   const currentViewRef = useRef(currentView);
-  const answersRef = useRef<(number | null)[]>([]);
+  const answersRef = useRef<(number | string | null)[]>([]);
   const secSettingsRef = useRef<Record<string, boolean>>({}); // always-fresh security settings
 
   // Keep refs in sync
@@ -144,13 +148,13 @@ const ExamInterface: React.FC = () => {
 
   // ── Derive security flags from examData (default ALL TRUE if not set) ──────
   const sec = examData?.security_settings ?? {};
-  const behaviorEnabled   = sec.behavior_detection      !== false;
-  const audioEnabled      = sec.audio_detection         !== false;
-  const liveEnabled       = sec.live_proctoring         !== false;
-  const multiFaceEnabled  = sec.multiple_face_detection !== false;
-  const lockdownEnabled   = sec.lockdown_browser        !== false;
-  const objectEnabled     = sec.object_detection        !== false;
-  const alertsEnabled     = sec.real_time_alerts        !== false;
+  const behaviorEnabled = sec.behavior_detection !== false;
+  const audioEnabled = sec.audio_detection !== false;
+  const liveEnabled = sec.live_proctoring !== false;
+  const multiFaceEnabled = sec.multiple_face_detection !== false;
+  const lockdownEnabled = sec.lockdown_browser !== false;
+  const objectEnabled = sec.object_detection !== false;
+  const alertsEnabled = sec.real_time_alerts !== false;
 
   // Keep secSettingsRef in sync so callbacks/closures always see current values
   useEffect(() => {
@@ -162,6 +166,7 @@ const ExamInterface: React.FC = () => {
   useEffect(() => { sessionStorage.setItem(`exam_${examId}_agreed`, agreedToRules.toString()); }, [agreedToRules, examId]);
   useEffect(() => { sessionStorage.setItem(`exam_${examId}_currentQuestion`, currentQuestion.toString()); }, [currentQuestion, examId]);
   useEffect(() => { sessionStorage.setItem(`exam_${examId}_answers`, JSON.stringify(answers)); }, [answers, examId]);
+  useEffect(() => { sessionStorage.setItem(`exam_${examId}_essayAnswers`, JSON.stringify(essayAnswers)); }, [essayAnswers, examId]);
   useEffect(() => { sessionStorage.setItem(`exam_${examId}_flagged`, JSON.stringify(flagged)); }, [flagged, examId]);
   useEffect(() => {
     if (currentView === 'exam' && timeRemaining > 0 && !sessionStorage.getItem(`exam_${examId}_endTime`)) {
@@ -182,9 +187,9 @@ const ExamInterface: React.FC = () => {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         if (!res.ok) {
-  const errData = await res.json();
-  throw new Error(errData.detail || 'Failed to load exam');
-}
+          const errData = await res.json();
+          throw new Error(errData.detail || 'Failed to load exam');
+        }
         const data: ExamData = await res.json();
         setExamData(data);
         if (data.end_datetime) {
@@ -194,17 +199,17 @@ const ExamInterface: React.FC = () => {
         } else {
           const savedEnd = sessionStorage.getItem(`exam_${examId}_endTime`);
           if (savedEnd) {
-             setTimeRemaining(Math.max(0, Math.floor((parseInt(savedEnd, 10) - Date.now()) / 1000)));
+            setTimeRemaining(Math.max(0, Math.floor((parseInt(savedEnd, 10) - Date.now()) / 1000)));
           } else {
-             setTimeRemaining(data.duration * 60);
+            setTimeRemaining(data.duration * 60);
           }
         }
         setViolationScore(data.violation_score ?? 0);
         violationScoreRef.current = data.violation_score ?? 0;
-        
+
         const savedAnswers = sessionStorage.getItem(`exam_${examId}_answers`);
         setAnswers(savedAnswers ? JSON.parse(savedAnswers) : Array(data.questions.length).fill(null));
-        
+
         const savedFlagged = sessionStorage.getItem(`exam_${examId}_flagged`);
         setFlagged(savedFlagged ? JSON.parse(savedFlagged) : Array(data.questions.length).fill(false));
 
@@ -229,7 +234,12 @@ const ExamInterface: React.FC = () => {
   // ============================================================
   // Derived values
   // ============================================================
-  const answeredCount = answers.filter(a => a !== null).length;
+  const answeredCount = answers.filter((a, i) => {
+    if (!examData) return false;
+    const q = examData.questions[i];
+    if (q?.question_type === 'essay') return (essayAnswers[i] || '').trim().length > 0;
+    return a !== null;
+  }).length;
   const unansweredCount = answers.length - answeredCount;
   const flaggedCount = flagged.filter(f => f).length;
 
@@ -263,7 +273,7 @@ const ExamInterface: React.FC = () => {
     try {
       await document.exitFullscreen?.();
       setFullScreenActive(false);
-    } catch {}
+    } catch { }
   };
 
   const toggleFullScreen = () => fullScreenActive ? exitFullScreen() : requestFullScreen();
@@ -306,9 +316,9 @@ const ExamInterface: React.FC = () => {
       if (!lockdownEnabled) return;
       if (currentView !== 'exam' || examTerminated) return;
       const blocked = [
-        e.ctrlKey && ['c','v','x','p','s','u','a','n','t','w'].includes(e.key),
-        e.ctrlKey && e.shiftKey && ['I','J','C','N','W'].includes(e.key),
-        e.metaKey && ['c','v','x','p','s','a'].includes(e.key),
+        e.ctrlKey && ['c', 'v', 'x', 'p', 's', 'u', 'a', 'n', 't', 'w'].includes(e.key),
+        e.ctrlKey && e.shiftKey && ['I', 'J', 'C', 'N', 'W'].includes(e.key),
+        e.metaKey && ['c', 'v', 'x', 'p', 's', 'a'].includes(e.key),
         e.key === 'F12',
         e.altKey && e.key === 'Tab',
         e.altKey && e.key === 'F4',
@@ -464,26 +474,26 @@ const ExamInterface: React.FC = () => {
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        exam_id:          parseInt(examId),
-        event_type:       eventType,
-        score_points:     scorePoints,
+        exam_id: parseInt(examId),
+        event_type: eventType,
+        score_points: scorePoints,
         cumulative_score: cumulativeScore,
         details,
-        snapshot:         snapshotBase64 || '',
+        snapshot: snapshotBase64 || '',
       }),
     }).catch(err => console.warn('postBehaviorViolation failed:', err));
   }, [examId, token]);
 
   /** POST an AI-detected cheating event to Django */
   const postAIViolation = useCallback((result: {
-    cheating_reason:   string | null;
-    head_direction:    string;
-    head_suspicious:   boolean;
-    multiple_faces:    boolean;
-    yolo_suspicious:   boolean;
-    yolo_labels:       string[];
-    h_ratio:           number;
-    v_ratio:           number;
+    cheating_reason: string | null;
+    head_direction: string;
+    head_suspicious: boolean;
+    multiple_faces: boolean;
+    yolo_suspicious: boolean;
+    yolo_labels: string[];
+    h_ratio: number;
+    v_ratio: number;
   }) => {
     if (!examId) return;
     fetch(`${DJANGO_BASE}/api/violations/ai/`, {
@@ -493,16 +503,16 @@ const ExamInterface: React.FC = () => {
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        exam_id:           parseInt(examId),
+        exam_id: parseInt(examId),
         cheating_detected: true,
-        cheating_reason:   result.cheating_reason ?? '',
-        head_direction:    result.head_direction,
-        head_suspicious:   result.head_suspicious,
-        multiple_faces:    result.multiple_faces,
-        yolo_suspicious:   result.yolo_suspicious,
-        yolo_labels:       result.yolo_labels,
-        h_ratio:           result.h_ratio,
-        v_ratio:           result.v_ratio,
+        cheating_reason: result.cheating_reason ?? '',
+        head_direction: result.head_direction,
+        head_suspicious: result.head_suspicious,
+        multiple_faces: result.multiple_faces,
+        yolo_suspicious: result.yolo_suspicious,
+        yolo_labels: result.yolo_labels,
+        h_ratio: result.h_ratio,
+        v_ratio: result.v_ratio,
       }),
     }).catch(err => console.warn('postAIViolation failed:', err));
   }, [examId, token]);
@@ -510,8 +520,8 @@ const ExamInterface: React.FC = () => {
   /** POST an audio anomaly event to Django */
   const postAudioViolation = useCallback((audio: {
     event_type: string;
-    db_level:   number;
-    reason:     string | null;
+    db_level: number;
+    reason: string | null;
   }) => {
     if (!examId) return;
     fetch(`${DJANGO_BASE}/api/violations/audio/`, {
@@ -521,10 +531,10 @@ const ExamInterface: React.FC = () => {
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        exam_id:    parseInt(examId),
+        exam_id: parseInt(examId),
         event_type: audio.event_type,
-        db_level:   audio.db_level,
-        reason:     audio.reason ?? '',
+        db_level: audio.db_level,
+        reason: audio.reason ?? '',
       }),
     }).catch(err => console.warn('postAudioViolation failed:', err));
   }, [examId, token]);
@@ -538,10 +548,10 @@ const ExamInterface: React.FC = () => {
     setViolationScore(newScore);
 
     setProctorAlerts(prevAlerts => [reason, ...prevAlerts].slice(0, 3));
-    
+
     // Persist to Django asynchronously
     postBehaviorViolation(eventType, points, newScore, reason, snapshotBase64);
-    
+
     if (newScore >= 20 && !isTerminatedRef.current && currentViewRef.current === 'exam') {
       terminateExam(`Excessive violations: ${reason}`, newScore);
     }
@@ -576,15 +586,15 @@ const ExamInterface: React.FC = () => {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         studentId = payload.user_id || "unknown";
-      } catch(e) {}
+      } catch (e) { }
     }
 
     const host = window.location.hostname;
     const sec = secSettingsRef.current;
-    const liveParam     = sec.live_proctoring         !== false ? '1' : '0';
-    const behaviorParam = sec.behavior_detection      !== false ? '1' : '0';
-    const objectParam   = sec.object_detection        !== false ? '1' : '0';
-    const multiFaceParam= sec.multiple_face_detection !== false ? '1' : '0';
+    const liveParam = sec.live_proctoring !== false ? '1' : '0';
+    const behaviorParam = sec.behavior_detection !== false ? '1' : '0';
+    const objectParam = sec.object_detection !== false ? '1' : '0';
+    const multiFaceParam = sec.multiple_face_detection !== false ? '1' : '0';
     const wsUrl = `ws://${host}:8001/ws/analyze/${examId}/${studentId}` +
       `?live=${liveParam}&behavior_detection=${behaviorParam}&object_detection=${objectParam}&multi_face=${multiFaceParam}`;
     const ws = new WebSocket(wsUrl);
@@ -629,7 +639,7 @@ const ExamInterface: React.FC = () => {
         setHeadVRatio(result.v_ratio ?? 0);
         setHeadSuspicious(result.head_suspicious ?? false);
         setYoloSuspicious(result.yolo_suspicious ?? false);
-        setYoloLabels((result.detections ?? []).map((d: {label: string}) => d.label));
+        setYoloLabels((result.detections ?? []).map((d: { label: string }) => d.label));
 
         if (result.cheating_detected) {
           const reason = result.cheating_reason ?? 'AI: suspicious behaviour';
@@ -682,14 +692,14 @@ const ExamInterface: React.FC = () => {
 
           // Persist full AI event details
           postAIViolation({
-            cheating_reason:  result.cheating_reason,
-            head_direction:   result.head_direction  ?? '',
-            head_suspicious:  result.head_suspicious ?? false,
-            multiple_faces:   result.multiple_faces  ?? false,
-            yolo_suspicious:  result.yolo_suspicious ?? false,
-            yolo_labels:      (result.detections ?? []).map((d: {label: string}) => d.label),
-            h_ratio:          result.h_ratio ?? 0,
-            v_ratio:          result.v_ratio ?? 0,
+            cheating_reason: result.cheating_reason,
+            head_direction: result.head_direction ?? '',
+            head_suspicious: result.head_suspicious ?? false,
+            multiple_faces: result.multiple_faces ?? false,
+            yolo_suspicious: result.yolo_suspicious ?? false,
+            yolo_labels: (result.detections ?? []).map((d: { label: string }) => d.label),
+            h_ratio: result.h_ratio ?? 0,
+            v_ratio: result.v_ratio ?? 0,
           });
         }
       } catch (e) {
@@ -737,7 +747,7 @@ const ExamInterface: React.FC = () => {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         studentId = payload.user_id || 'unknown';
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const host = window.location.hostname;
@@ -798,8 +808,8 @@ const ExamInterface: React.FC = () => {
           addViolation(1.0, `🔊 ${reason}`, 'ai_audio_violation');
           postAudioViolation({
             event_type: result.event_type ?? 'loud_noise',
-            db_level:   result.db_level   ?? 0,
-            reason:     result.reason,
+            db_level: result.db_level ?? 0,
+            reason: result.reason,
           });
         } else if (!result.suspicious) {
           setLastAudioAlert(null);
@@ -828,7 +838,7 @@ const ExamInterface: React.FC = () => {
       audioProcessorRef.current = null;
     }
     if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current.close().catch(() => { });
       audioCtxRef.current = null;
     }
     if (audioStreamRef.current) {
@@ -907,13 +917,15 @@ const ExamInterface: React.FC = () => {
     // Build answers array using question id and selected choice id from the ref to avoid stale closures
     const answersPayload = examData.questions
       .map((q, index) => {
-        const selectedIndex = answersRef.current[index];
+        if (q.question_type === 'essay') {
+          const text = (answersRef.current[index] as string) || essayAnswers[index] || '';
+          if (!text.trim()) return null;
+          return { question_id: q.id, essay_answer: text };
+        }
+        const selectedIndex = answersRef.current[index] as number | null;
         if (selectedIndex === null || selectedIndex === undefined) return null;
         const selectedChoice = q.choices[selectedIndex];
-        return {
-          question_id: q.id,
-          choice_id: selectedChoice?.id ?? null,
-        };
+        return { question_id: q.id, choice_id: selectedChoice?.id ?? null };
       })
       .filter(Boolean);
 
@@ -935,6 +947,7 @@ const ExamInterface: React.FC = () => {
       sessionStorage.removeItem(`exam_${examId}_agreed`);
       sessionStorage.removeItem(`exam_${examId}_currentQuestion`);
       sessionStorage.removeItem(`exam_${examId}_answers`);
+      sessionStorage.removeItem(`exam_${examId}_essayAnswers`);
       sessionStorage.removeItem(`exam_${examId}_flagged`);
       sessionStorage.removeItem(`exam_${examId}_endTime`);
     } catch (err) {
@@ -978,7 +991,13 @@ const ExamInterface: React.FC = () => {
   };
 
   const getQuestionStatus = (index: number): 'answered' | 'flagged' | 'unanswered' => {
-    if (answers[index] !== null) return 'answered';
+    if (!examData) return 'unanswered';
+    const q = examData.questions[index];
+    if (q?.question_type === 'essay') {
+      if ((essayAnswers[index] || '').trim().length > 0) return 'answered';
+    } else if (answers[index] !== null) {
+      return 'answered';
+    }
     if (flagged[index]) return 'flagged';
     return 'unanswered';
   };
@@ -1063,7 +1082,7 @@ const ExamInterface: React.FC = () => {
           startAudioProctoring();
         }
       };
-      
+
       // Delay slightly to ensure videoRef is mounted
       setTimeout(initWebcamAndAI, 500);
     }
@@ -1199,18 +1218,18 @@ const ExamInterface: React.FC = () => {
       setSystemCheckStatus(p => ({ ...p, fullscreen: 'requestFullscreen' in document.documentElement ? 'success' : 'failed' }));
     }, 3000);
 
-  setTimeout(async () => {
-  try {
-    const s = await (navigator.mediaDevices as any).getDisplayMedia({ video: { displaySurface: 'monitor' } });
-    const surface = s.getVideoTracks()[0].getSettings().displaySurface;
-    s.getTracks().forEach((t: MediaStreamTrack) => t.stop());
-    setSystemCheckStatus(p => ({ ...p, screen: (surface === 'monitor' || surface === undefined) ? 'success' : 'failed' }));
-  } catch {
-    setSystemCheckStatus(p => ({ ...p, screen: 'failed' }));
-  } finally {
-    setCheckingComplete(true);
-  }
-}, 3500);
+    setTimeout(async () => {
+      try {
+        const s = await (navigator.mediaDevices as any).getDisplayMedia({ video: { displaySurface: 'monitor' } });
+        const surface = s.getVideoTracks()[0].getSettings().displaySurface;
+        s.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+        setSystemCheckStatus(p => ({ ...p, screen: (surface === 'monitor' || surface === undefined) ? 'success' : 'failed' }));
+      } catch {
+        setSystemCheckStatus(p => ({ ...p, screen: 'failed' }));
+      } finally {
+        setCheckingComplete(true);
+      }
+    }, 3500);
   };
 
   const retrySpecificCheck = async (key: string) => {
@@ -1221,16 +1240,16 @@ const ExamInterface: React.FC = () => {
       case 'internet': setSystemCheckStatus(p => ({ ...p, internet: navigator.onLine ? 'success' : 'failed' })); break;
       case 'browser': setSystemCheckStatus(p => ({ ...p, browser: /Chrome|Firefox|Edg/.test(navigator.userAgent) ? 'success' : 'failed' })); break;
       case 'fullscreen': setSystemCheckStatus(p => ({ ...p, fullscreen: 'requestFullscreen' in document.documentElement ? 'success' : 'failed' })); break;
-     case 'screen':
-  try {
-    const s = await (navigator.mediaDevices as any).getDisplayMedia({ video: { displaySurface: 'monitor' } });
-    const surface = s.getVideoTracks()[0].getSettings().displaySurface;
-    s.getTracks().forEach((t: MediaStreamTrack) => t.stop());
-    setSystemCheckStatus(p => ({ ...p, screen: (surface === 'monitor' || surface === undefined || surface === null) ? 'success' : 'failed' }));
-  } catch {
-    setSystemCheckStatus(p => ({ ...p, screen: 'failed' }));
-  }
-  break;
+      case 'screen':
+        try {
+          const s = await (navigator.mediaDevices as any).getDisplayMedia({ video: { displaySurface: 'monitor' } });
+          const surface = s.getVideoTracks()[0].getSettings().displaySurface;
+          s.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+          setSystemCheckStatus(p => ({ ...p, screen: (surface === 'monitor' || surface === undefined || surface === null) ? 'success' : 'failed' }));
+        } catch {
+          setSystemCheckStatus(p => ({ ...p, screen: 'failed' }));
+        }
+        break;
     }
   };
 
@@ -1473,7 +1492,7 @@ const ExamInterface: React.FC = () => {
       { key: 'internet', icon: Wifi, title: 'Internet Connection', checkingDesc: 'Testing connection...', successDesc: 'Strong internet connection', failedDesc: 'Weak or unstable connection', troubleshooting: 'Check your internet connection' },
       { key: 'browser', icon: Monitor, title: 'Browser Compatibility', checkingDesc: 'Verifying browser...', successDesc: 'Browser is compatible', failedDesc: 'Browser not supported', troubleshooting: 'Use Chrome, Firefox, or Edge' },
       { key: 'fullscreen', icon: Maximize2, title: 'Fullscreen Support', checkingDesc: 'Checking fullscreen...', successDesc: 'Fullscreen mode supported', failedDesc: 'Fullscreen not supported', troubleshooting: 'Update your browser' },
-      { key: 'screen', icon: Monitor, title: 'Screen Sharing', checkingDesc: '⚠️ Please select "Entire Screen" from the list then click Allow', successDesc: 'Screen sharing granted', failedDesc: 'Screen sharing denied',troubleshooting: 'You must share your Entire Screen — window or tab sharing is not allowed' },
+      { key: 'screen', icon: Monitor, title: 'Screen Sharing', checkingDesc: '⚠️ Please select "Entire Screen" from the list then click Allow', successDesc: 'Screen sharing granted', failedDesc: 'Screen sharing denied', troubleshooting: 'You must share your Entire Screen — window or tab sharing is not allowed' },
     ];
     const allSuccess = Object.values(systemCheckStatus).every(s => s === 'success');
 
@@ -1608,25 +1627,22 @@ const ExamInterface: React.FC = () => {
             </div>
             <div className="flex items-center gap-3">
               {/* AI Proctoring status badge */}
-              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                aiStatus === 'connected' ? 'bg-green-500/30 text-green-200'
-                : aiStatus === 'error'   ? 'bg-yellow-500/30 text-yellow-200'
-                : 'bg-white/10 text-white/50'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${
-                  aiStatus === 'connected' ? 'bg-green-300 animate-pulse'
-                  : aiStatus === 'error'   ? 'bg-yellow-300'
-                  : 'bg-white/30'
-                }`} />
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${aiStatus === 'connected' ? 'bg-green-500/30 text-green-200'
+                  : aiStatus === 'error' ? 'bg-yellow-500/30 text-yellow-200'
+                    : 'bg-white/10 text-white/50'
+                }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${aiStatus === 'connected' ? 'bg-green-300 animate-pulse'
+                    : aiStatus === 'error' ? 'bg-yellow-300'
+                      : 'bg-white/30'
+                  }`} />
                 AI {aiStatus === 'connected' ? 'Monitoring' : aiStatus === 'error' ? 'Unavailable' : 'Connecting...'}
               </div>
-              
+
               {/* Audio Proctoring status badge */}
-              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                audioStatus === 'connected' ? 'bg-green-500/30 text-green-200'
-                : audioStatus === 'error'   ? 'bg-yellow-500/30 text-yellow-200'
-                : 'bg-white/10 text-white/50'
-              }`}>
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${audioStatus === 'connected' ? 'bg-green-500/30 text-green-200'
+                  : audioStatus === 'error' ? 'bg-yellow-500/30 text-yellow-200'
+                    : 'bg-white/10 text-white/50'
+                }`}>
                 <Mic className="w-3 h-3" />
                 {audioStatus === 'connected' ? `${Math.round(micDbLevel)} dBFS` : audioStatus === 'error' ? 'Audio Err' : 'Mic...'}
               </div>
@@ -1711,19 +1727,51 @@ const ExamInterface: React.FC = () => {
 
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">{currentQ.question_text}</h2>
 
-                {/* Choices */}
+                {/* Choices / Essay Answer */}
                 <div className="space-y-3 mb-8">
-                  {currentQ.choices.map((choice, index) => (
-                    <button key={choice.id} onClick={() => handleAnswerSelect(index)} disabled={examTerminated}
-                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${answers[currentQuestion] === index ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-white'} ${examTerminated ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${answers[currentQuestion] === index ? 'border-blue-600' : 'border-gray-300'}`}>
-                          {answers[currentQuestion] === index && <div className="w-3 h-3 rounded-full bg-blue-600" />}
-                        </div>
-                        <span className="text-gray-700">{choice.choice_text}</span>
+                  {currentQ.question_type === 'essay' ? (
+                    <div>
+                      <textarea
+                        disabled={examTerminated}
+                        value={essayAnswers[currentQuestion] || ''}
+                        onChange={e => {
+                          if (examTerminated) return;
+                          const newEssayAnswers = [...essayAnswers];
+                          // Ensure array is large enough
+                          while (newEssayAnswers.length <= currentQuestion) newEssayAnswers.push('');
+                          newEssayAnswers[currentQuestion] = e.target.value;
+                          setEssayAnswers(newEssayAnswers);
+                        }}
+                        placeholder="Write your answer here..."
+                        rows={10}
+                        className={`w-full p-4 rounded-xl border-2 resize-y text-gray-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors ${examTerminated
+                            ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-60'
+                            : 'bg-white border-gray-200 hover:border-blue-300 focus:border-blue-500'
+                          }`}
+                        style={{ minHeight: '200px', userSelect: 'text', WebkitUserSelect: 'text' }}
+                        onCopy={e => e.stopPropagation()}
+                        onCut={e => e.stopPropagation()}
+                        onPaste={e => e.stopPropagation()}
+                      />
+                      <div className="flex justify-end mt-2">
+                        <span className="text-xs text-gray-400">
+                          {(essayAnswers[currentQuestion] || '').trim().split(/\s+/).filter(Boolean).length} words
+                        </span>
                       </div>
-                    </button>
-                  ))}
+                    </div>
+                  ) : (
+                    currentQ.choices.map((choice, index) => (
+                      <button key={choice.id} onClick={() => handleAnswerSelect(index)} disabled={examTerminated}
+                        className={`w-full text-left p-4 rounded-lg border-2 transition-all ${answers[currentQuestion] === index ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300 bg-white'} ${examTerminated ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${answers[currentQuestion] === index ? 'border-blue-600' : 'border-gray-300'}`}>
+                            {answers[currentQuestion] === index && <div className="w-3 h-3 rounded-full bg-blue-600" />}
+                          </div>
+                          <span className="text-gray-700">{choice.choice_text}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
                 </div>
 
                 {/* Navigation */}

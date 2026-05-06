@@ -188,6 +188,7 @@ class ExamResultsView(APIView):
                 'submitted_at': r.submitted_at,
                 'is_terminated': r.is_terminated,
                 'risk_score': r.risk_score if hasattr(r, 'risk_score') and r.risk_score is not None else r.violation_score,
+                'grading_status': r.grading_status,
             })
 
         return Response({
@@ -195,4 +196,150 @@ class ExamResultsView(APIView):
             'exam_title': exam.title,
             'total_students': len(data),
             'results': data,
+            'has_essay_questions': exam.questions.filter(question_type='essay').exists(),
         })
+
+
+# ─── Grade Essay Questions (Instructor) ───────────────────────────
+class GradeEssayView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_exam(self, exam_id, user):
+        try:
+            return Exam.objects.get(id=exam_id, professor=user)
+        except Exam.DoesNotExist:
+            return None
+
+    def get(self, request, exam_id):
+        """Return all students' essay answers for this exam."""
+        if not is_professor(request.user):
+            return Response({"error": "Professors only."}, status=status.HTTP_403_FORBIDDEN)
+
+        exam = self._get_exam(exam_id, request.user)
+        if not exam:
+            return Response({"error": "Exam not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        essay_questions = exam.questions.filter(question_type='essay').order_by('order')
+        if not essay_questions.exists():
+            return Response({"error": "This exam has no essay questions."}, status=status.HTTP_400_BAD_REQUEST)
+
+        results = ExamResult.objects.filter(exam=exam).select_related('student')
+
+        students_data = []
+        for result in results:
+            student = result.student
+            answers = []
+            for q in essay_questions:
+                try:
+                    sa = student.answers.get(exam=exam, question=q)
+                    answers.append({
+                        'question_id':   q.id,
+                        'question_text': q.question_text,
+                        'max_marks':     q.marks,
+                        'essay_answer':  sa.essay_answer or '',
+                        'marks_awarded': float(sa.marks_obtained),
+                        'is_graded':     sa.marks_obtained > 0 or sa.essay_answer is not None,
+                    })
+                except Exception:
+                    answers.append({
+                        'question_id':   q.id,
+                        'question_text': q.question_text,
+                        'max_marks':     q.marks,
+                        'essay_answer':  '',
+                        'marks_awarded': 0,
+                        'is_graded':     False,
+                    })
+
+            students_data.append({
+                'student_id':      student.id,
+                'student_name':    student.get_full_name(),
+                'student_code':    student.custom_id,
+                'profile_image':   request.build_absolute_uri(student.profile_image.url) if student.profile_image else None,
+                'grading_status':  result.grading_status,
+                'answers':         answers,
+            })
+
+        return Response({
+            'exam_id':    exam.id,
+            'exam_title': exam.title,
+            'students':   students_data,
+        })
+
+    def post(self, request, exam_id):
+        """Save marks for a specific student's essay question."""
+        if not is_professor(request.user):
+            return Response({"error": "Professors only."}, status=status.HTTP_403_FORBIDDEN)
+
+        exam = self._get_exam(exam_id, request.user)
+        if not exam:
+            return Response({"error": "Exam not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        student_id  = request.data.get('student_id')
+        question_id = request.data.get('question_id')
+        marks_awarded = request.data.get('marks_awarded', 0)
+
+        try:
+            marks_awarded = float(marks_awarded)
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid marks value."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from authentication.models import BaseUser
+            student = BaseUser.objects.get(id=student_id)
+        except BaseUser.DoesNotExist:
+            return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            from .models import Question
+            question = Question.objects.get(id=question_id, exam=exam, question_type='essay')
+        except Question.DoesNotExist:
+            return Response({"error": "Essay question not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Clamp marks to max allowed
+        marks_awarded = min(marks_awarded, question.marks)
+
+        # Update the StudentAnswer
+        from .models import StudentAnswer
+        sa, _ = StudentAnswer.objects.get_or_create(
+            student=student, exam=exam, question=question,
+            defaults={'essay_answer': '', 'marks_obtained': 0}
+        )
+        old_marks = float(sa.marks_obtained)
+        sa.marks_obtained = marks_awarded
+        sa.is_correct = marks_awarded > 0
+        sa.save()
+
+        # Recalculate total marks for this student
+        result = ExamResult.objects.get(student=student, exam=exam)
+        marks_diff = marks_awarded - old_marks
+        new_total = float(result.total_marks_obtained) + marks_diff
+        new_total = max(0, new_total)
+        new_pct = (new_total / exam.total_marks * 100) if exam.total_marks > 0 else 0
+        result.total_marks_obtained = round(new_total, 2)
+        result.percentage = round(new_pct, 2)
+
+        # Check if ALL essay questions are now graded for this student
+        essay_questions = exam.questions.filter(question_type='essay')
+        graded_count = StudentAnswer.objects.filter(
+            student=student, exam=exam,
+            question__question_type='essay',
+            marks_obtained__gt=0
+        ).count()
+
+        unsubmitted_essays = StudentAnswer.objects.filter(
+            student=student, exam=exam,
+            question__question_type='essay',
+            essay_answer__isnull=False
+        ).exclude(essay_answer='').count()
+
+        if graded_count >= essay_questions.count() or graded_count >= unsubmitted_essays:
+            result.grading_status = 'graded'
+        
+        result.save()
+
+        return Response({
+            'detail': 'Grade saved.',
+            'new_total': float(result.total_marks_obtained),
+            'new_percentage': float(result.percentage),
+            'grading_status': result.grading_status,
+        })
