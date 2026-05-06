@@ -266,7 +266,7 @@ const Header: React.FC<HeaderProps> = ({
               <Link
                 to="/settings"
                 className={`p-2 font-semibold rounded-lg transition-all ${
-                  isScrolled ? "text-white hover:text-gray-300" : "text-gray-700 hover:text-gray-900"
+                  isScrolled ? "text-white hover:bg-white/10" : "text-gray-700 hover:bg-gray-100"
                 }`}
                 title="Settings"
               >
@@ -275,14 +275,12 @@ const Header: React.FC<HeaderProps> = ({
 
               <button
                 onClick={handleLogout}
-                className={`hidden lg:flex items-center gap-2 px-3 py-2 font-semibold rounded-lg border-2 transition-all ${
-                  isScrolled
-                    ? "bg-red-400 text-white border-red-400 hover:bg-red-500 hover:text-white hover:border-red-500"
-                    : "bg-transparent text-danger border-danger hover:bg-danger hover:text-white hover:border-danger"
+                className={`hidden lg:flex p-2 font-semibold rounded-lg transition-all ${
+                  isScrolled ? "text-white hover:bg-white/10 hover:text-red-300" : "text-red-500 hover:bg-red-50 hover:text-red-600"
                 }`}
+                title="Logout"
               >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
+                <LogOut className="w-5 h-5" />
               </button>
 
               <button
