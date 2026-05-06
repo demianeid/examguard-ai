@@ -177,13 +177,47 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const renderNavLink = (item: { name: string; path: string; icon?: React.ReactNode }, isMobile: boolean = false) => {
-    const baseClasses = isMobile 
-      ? `block text-center px-3.5 py-2 font-semibold transition-colors ${
-          isScrolled ? "text-white hover:text-blue-200" : "text-gray-900 hover:text-blue-600"
+    // ── Determine if this nav item is the active route ──
+    const isActive = (() => {
+      const currentPath = location.pathname;
+      const itemPath = item.path;
+
+      // Hash-link pages (unregistered landing)
+      if (itemPath.startsWith('/#')) {
+        return currentPath === '/' && location.hash === itemPath.slice(1);
+      }
+
+      // Exact match
+      if (currentPath === itemPath) return true;
+
+      // Nested route match (e.g. /classes-instructor/123 → "Classes" active)
+      // but exclude root-level home paths to prevent false positives
+      const isHomePath = itemPath === '/' || itemPath === '/home' || itemPath === '/home-instructor';
+      if (!isHomePath && currentPath.startsWith(itemPath + '/')) return true;
+
+      return false;
+    })();
+
+    const baseClasses = isMobile
+      ? `block text-center px-3.5 py-2 font-semibold transition-colors rounded-lg ${
+          isActive
+            ? isScrolled
+              ? "text-white bg-white/15 border-l-[3px] border-white"
+              : "text-blue-600 bg-blue-50 border-l-[3px] border-blue-600"
+            : isScrolled
+              ? "text-white hover:text-blue-200"
+              : "text-gray-900 hover:text-blue-600"
         }`
       : `relative px-3.5 py-2 font-semibold transition-colors group ${
-          isScrolled ? "text-white" : "text-gray-900"
+          isActive
+            ? isScrolled ? "text-white" : "text-blue-600"
+            : isScrolled ? "text-white" : "text-gray-900"
         }`;
+
+    // Underline: full-width & visible when active, expand-on-hover otherwise
+    const underlineClasses = isActive
+      ? `absolute bottom-0 left-0 w-full h-0.5 transition-all duration-300 ${isScrolled ? "bg-white" : "bg-blue-600"}`
+      : `absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${isScrolled ? "bg-white" : "bg-blue-600"}`;
 
     const content = (
       <>
@@ -196,9 +230,7 @@ const Header: React.FC<HeaderProps> = ({
       return (
         <Link to={item.path} className={baseClasses} onClick={() => isMobile && setIsMenuOpen(false)}>
           {content}
-          {!isMobile && (
-            <span className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${isScrolled ? "bg-white" : "bg-blue-600"}`}></span>
-          )}
+          {!isMobile && <span className={underlineClasses}></span>}
         </Link>
       );
     } else {
@@ -206,9 +238,7 @@ const Header: React.FC<HeaderProps> = ({
         return (
           <HashLink smooth to={item.path} className={baseClasses} onClick={() => isMobile && setIsMenuOpen(false)}>
             {content}
-            {!isMobile && (
-              <span className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full ${isScrolled ? "bg-white" : "bg-blue-600"}`}></span>
-            )}
+            {!isMobile && <span className={underlineClasses}></span>}
           </HashLink>
         );
       } else {
@@ -216,7 +246,7 @@ const Header: React.FC<HeaderProps> = ({
           <Link to={item.path} className={baseClasses} onClick={() => isMobile && setIsMenuOpen(false)}>
             {content}
             {!isMobile && (
-              <span className={`absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full bg-primary`}></span>
+              <span className={`absolute bottom-0 left-0 ${isActive ? "w-full" : "w-0 group-hover:w-full"} h-0.5 transition-all duration-300 bg-primary`}></span>
             )}
           </Link>
         );

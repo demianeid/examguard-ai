@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { motion } from "framer-motion";
+import { useLocation } from "react-router-dom";
+import Header from "../components/Header";
+import { FooterSecond } from "../components/Footer";
 
 interface FormData {
   name: string;
@@ -10,6 +13,9 @@ interface FormData {
 }
 
 const Contact: React.FC = () => {
+  const location = useLocation();
+  const hideHeader = location.state?.hideHeader;
+  
   const [formData, setFormData] = useState<FormData>({
     name: '',
     email: '',
@@ -32,6 +38,7 @@ const Contact: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen relative">
+      {!hideHeader && <Header showAccount={true} isRegistered={true} />}
       
       {/* Two-tone Background */}
       <div className="absolute inset-0 top-0 z-0">
@@ -39,7 +46,7 @@ const Contact: React.FC = () => {
         <div className="h-1/2 bg-white"></div>
       </div>
 
-      <section className="w-full py-12 px-4 relative z-10" id="contact">
+      <section className={`w-full ${hideHeader ? 'pt-8' : 'pt-24'} pb-12 px-4 relative z-10`} id="contact">
         <div className="max-w-[1200px] mx-auto">
           {/* Header */}
           <motion.div
@@ -190,24 +197,7 @@ const Contact: React.FC = () => {
         </div>
       </section>
 
-      {/* Footer */}
-       <div className="border-t border-[#1d1d1d]/20  pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-white px-6 pb-4 relative z-10">
-  <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">
-    © 2026 ExamGuard. All rights reserved.
-  </p>
-
-  <div className="flex flex-wrap gap-3 justify-center md:justify-end">
-    {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item, idx) => (
-      <a
-        key={idx}
-        href="#"
-        className="text-[#1d1d1d]/70 text-sm hover:underline"
-      >
-        {item}
-      </a>
-    ))}
-  </div>
-</div>
+      <FooterSecond />
     </div>
   );
 };

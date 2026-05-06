@@ -101,7 +101,7 @@ const Footer = () => {
                 </svg>
                 01210770521
               </a>
-              <Link to="/contact" className="text-white/70 text-sm hover:underline">More options...</Link>
+              <Link to="/contact" state={{ hideHeader: true }} className="text-white/70 text-sm hover:underline">More options...</Link>
             </div>
           </div>
         </div>
@@ -119,6 +119,30 @@ const Footer = () => {
         </div>
       </div>
     </footer>
+  );
+};
+
+export const FooterSecond = () => {
+  return (
+    <div className="border-t border-gray-200 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-white px-8 pb-4 rounded-t-3xl shadow-inner">
+      <div className="mb-2 md:mb-0">
+        <p className="text-gray-900 font-bold text-lg">
+          ExamGuard<span className="text-blue-600"> AI</span>
+        </p>
+        <p className="text-gray-500 text-sm">© 2026 ExamGuard. All rights reserved.</p>
+      </div>
+      <div className="flex flex-wrap gap-6 justify-center md:justify-end">
+        {["Privacy Policy", "Terms of Service", "Cookie Policy"].map((item, idx) => (
+          <a
+            key={idx}
+            href="#"
+            className="text-gray-500 text-sm font-medium hover:text-blue-600 transition-colors"
+          >
+            {item}
+          </a>
+        ))}
+      </div>
+    </div>
   );
 };
 

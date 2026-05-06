@@ -28,6 +28,7 @@ interface Exam {
   id: number;
   title: string;
   start_datetime: string;
+  end_datetime?: string;
   duration: number;
   status: 'upcoming' | 'active' | 'completed';
   questions_count: number;

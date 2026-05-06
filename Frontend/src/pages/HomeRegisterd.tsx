@@ -2,6 +2,7 @@ import Header from "../components/Header";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { ChevronRight } from 'lucide-react';
+import { FooterSecond } from "../components/Footer";
 
 const HomeRegistered = () => {
   return (
@@ -79,27 +80,7 @@ const HomeRegistered = () => {
         </div>
       </section>
 
-      {/* Footer */}
-      {/* Bottom Bar */}
-      <div className="border-t border-[#1d1d1d]/20 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-[#E3F0FE] px-6 pb-4">
-        <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">
-          © 2026 ExamGuard. All rights reserved.
-        </p>
-
-        <div className="flex flex-wrap gap-3 justify-center md:justify-end">
-          {["Privacy Policy", "Terms of Service", "Cookie Policy"].map(
-            (item, idx) => (
-              <a
-                key={idx}
-                href="#"
-                className="text-[#1d1d1d]/70 text-sm hover:underline"
-              >
-                {item}
-              </a>
-            )
-          )}
-        </div>
-      </div>
+      <FooterSecond />
     </div>
   );
 };

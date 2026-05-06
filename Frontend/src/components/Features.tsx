@@ -2,6 +2,7 @@
 import { motion } from "framer-motion"
 import type { Variants } from "framer-motion"
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import {
   ScanFace,
   Monitor,
@@ -18,7 +19,32 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-const Features = () => {
+const Features = ({ 
+  showOverview = true,
+  isRegistered: propIsRegistered
+}: { 
+  showOverview?: boolean;
+  isRegistered?: boolean;
+}) => {
+  const navigate = useNavigate()
+  
+  // Robust check for registration status
+  const getIsRegistered = () => {
+    if (propIsRegistered !== undefined) return propIsRegistered;
+    const token = localStorage.getItem("access_token");
+    return !!token && token !== "null" && token !== "undefined";
+  };
+
+  const isRegistered = getIsRegistered();
+
+  const handleLearnMore = () => {
+    if (isRegistered) {
+      navigate("/OfflineMode")
+    } else {
+      navigate("/Signup")
+    }
+  }
+
   const features: { title: string; text: string; note: string; icon: LucideIcon; image: string }[] = [
     {
       title: "Face Recognition & Identity Verification",
@@ -120,115 +146,117 @@ const Features = () => {
   return (
     <div className="w-full min-h-screen bg-background">
       {/* Features Overview */}
-      <motion.section
-        className="bg-blue-50 min-h-screen pt-32 pb-0 py-16"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.3 }}
-        variants={containerVariants}
-      >
-        <div className="container mx-auto px-6">
-          <motion.h2
-            className="text-3xl font-bold text-center text-gray-800 mb-12"
-            initial={{ opacity: 0, y: -30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
-            Comprehensive Exam Integrity Solution
-          </motion.h2>
+      {showOverview && (
+        <motion.section
+          className="bg-blue-50 min-h-screen pt-32 pb-0 py-16"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={containerVariants}
+        >
+          <div className="container mx-auto px-6">
+            <motion.h2
+              className="text-3xl font-bold text-center text-gray-800 mb-12"
+              initial={{ opacity: 0, y: -30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+            >
+              Comprehensive Exam Integrity Solution
+            </motion.h2>
 
-          {/* Single animated feature showcase */}
-          <motion.div
-            className="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden"
-            whileHover={{ scale: 1.02, boxShadow: "0 20px 40px rgba(0,0,0,0.15)" }}
-            transition={{ type: "spring", stiffness: 300 }}
-          >
-            <div className="relative h-96">
-              <motion.img
-                src="images/g2.png"
-                alt="Comprehensive Solution"
-                className="w-full h-full object-cover"
-                animate={{
-                  scale: [1, 1.05, 1],
-                }}
-                transition={{
-                  duration: 10,
-                  repeat: Number.POSITIVE_INFINITY,
-                  ease: "easeInOut",
-                }}
-              />
+            {/* Single animated feature showcase */}
+            <motion.div
+              className="max-w-6xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden"
+              whileHover={{ scale: 1.02, boxShadow: "0 20px 40px rgba(0,0,0,0.15)" }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <div className="relative h-96">
+                <motion.img
+                  src="images/g2.png"
+                  alt="Comprehensive Solution"
+                  className="w-full h-full object-cover"
+                  animate={{
+                    scale: [1, 1.05, 1],
+                  }}
+                  transition={{
+                    duration: 10,
+                    repeat: Number.POSITIVE_INFINITY,
+                    ease: "easeInOut",
+                  }}
+                />
 
-              {/* Animated text overlay */}
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-Tertiary/50 to-Quaternary/50 flex items-center justify-center"
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                transition={{ duration: 1 }}
-              >
+                {/* Animated text overlay */}
                 <motion.div
-                  className="text-center text-white px-8"
-                  initial={{ y: 50, opacity: 0 }}
-                  whileInView={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 1.2, delay: 0.3 }}
+                  className="absolute inset-0 bg-gradient-to-r from-Tertiary/50 to-Quaternary/50 flex items-center justify-center"
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  transition={{ duration: 1 }}
                 >
-                  <motion.h3
-                    className="text-4xl font-bold mb-4"
-                    animate={{
-                      textShadow: [
-                        "0 0 0px rgba(255,255,255,0)",
-                        "0 0 20px rgba(255,255,255,0.5)",
-                        "0 0 0px rgba(255,255,255,0)",
-                      ],
-                    }}
-                    transition={{
-                      duration: 3,
-                      repeat: Number.POSITIVE_INFINITY,
-                      ease: "easeInOut",
-                    }}
-                  >
-                    All-in-One Platform
-                  </motion.h3>
-                  <motion.p
-                    className="text-xl mb-6"
-                    animate={{ opacity: [0.7, 1, 0.7] }}
-                    transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
-                  >
-                    From online proctoring to offline surveillance
-                  </motion.p>
                   <motion.div
-                    className="flex justify-center gap-4"
-                    initial={{ scale: 0 }}
-                    whileInView={{ scale: 1 }}
-                    transition={{ duration: 0.5, delay: 0.6 }}
+                    className="text-center text-white px-8"
+                    initial={{ y: 50, opacity: 0 }}
+                    whileInView={{ y: 0, opacity: 1 }}
+                    transition={{ duration: 1.2, delay: 0.3 }}
                   >
-                    <motion.div
-                      className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2"
-                      whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.3)" }}
+                    <motion.h3
+                      className="text-4xl font-bold mb-4"
+                      animate={{
+                        textShadow: [
+                          "0 0 0px rgba(255,255,255,0)",
+                          "0 0 20px rgba(255,255,255,0.5)",
+                          "0 0 0px rgba(255,255,255,0)",
+                        ],
+                      }}
+                      transition={{
+                        duration: 3,
+                        repeat: Number.POSITIVE_INFINITY,
+                        ease: "easeInOut",
+                      }}
                     >
-                      <div className="text-2xl font-bold">99.9%</div>
-                      <div className="text-sm">Accuracy</div>
-                    </motion.div>
-                    <motion.div
-                      className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2"
-                      whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.3)" }}
+                      All-in-One Platform
+                    </motion.h3>
+                    <motion.p
+                      className="text-xl mb-6"
+                      animate={{ opacity: [0.7, 1, 0.7] }}
+                      transition={{ duration: 2, repeat: Number.POSITIVE_INFINITY }}
                     >
-                      <div className="text-2xl font-bold">24/7</div>
-                      <div className="text-sm">Monitoring</div>
-                    </motion.div>
+                      From online proctoring to offline surveillance
+                    </motion.p>
                     <motion.div
-                      className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2"
-                      whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.3)" }}
+                      className="flex justify-center gap-4"
+                      initial={{ scale: 0 }}
+                      whileInView={{ scale: 1 }}
+                      transition={{ duration: 0.5, delay: 0.6 }}
                     >
-                      <div className="text-2xl font-bold">AI</div>
-                      <div className="text-sm">Powered</div>
+                      <motion.div
+                        className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2"
+                        whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.3)" }}
+                      >
+                        <div className="text-2xl font-bold">99.9%</div>
+                        <div className="text-sm">Accuracy</div>
+                      </motion.div>
+                      <motion.div
+                        className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2"
+                        whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.3)" }}
+                      >
+                        <div className="text-2xl font-bold">24/7</div>
+                        <div className="text-sm">Monitoring</div>
+                      </motion.div>
+                      <motion.div
+                        className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2"
+                        whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.3)" }}
+                      >
+                        <div className="text-2xl font-bold">AI</div>
+                        <div className="text-sm">Powered</div>
+                      </motion.div>
                     </motion.div>
                   </motion.div>
                 </motion.div>
-              </motion.div>
-            </div>
-          </motion.div>
-        </div>
-      </motion.section>
+              </div>
+            </motion.div>
+          </div>
+        </motion.section>
+      )}
 
       <section className="w-full py-24 px-4" id="features">
         <div className="max-w-[1340px] w-full mx-auto">
@@ -294,6 +322,7 @@ const Features = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.2 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
+              onClick={handleLearnMore}
               className="
                 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold 
                 transition-all duration-300 hover:-translate-y-1 hover:bg-blue-700 

@@ -4,6 +4,7 @@ import { ChevronRight, Play, Pause } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import Header from '../components/Header'
+import { FooterSecond } from "../components/Footer";
 
 
 const HeroSection: React.FC = () => {
@@ -73,12 +74,12 @@ const HeroSection: React.FC = () => {
       image: "/images/h2.jpeg",
       description: "AI-powered video analysis for behavior monitoring"
     },
-    {
-      id: 4,
-      title: "Identity Verification",
-      image: "/images/g4.png",
-      description: "Multi-factor authentication to confirm student identity"
-    },
+    // {
+    //   id: 4,
+    //   title: "Identity Verification",
+    //   image: "/images/g4.png",
+    //   description: "Multi-factor authentication to confirm student identity"
+    // },
     // {
     //   id: 5,
     //   title: "Smart Surveillance",
@@ -564,27 +565,7 @@ const HeroSection: React.FC = () => {
           </motion.div>
         </div>
       </motion.section>
-           {/* Footer */}
-      {/* Bottom Bar */}
-      <div className="border-t border-[#1d1d1d]/20 mt-8 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-[#E3F0FE] px-6 pb-4">
-        <p className="text-[#1d1d1d]/70 text-sm mb-2 md:mb-0">
-          © 2026 ExamGuard. All rights reserved.
-        </p>
-
-        <div className="flex flex-wrap gap-3 justify-center md:justify-end">
-          {["Privacy Policy", "Terms of Service", "Cookie Policy"].map(
-            (item, idx) => (
-              <a
-                key={idx}
-                href="#"
-                className="text-[#1d1d1d]/70 text-sm hover:underline"
-              >
-                {item}
-              </a>
-            )
-          )}
-        </div>
-      </div>
+      <FooterSecond />
     </div>
     
   );

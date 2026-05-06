@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 
-const HowWork = () => {
+const HowWork = ({ bgColor = "bg-[#F1F8FF]" }: { bgColor?: string }) => {
   const steps = [
     {
       number: 1,
@@ -30,7 +30,7 @@ const HowWork = () => {
   ];
 
   return (
-    <div className="bg-[#F1F8FF] py-12 " id="howitworks">
+    <div className={`${bgColor} py-12 `} id="howitworks">
       <div className="max-w-[1200px] mx-auto px-4">
         {/* Header */}
         <motion.div
