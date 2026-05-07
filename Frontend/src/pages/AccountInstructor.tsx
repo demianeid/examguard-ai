@@ -338,6 +338,7 @@ const AccountInstructor: React.FC = () => {
   const [alertItems, setAlertItems]               = useState<AlertItem[]>([]);
   const [monitoringLoading, setMonitoringLoading] = useState(false);
   const [showAllMonitoring, setShowAllMonitoring] = useState(false);
+  const [showAllAlerts,     setShowAllAlerts]     = useState(false);
   
   const liveStudentsRef = React.useRef<LiveStudent[]>([]);
   useEffect(() => { liveStudentsRef.current = liveStudents; }, [liveStudents]);
@@ -453,15 +454,17 @@ const AccountInstructor: React.FC = () => {
     setDashboardLoading(true);
     try {
       const clsRes = await authFetch(`${BASE}/api/instructors/classes/`);
-      if (!clsRes.ok) throw new Error();
-      const classes: ClassItem[] = await clsRes.json();
+      const rawClasses: ClassItem[] = await clsRes.json();
+      // De-duplicate classes by ID
+      const classes = Array.from(new Map(rawClasses.map(c => [c.id, c])).values());
 
       const results = await Promise.allSettled(
         classes.map(async (cls, idx) => {
           try {
             const exRes = await authFetch(`${BASE}/api/exam/class/${cls.id}/`);
             const rawExams: ExamItem[] = exRes.ok ? await exRes.json() : [];
-            const exams = rawExams.map(e => ({ ...e, status: e.status ?? computeStatus(e) }));
+            // De-duplicate exams by ID
+            const exams = Array.from(new Map(rawExams.map(e => [e.id, { ...e, status: e.status ?? computeStatus(e) }])).values());
             return { cls, exams, colorIndex: cls.id % OCEAN.length } as ClassWithExams;
           } catch {
             return { cls, exams: [], colorIndex: idx % OCEAN.length } as ClassWithExams;
@@ -489,11 +492,13 @@ const AccountInstructor: React.FC = () => {
   // ── fetch live monitoring students + alerts from active exams ──
   const fetchLiveActivity = async (classes: ClassWithExams[]) => {
     setMonitoringLoading(true);
-    const activeClassExams = classes
+    const rawActiveClassExams = classes
       .flatMap(c => c.exams
         .filter(e => e.status === 'active')
         .map(e => ({ cls: c.cls, exam: e, colorIndex: c.colorIndex }))
       );
+    // De-duplicate active exams to ensure we don't fetch students for the same exam twice
+    const activeClassExams = Array.from(new Map(rawActiveClassExams.map(x => [x.exam.id, x])).values());
 
     if (activeClassExams.length === 0) {
       setLiveStudents([]);
@@ -507,7 +512,11 @@ const AccountInstructor: React.FC = () => {
       [...new Set(activeClassExams.map(x => x.cls.id))].map(async classId => {
         try {
           const res = await authFetch(`${BASE}/api/instructors/classes/${classId}/students/`);
-          if (res.ok) studentsMap[classId] = await res.json();
+          if (res.ok) {
+            const rawStudents: Student[] = await res.json();
+            // De-duplicate students by ID
+            studentsMap[classId] = Array.from(new Map(rawStudents.map(s => [s.id, s])).values());
+          }
         } catch {}
       })
     );
@@ -531,7 +540,14 @@ const AccountInstructor: React.FC = () => {
         isLive:        true,
       }));
     });
-    setLiveStudents(built);
+    
+    // De-duplicate students to ensure unique monitoring entries
+    // We de-duplicate by (Name + ExamId) as a fallback if database IDs are messy
+    const uniqueStudents = Array.from(
+      new Map(built.map(s => [`${s.name}-${s.examId}`, s])).values()
+    );
+    
+    setLiveStudents(uniqueStudents);
 
     // fetch incidents per active exam
     const allAlerts: AlertItem[] = [];
@@ -585,6 +601,7 @@ const AccountInstructor: React.FC = () => {
   const totalStudents  = classesWithExams.reduce((s, c) => s + (c.cls.number_of_students ?? 0), 0);
 
   const visibleStudents = showAllMonitoring ? liveStudents : liveStudents.slice(0, 3);
+  const visibleAlerts   = showAllAlerts     ? alertItems   : alertItems.slice(0, 3);
 
   // ── loading / error screens ──
   if (profileLoading) return (
@@ -906,7 +923,7 @@ const AccountInstructor: React.FC = () => {
                     <p className="text-xs text-gray-300 mt-1">Alerts from active exams will appear here</p>
                   </div>
                 ) : (
-                  alertItems.map((alert, idx) => (
+                  visibleAlerts.map((alert, idx) => (
                     <motion.div key={alert.uniqueId || `alert-${alert.examId}-${idx}`}
                       initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: idx * 0.08 }}
@@ -943,11 +960,25 @@ const AccountInstructor: React.FC = () => {
                 )}
               </div>
 
+              {alertItems.length > 3 && (
+                <div className="px-4 pb-2">
+                  <button onClick={() => setShowAllAlerts(s => !s)}
+                    className="w-full py-2 rounded-xl text-xs font-semibold text-[#3F72B7] border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5">
+                    {showAllAlerts
+                      ? <><ChevronUp size={13} /> Show less</>
+                      : <><ChevronDown size={13} /> Show {alertItems.length - 3} more</>}
+                  </button>
+                </div>
+              )}
+
               <div className="px-4 pb-4">
                 <button
-                  onClick={() => navigate('/classes-instructor')}
+                  onClick={() => {
+                    if (liveExams.length > 0) navigate(`/proctor/${liveExams[0].id}`);
+                    else navigate('/classes-instructor');
+                  }}
                   className="w-full py-2 rounded-xl text-xs font-semibold text-[#3F72B7] border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5">
-                  <ChevronRight size={13} /> Manage all classes
+                  <Eye size={13} /> Monitor Exam
                 </button>
               </div>
             </div>

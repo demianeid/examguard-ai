@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import Header from "../components/Header";
 import { Link } from "react-router-dom";
 import axios, { AxiosError } from "axios";
+import { Eye, EyeOff } from "lucide-react";
 
 interface LoginError {
   detail?: string;
@@ -21,6 +22,7 @@ export default function Login() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -151,18 +153,27 @@ export default function Login() {
               <label className="block text-sm text-gray-600 mb-1 text-left">
                 Password
               </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="********"
-                className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 text-sm lg:text-base ${
-                  errors.password
-                    ? "border-red-500 focus:ring-red-500"
-                    : "border-gray-200 focus:ring-blue-500"
-                }`}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="********"
+                  className={`w-full px-4 py-3 bg-white border rounded-lg focus:outline-none focus:ring-2 text-sm lg:text-base pr-12 ${
+                    errors.password
+                      ? "border-red-500 focus:ring-red-500"
+                      : "border-gray-200 focus:ring-blue-500"
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
               {errors.password && (
                 <p className="text-red-500 text-xs mt-1 text-left">{errors.password}</p>
               )}

@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { ArrowLeft, Upload, FileCheck, CheckCircle } from "lucide-react";
+import { ArrowLeft, Upload, FileCheck, CheckCircle, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import { Link } from "react-router-dom";
@@ -29,6 +29,8 @@ export default function ProfessorSignup() {
   const [submitted, setSubmitted] = useState(false);
   const [profilePreview, setProfilePreview] = useState<string | null>(null);
   const [identityPreview, setIdentityPreview] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,18 +221,31 @@ export default function ProfessorSignup() {
                     <label className="block text-left text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
                       {label} *
                     </label>
-                    <input
-                      type={type}
-                      name={name}
-                      value={value}
-                      onChange={handleChange}
-                      placeholder={placeholder}
-                      className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 text-sm transition-all ${
-                        errors[name]
-                          ? "border-red-400 focus:ring-red-200 bg-red-50"
-                          : "border-gray-200 focus:ring-blue-200 focus:border-blue-400 bg-gray-50 focus:bg-white"
-                      }`}
-                    />
+                    <div className="relative">
+                      <input
+                        type={name === "password" ? (showPassword ? "text" : "password") : name === "confirmPassword" ? (showConfirmPassword ? "text" : "password") : type}
+                        name={name}
+                        value={value}
+                        onChange={handleChange}
+                        placeholder={placeholder}
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 text-sm transition-all ${
+                          (name === "password" || name === "confirmPassword") ? "pr-12" : ""
+                        } ${
+                          errors[name]
+                            ? "border-red-400 focus:ring-red-200 bg-red-50"
+                            : "border-gray-200 focus:ring-blue-200 focus:border-blue-400 bg-gray-50 focus:bg-white"
+                        }`}
+                      />
+                      {(name === "password" || name === "confirmPassword") && (
+                        <button
+                          type="button"
+                          onClick={() => name === "password" ? setShowPassword(!showPassword) : setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                        >
+                          {(name === "password" ? showPassword : showConfirmPassword) ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
+                      )}
+                    </div>
                     {errors[name] && (
                       <p className="text-red-500 text-xs mt-1 text-left">{errors[name]}</p>
                     )}

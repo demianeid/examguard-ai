@@ -124,7 +124,7 @@ const Footer = () => {
 
 export const FooterSecond = () => {
   return (
-    <div className="border-t border-gray-200 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-white px-8 pb-4 rounded-t-3xl shadow-inner">
+    <div className="border-t border-gray-300 pt-4 flex flex-col md:flex-row items-center justify-between text-center md:text-left bg-transparent px-8 pb-4">
       <div className="mb-2 md:mb-0">
         <p className="text-gray-900 font-bold text-lg">
           ExamGuard<span className="text-blue-600"> AI</span>

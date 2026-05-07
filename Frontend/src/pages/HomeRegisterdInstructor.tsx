@@ -321,7 +321,7 @@ const HeroSection: React.FC = () => {
       </section>
 
       {/* Offline Exams Section */}
-      <section className="container min-h-screen pt-32 pb-0 mx-auto px-6 py-16">
+      <section className="container mx-auto px-6 py-20">
         <motion.div 
           className="flex flex-col lg:flex-row-reverse items-center justify-between gap-12 "
           initial="hidden"

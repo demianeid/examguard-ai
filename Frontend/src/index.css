@@ -17,3 +17,9 @@ html, body {
 #root {
   width: 100%;
 }
+
+/* Hide default browser password reveal icon (e.g., in Edge) */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}

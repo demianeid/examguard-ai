@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
   User, Lock, Shield, Globe, Bell, Database, Trash2, 
-  HelpCircle, MessageCircle, FileText, Eye, ChevronRight, 
+  HelpCircle, MessageCircle, FileText, Eye, EyeOff, ChevronRight, 
   ArrowLeft, Settings, Save, CheckCircle, X, AlertTriangle, Camera
 } from "lucide-react";
 import Header from '../components/Header';
@@ -167,6 +167,11 @@ const SettingsPage: React.FC = () => {
   const [deleteError, setDeleteError]               = useState("");
   const [isDeletingAccount, setIsDeletingAccount]   = useState(false);
   const [deleteSuccess, setDeleteSuccess]           = useState(false);
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword]         = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showDeletePassword, setShowDeletePassword]   = useState(false);
 
   const [profile, setProfile]           = useState<ProfileData | null>(null);
   const [firstName, setFirstName]       = useState("");
@@ -465,19 +470,28 @@ const SettingsPage: React.FC = () => {
           <Modal isOpen={showPasswordModal} onClose={() => !isChangingPassword && setShowPasswordModal(false)} title="Change Password">
             <div className="space-y-4">
               {[
-                { id: 'current_password', label: 'Current Password', value: currentPassword, setter: setCurrentPassword, autoComplete: 'current-password' },
-                { id: 'new_password',     label: 'New Password',     value: newPassword,     setter: setNewPassword,     autoComplete: 'new-password' },
-                { id: 'confirm_password', label: 'Confirm New Password', value: confirmPassword, setter: setConfirmPassword, autoComplete: 'new-password' },
-              ].map(({ id, label, value, setter, autoComplete }) => (
+                { id: 'current_password', label: 'Current Password', value: currentPassword, setter: setCurrentPassword, autoComplete: 'current-password', show: showCurrentPassword, setShow: setShowCurrentPassword },
+                { id: 'new_password',     label: 'New Password',     value: newPassword,     setter: setNewPassword,     autoComplete: 'new-password',     show: showNewPassword,     setShow: setShowNewPassword },
+                { id: 'confirm_password', label: 'Confirm New Password', value: confirmPassword, setter: setConfirmPassword, autoComplete: 'new-password', show: showConfirmPassword, setShow: setShowConfirmPassword },
+              ].map(({ id, label, value, setter, autoComplete, show, setShow }) => (
                 <div key={id}>
                   <label htmlFor={id} className="block text-sm font-semibold text-slate-700 mb-2">{label}</label>
-                  <input
-                    id={id} name={id} type="password" value={value}
-                    onChange={(e) => setter(e.target.value)}
-                    disabled={isChangingPassword} autoComplete={autoComplete}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] disabled:opacity-60"
-                    placeholder={`Enter ${label.toLowerCase()}`}
-                  />
+                  <div className="relative">
+                    <input
+                      id={id} name={id} type={show ? "text" : "password"} value={value}
+                      onChange={(e) => setter(e.target.value)}
+                      disabled={isChangingPassword} autoComplete={autoComplete}
+                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3F72B7] disabled:opacity-60 pr-12"
+                      placeholder={`Enter ${label.toLowerCase()}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShow(!show)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
               ))}
 
@@ -540,20 +554,25 @@ const SettingsPage: React.FC = () => {
                   </div>
                   <p className="text-sm text-red-600">All your data will be permanently deleted.</p>
                 </div>
-                {[
-                  { id: 'delete_password',     label: 'Enter your password to confirm', placeholder: 'Enter your password', type: 'password', value: deletePassword, setter: setDeletePassword },
-                ].map(({ id, label, placeholder, type, value, setter }) => (
-                  <div key={id}>
-                    <label htmlFor={id} className="block text-sm font-semibold text-slate-700 mb-2">{label}</label>
-                    <input
-                      id={id} name={id} type={type} value={value}
-                      onChange={(e) => setter(e.target.value)}
-                      disabled={isDeletingAccount} autoComplete="off"
-                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60"
-                      placeholder={placeholder}
-                    />
+                  <div key="delete_password">
+                    <label htmlFor="delete_password" className="block text-sm font-semibold text-slate-700 mb-2">Enter your password to confirm</label>
+                    <div className="relative">
+                      <input
+                        id="delete_password" name="delete_password" type={showDeletePassword ? "text" : "password"} value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        disabled={isDeletingAccount} autoComplete="off"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60 pr-12"
+                        placeholder="Enter your password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDeletePassword(!showDeletePassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 focus:outline-none"
+                      >
+                        {showDeletePassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </div>
-                ))}
                 {deleteError && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                     <p className="text-red-600 text-sm">{deleteError}</p>
