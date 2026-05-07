@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from django.core.mail import send_mail
 from django.conf import settings
@@ -19,16 +19,17 @@ class GetProfileView(APIView):
         is_professor = user.role == 'professor'
 
         data = {
-            "user_role":     user.role,
-            "id":            user.custom_id,
-            "first_name":    user.first_name,
-            "last_name":     user.last_name,
-            "full_name":     f"{'Dr. ' if is_professor else ''}{user.get_full_name()}",
-            "email":         user.email,
-            "phone":         user.phone_number,
-            "profile_image": user.profile_image.url if user.profile_image else None,
-            "is_active":     user.is_active,
-            "last_login":    user.last_login,
+            "user_role":           user.role,
+            "id":                  user.custom_id,
+            "first_name":          user.first_name,
+            "last_name":           user.last_name,
+            "full_name":           f"{'Dr. ' if is_professor else ''}{user.get_full_name()}",
+            "email":               user.email,
+            "phone":               user.phone_number,
+            "profile_image":       user.profile_image.url if user.profile_image else None,
+            "is_active":           user.is_active,
+            "last_login":          user.last_login,
+            "email_notifications": user.email_notifications,
         }
 
         if is_professor:
@@ -45,7 +46,7 @@ class GetProfileView(APIView):
 # ─── Update Profile ───────────────────────────────────────────────
 class UpdateProfileView(APIView):
     permission_classes = [IsAuthenticated]
-    parser_classes     = (MultiPartParser, FormParser)
+    parser_classes     = (MultiPartParser, FormParser, JSONParser)
 
     def patch(self, request):
         user = request.user
@@ -56,6 +57,14 @@ class UpdateProfileView(APIView):
             if 'last_name'    in data: user.last_name    = data['last_name']
             if 'phone_number' in data: user.phone_number = data['phone_number']
 
+            # Accept the boolean toggle — sent as JSON true/false or string
+            if 'email_notifications' in data:
+                val = data['email_notifications']
+                if isinstance(val, str):
+                    user.email_notifications = val.lower() == 'true'
+                else:
+                    user.email_notifications = bool(val)
+
             if 'profile_image' in request.FILES:
                 user.profile_image = request.FILES['profile_image']
 
@@ -64,10 +73,11 @@ class UpdateProfileView(APIView):
             return Response({
                 "message": "Profile updated successfully",
                 "data": {
-                    "first_name":    user.first_name,
-                    "last_name":     user.last_name,
-                    "phone":         user.phone_number,
-                    "profile_image": user.profile_image.url if user.profile_image else None,
+                    "first_name":          user.first_name,
+                    "last_name":           user.last_name,
+                    "phone":               user.phone_number,
+                    "profile_image":       user.profile_image.url if user.profile_image else None,
+                    "email_notifications": user.email_notifications,
                 }
             }, status=status.HTTP_200_OK)
 
@@ -144,3 +154,73 @@ class DeleteAccountView(APIView):
             pass
 
         return Response({"message": "Account deleted successfully."}, status=status.HTTP_200_OK)
+
+
+# ─── Download My Data ─────────────────────────────────────────────
+class DownloadDataView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import json
+        from django.http import HttpResponse
+        from django.utils import timezone
+
+        user = request.user
+
+        # ── Profile ───────────────────────────────────────────────
+        data = {
+            "exported_at": timezone.now().isoformat(),
+            "profile": {
+                "id":           user.custom_id,
+                "first_name":   user.first_name,
+                "last_name":    user.last_name,
+                "email":        user.email,
+                "phone":        user.phone_number,
+                "role":         user.role,
+                "date_joined":  user.date_joined.isoformat() if user.date_joined else None,
+                "last_login":   user.last_login.isoformat()  if user.last_login  else None,
+                "email_notifications": user.email_notifications,
+            },
+        }
+
+        # ── Exam results (students only) ──────────────────────────
+        try:
+            from exam.models import ExamResult
+            results = ExamResult.objects.filter(student=user).select_related('exam')
+            data["exam_results"] = [
+                {
+                    "exam":        r.exam.title if r.exam else None,
+                    "score":       r.score,
+                    "total_marks": r.exam.total_marks if r.exam else None,
+                    "percentage":  r.percentage,
+                    "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
+                }
+                for r in results
+            ]
+        except Exception:
+            data["exam_results"] = []
+
+        # ── Notifications ─────────────────────────────────────────
+        try:
+            from notifications.models import Notification
+            notifs = Notification.objects.filter(recipient=user).order_by('-created_at')[:50]
+            data["notifications"] = [
+                {
+                    "type":       n.type,
+                    "title":      n.title,
+                    "content":    n.content,
+                    "is_read":    n.is_read,
+                    "created_at": n.created_at.isoformat(),
+                }
+                for n in notifs
+            ]
+        except Exception:
+            data["notifications"] = []
+
+        filename = f"examguard-data-{user.custom_id}-{timezone.now().strftime('%Y%m%d')}.json"
+        response = HttpResponse(
+            json.dumps(data, indent=2, ensure_ascii=False),
+            content_type="application/json",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response

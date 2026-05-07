@@ -108,14 +108,49 @@ const SettingsPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [emailNotifications, setEmailNotifications] = useState(() => {
+    // Use localStorage as fast initial value; real value loaded from API on mount
     const saved = localStorage.getItem('emailNotifications');
-    return saved ? JSON.parse(saved) : true;
+    return saved !== null ? JSON.parse(saved) : true;
   });
   const [isSaving, setIsSaving]       = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [toast, setToast]             = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error') => setToast({ message, type });
+
+  // Toggle email notifications: PATCH backend + update localStorage cache
+  const handleToggleEmailNotifications = async () => {
+    const newVal = !emailNotifications;
+    setEmailNotifications(newVal);
+    localStorage.setItem('emailNotifications', JSON.stringify(newVal));
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+    try {
+      const res = await fetch(`${BASE}/api/auth/profile/update/`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email_notifications: newVal }),
+      });
+      if (res.ok) {
+        showToast(
+          newVal ? 'Email notifications enabled' : 'Email notifications disabled',
+          'success'
+        );
+      } else {
+        // Revert on failure
+        setEmailNotifications(!newVal);
+        localStorage.setItem('emailNotifications', JSON.stringify(!newVal));
+        showToast('Failed to update notification preference', 'error');
+      }
+    } catch {
+      setEmailNotifications(!newVal);
+      localStorage.setItem('emailNotifications', JSON.stringify(!newVal));
+      showToast('Network error — preference not saved', 'error');
+    }
+  };
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal]     = useState(false);
@@ -213,6 +248,12 @@ const SettingsPage: React.FC = () => {
         setPhone(data.phone || data.phone_number || "");
         setEmail(data.email || "");
         setUserId(data.id   || "");
+
+        // Load email_notifications from backend (source of truth)
+        if (typeof data.email_notifications === 'boolean') {
+          setEmailNotifications(data.email_notifications);
+          localStorage.setItem('emailNotifications', JSON.stringify(data.email_notifications));
+        }
 
         // ✅ Always resolve to full URL
         setProfileImage(resolveImageUrl(data.profile_image));
@@ -719,7 +760,8 @@ const SettingsPage: React.FC = () => {
             <label htmlFor="email_notifications" className="relative inline-flex items-center cursor-pointer">
               <input
                 id="email_notifications" name="email_notifications" type="checkbox"
-                checked={emailNotifications} onChange={() => setEmailNotifications(!emailNotifications)}
+                checked={emailNotifications}
+                onChange={handleToggleEmailNotifications}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F72B7]"></div>

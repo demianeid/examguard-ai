@@ -33,13 +33,14 @@ class Notification(models.Model):
 
 class ExamReminderLog(models.Model):
     REMINDER_CHOICES = [
-        ('1day', '1 Day Before'),
-        ('1hour', '1 Hour Before'),
-        ('10min', '10 Minutes Before'),
+        ('1day',       '1 Day Before (in-app)'),
+        ('1day_email', '1 Day Before (email)'),
+        ('1hour',      '1 Hour Before'),
+        ('10min',      '10 Minutes Before'),
     ]
     
     exam = models.ForeignKey('exam.Exam', on_delete=models.CASCADE, related_name='reminder_logs')
-    reminder_type = models.CharField(max_length=10, choices=REMINDER_CHOICES)
+    reminder_type = models.CharField(max_length=20, choices=REMINDER_CHOICES)
     sent_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

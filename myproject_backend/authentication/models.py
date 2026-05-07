@@ -21,11 +21,13 @@ class BaseUser(AbstractUser):
     role          = models.CharField(max_length=10, choices=Role.choices)
     phone_number  = models.CharField(max_length=15, blank=True, null=True)
     profile_image = models.ImageField(upload_to='profiles/', blank=True, null=True)
-    email_sent    = models.BooleanField(default=False)
-    otp_code      = models.CharField(max_length=6, blank=True, null=True)
-    otp_expiry    = models.DateTimeField(blank=True, null=True)
-    updated_at    = models.DateTimeField(auto_now=True)
-    custom_id     = models.CharField(max_length=10, unique=True, editable=False)
+    email_sent          = models.BooleanField(default=False)
+    otp_code            = models.CharField(max_length=6, blank=True, null=True)
+    otp_expiry          = models.DateTimeField(blank=True, null=True)
+    updated_at          = models.DateTimeField(auto_now=True)
+    custom_id           = models.CharField(max_length=10, unique=True, editable=False)
+    email_notifications = models.BooleanField(default=True)   # user-controlled toggle
+    last_login_ip       = models.GenericIPAddressField(blank=True, null=True)  # for new-device alerts
 
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
@@ -65,7 +67,15 @@ class BaseUser(AbstractUser):
 
 
 # ─── Shared Email Helper (Local SMTP) ───────────────────────────
-def _send_email(subject, html_content, to_email):
+def _send_email(subject, html_content, to_email, user=None):
+    """
+    Send a styled HTML email.
+    Pass `user` to have the toggle respected automatically.
+    If user.email_notifications is False the call is a silent no-op.
+    """
+    if user is not None and not getattr(user, 'email_notifications', True):
+        print(f"[Email] Skipped (notifications off) for {to_email}")
+        return False
     try:
         send_mail(
             subject=subject,
@@ -75,10 +85,10 @@ def _send_email(subject, html_content, to_email):
             html_message=html_content,
             fail_silently=False,
         )
-        print(f"Email sent successfully to {to_email}")
+        print(f"[Email] Sent successfully to {to_email}")
         return True
     except Exception as e:
-        print(f"Email Error: {e}")
+        print(f"[Email] Error sending to {to_email}: {e}")
         return False
 
 

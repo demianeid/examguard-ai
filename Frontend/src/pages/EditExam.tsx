@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   X, Clock, Trash2, Shield, Eye, Users, Mic, Lock,
-  Video, AlertCircle, Wifi, CheckCircle, Edit, Save,
+  AlertCircle, CheckCircle, Edit, Save,
   UserPlus, UserMinus, Search,
 } from "lucide-react";
 
@@ -88,17 +88,14 @@ const typeToFrontend: Record<string, string> = {
   "essay":           "essay",
 };
 
-const defaultSecuritySettings: SecurityFeature[] = [
-  { id: "1",  name: "AI Proctoring",          description: "Automated behavior analysis and anomaly detection",   recommended: true,  enabled: true,  icon: <Shield      className="w-5 h-5 text-blue-500" /> },
-  { id: "2",  name: "Live Proctoring",         description: "Real-time human monitoring during the exam",           recommended: false, enabled: false, icon: <Eye         className="w-5 h-5 text-gray-400" /> },
-  { id: "3",  name: "Eye Tracking",            description: "Monitor eye movements and focus patterns",             recommended: true,  enabled: true,  icon: <Eye         className="w-5 h-5 text-blue-500" /> },
-  { id: "4",  name: "Multiple Face Detection", description: "Alert if multiple people are detected",                recommended: true,  enabled: true,  icon: <Users       className="w-5 h-5 text-blue-500" /> },
-  { id: "5",  name: "Speaker Recognition",     description: "Detect unauthorized voices or conversations",          recommended: false, enabled: false, icon: <Mic         className="w-5 h-5 text-gray-400" /> },
-  { id: "6",  name: "Lockdown Browser",        description: "Restrict access to other applications",               recommended: true,  enabled: true,  icon: <Lock        className="w-5 h-5 text-blue-500" /> },
-  { id: "7",  name: "Record & Review",         description: "Record entire session for later review",              recommended: false, enabled: false, icon: <Video       className="w-5 h-5 text-gray-400" /> },
-  { id: "8",  name: "Object Detection",        description: "Detect phones, notes, or unauthorized materials",     recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
-  { id: "9",  name: "Real-Time Alerts",        description: "Instant notifications for suspicious activity",       recommended: true,  enabled: true,  icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
-  { id: "10", name: "Offline Exam Mode",       description: "Allow exams without internet connection",             recommended: false, enabled: false, icon: <Wifi        className="w-5 h-5 text-gray-400" /> },
+const baseSecuritySettings: SecurityFeature[] = [
+  { id: "behavior",  name: "Behavior Detection",      description: "Head pose tracking and anomaly behavior analysis",      recommended: true, enabled: true, icon: <Shield      className="w-5 h-5 text-blue-500" /> },
+  { id: "audio",     name: "Audio Detection",         description: "Detect speech or suspicious sounds via microphone",     recommended: true, enabled: true, icon: <Mic         className="w-5 h-5 text-blue-500" /> },
+  { id: "live",      name: "Live Proctoring",         description: "Real-time human monitoring during the exam",            recommended: true, enabled: true, icon: <Eye         className="w-5 h-5 text-blue-500" /> },
+  { id: "multiface", name: "Multiple Face Detection", description: "Alert if multiple people are detected",                 recommended: true, enabled: true, icon: <Users       className="w-5 h-5 text-blue-500" /> },
+  { id: "lockdown",  name: "Lockdown Browser",        description: "Restrict copy, paste, shortcuts and other applications", recommended: true, enabled: true, icon: <Lock        className="w-5 h-5 text-blue-500" /> },
+  { id: "object",    name: "Object Detection",        description: "Detect phones, notes, or unauthorized materials",      recommended: true, enabled: true, icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
+  { id: "alerts",    name: "Real-Time Alerts",        description: "Instant notifications for suspicious activity",        recommended: true, enabled: true, icon: <AlertCircle className="w-5 h-5 text-blue-500" /> },
 ];
 
 // ============================================================
@@ -167,7 +164,7 @@ export default function EditExam() {
     instructions: "", studentSelectionType: "all",
   });
   const [questions, setQuestions]               = useState<Question[]>([]);
-  const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>(defaultSecuritySettings);
+  const [securitySettings, setSecuritySettings] = useState<SecurityFeature[]>(baseSecuritySettings);
   const [errors, setErrors]                     = useState<Partial<Record<keyof ExamFormData | "students", string>>>({});
   const [questionErrors, setQuestionErrors]     = useState<QuestionErrors>({});
   const [isLoading, setIsLoading]               = useState(false);
@@ -242,6 +239,26 @@ export default function EditExam() {
           instructions:         data.instructions ?? "",
           studentSelectionType: selectionType,
         };
+
+        // ── Apply security settings from API ──
+        const apiSecurity = data.security_settings;
+        if (apiSecurity) {
+          const idToField: Record<string, keyof typeof apiSecurity> = {
+            behavior:  "behavior_detection",
+            audio:     "audio_detection",
+            live:      "live_proctoring",
+            multiface: "multiple_face_detection",
+            lockdown:  "lockdown_browser",
+            object:    "object_detection",
+            alerts:    "real_time_alerts",
+          };
+          setSecuritySettings(
+            baseSecuritySettings.map((s) => ({
+              ...s,
+              enabled: apiSecurity[idToField[s.id]] ?? s.enabled,
+            }))
+          );
+        }
 
         setFormData(fd);
         setQuestions(qs);
@@ -490,6 +507,8 @@ export default function EditExam() {
   const handleSaveChanges = async () => {
     setIsLoading(true);
     try {
+      const getEnabled = (id: string) => securitySettings.find((s) => s.id === id)?.enabled ?? true;
+
       const payload = {
         title:          formData.examTitle,
         description:    formData.description,
@@ -499,8 +518,17 @@ export default function EditExam() {
         end_datetime:   combineDatetime(formData.endDate,   formData.endTime),
         instructions:   formData.instructions,
         questions:      questions.map(mapQuestionToBackend),
-       assigned_student_ids:
-     formData.studentSelectionType === "all" ? null : selectedStudents.map((s) => s.id),
+        assigned_student_ids:
+          formData.studentSelectionType === "all" ? null : selectedStudents.map((s) => s.id),
+        security_settings: {
+          behavior_detection:      getEnabled("behavior"),
+          audio_detection:         getEnabled("audio"),
+          live_proctoring:         getEnabled("live"),
+          multiple_face_detection: getEnabled("multiface"),
+          lockdown_browser:        getEnabled("lockdown"),
+          object_detection:        getEnabled("object"),
+          real_time_alerts:        getEnabled("alerts"),
+        },
       };
 
       const res = await fetch(`${BASE_URL}/${examId}/`, {
