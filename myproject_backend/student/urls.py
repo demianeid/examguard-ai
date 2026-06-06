@@ -10,6 +10,7 @@ from .views import (
     StudentExamResultView,
     StudentClassGradesView,
     StudentDashboardView,
+    StudentExamStatusView,
 )
 from face.views import verify_face  # alias so frontend /api/student/face/verify/ works
 
@@ -23,6 +24,7 @@ urlpatterns = [
     path('exams/<int:exam_id>/start/',            StudentExamStartView.as_view(),  name='student-exam-start'),
     path('exams/<int:exam_id>/submit/',           StudentExamSubmitView.as_view(), name='student-exam-submit'),
     path('exams/<int:exam_id>/result/',           StudentExamResultView.as_view(), name='student-exam-result'),
+    path('exams/<int:exam_id>/status/',           StudentExamStatusView.as_view(), name='student-exam-status'),
     path('dashboard/',                            StudentDashboardView.as_view(),  name='student-dashboard'),
 
     # Face verification alias — frontend calls /api/student/face/verify/

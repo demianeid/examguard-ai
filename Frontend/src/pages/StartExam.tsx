@@ -80,6 +80,7 @@ const ExamInterface: React.FC = () => {
   const [proctorAlerts, setProctorAlerts] = useState<string[]>([]);
   const [examTerminated, setExamTerminated] = useState(false);
   const [terminationReason, setTerminationReason] = useState('');
+  const [forceTerminationType, setForceTerminationType] = useState<'score' | 'instructor' | null>(null);
   const [isRequestingFullScreen, setIsRequestingFullScreen] = useState(false);
   const [devToolsOpen, setDevToolsOpen] = useState(false);
   const [showFsAlert, setShowFsAlert] = useState(false);
@@ -557,21 +558,42 @@ const ExamInterface: React.FC = () => {
     }
   }, [postBehaviorViolation]);
 
-  const terminateExam = (reason: string, score?: number) => {
+  const terminateExam = (reason: string, score?: number, type: 'score' | 'instructor' = 'score') => {
     isTerminatedRef.current = true; // set sync ref FIRST so fullscreenchange handler sees it immediately
     setExamTerminated(true);
     setTerminationReason(reason);
-    setCurrentView('time-up');
+    setForceTerminationType(type);
     exitFullScreen();
     stopAIProctoring();
     stopAudioProctoring();        // close audio WebSocket + mic stream
     // Auto-submit on termination
     const doAutoSubmit = async () => {
       await submitExam(true, score ?? violationScore);
-      setTimeout(() => navigate('/classes'), 5000);
     };
     doAutoSubmit();
   };
+
+  // ── Instructor force-termination polling ──────────────────────────────────
+  useEffect(() => {
+    if (currentView !== 'exam' || !examId || examTerminated) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/student/exams/${examId}/status/`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.is_terminated && !isTerminatedRef.current) {
+          const reason = data.termination_reason === 'instructor'
+            ? '⚠️ Your exam has been forcefully terminated by your instructor.'
+            : '⚠️ Your exam has been automatically terminated due to exceeding the maximum violation score.';
+          terminateExam(reason, violationScore, data.termination_reason === 'instructor' ? 'instructor' : 'score');
+        }
+      } catch { /* silently ignore poll failures */ }
+    };
+    const interval = setInterval(poll, 10_000);
+    return () => clearInterval(interval);
+  }, [currentView, examId, examTerminated, token]);
 
   // ============================================================
   // AI WebSocket Proctoring
@@ -863,7 +885,7 @@ const ExamInterface: React.FC = () => {
 
   // Stop audio proctoring when exam ends for any reason
   useEffect(() => {
-    if (examTerminated || currentView === 'time-up') stopAudioProctoring();
+    if (examTerminated || currentView === 'time-up' || currentView === 'terminated') stopAudioProctoring();
   }, [examTerminated, currentView, stopAudioProctoring]);
 
   // Clean up audio on unmount
@@ -871,7 +893,7 @@ const ExamInterface: React.FC = () => {
 
   // Stop AI proctoring when exam ends for any reason
   useEffect(() => {
-    if (examTerminated || currentView === 'time-up') stopAIProctoring();
+    if (examTerminated || currentView === 'time-up' || currentView === 'terminated') stopAIProctoring();
   }, [examTerminated, currentView, stopAIProctoring]);
 
   // Clean up on unmount
@@ -1975,37 +1997,60 @@ const ExamInterface: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* ============================================================
+            Terminated Overlay Modal (Blocking)
+            ============================================================ */}
+        {examTerminated && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden animate-in fade-in zoom-in duration-300">
+              {/* Red header band */}
+              <div className={`px-6 py-6 text-white text-center ${forceTerminationType === 'instructor' ? 'bg-gradient-to-r from-red-600 to-red-800' : 'bg-gradient-to-r from-orange-500 to-red-600'}`}>
+                <div className="flex justify-center mb-3">
+                  <div className="bg-white/20 p-4 rounded-full">
+                    <Ban className="w-12 h-12 text-white" />
+                  </div>
+                </div>
+                <h1 className="text-2xl font-black tracking-tight mb-1">Exam Terminated</h1>
+                <p className="text-white/90 text-sm font-medium">
+                  {forceTerminationType === 'instructor' ? 'Manual termination by instructor' : 'Automatic termination by system'}
+                </p>
+              </div>
+
+              {/* Body */}
+              <div className="p-6">
+                {/* Big warning message */}
+                <div className={`rounded-2xl border-2 p-4 mb-6 flex items-start gap-4 ${forceTerminationType === 'instructor' ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
+                  <span className="text-3xl flex-shrink-0 mt-1">⚠️</span>
+                  <p className={`text-base font-bold leading-relaxed ${forceTerminationType === 'instructor' ? 'text-red-900' : 'text-orange-900'}`}>
+                    {terminationReason}
+                  </p>
+                </div>
+
+                <p className="text-sm text-gray-500 text-center mb-6 px-4">
+                  Your responses up to this point have been recorded and will be reviewed by the exam administrator.
+                </p>
+
+                {/* Acknowledge button — required to exit */}
+                <button
+                  onClick={() => navigate('/classes')}
+                  className={`w-full py-3.5 px-6 rounded-xl font-bold text-white text-lg transition-all shadow-lg ${
+                    forceTerminationType === 'instructor'
+                      ? 'bg-red-600 hover:bg-red-700 active:scale-95'
+                      : 'bg-orange-500 hover:bg-orange-600 active:scale-95'
+                  }`}
+                >
+                  I Understand
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  // ============================================================
-  // Terminated View
-  // ============================================================
-  if (currentView === 'terminated') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 p-8 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full text-center">
-          <div className="mb-6 flex justify-center"><div className="bg-red-100 p-4 rounded-full"><Ban className="w-16 h-16 text-red-600" /></div></div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Exam Terminated</h1>
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
-            <p className="text-lg text-gray-800 mb-4">Your exam has been automatically terminated due to multiple security violations.</p>
-            <div className="space-y-3 text-left bg-white p-4 rounded-lg">
-              <div className="flex justify-between"><span className="text-gray-600">Violation Score:</span><span className="font-bold text-red-600">{violationScore.toFixed(1)}/20</span></div>
-              <div className="flex justify-between"><span className="text-gray-600">Reason:</span><span className="font-bold text-gray-800">{terminationReason}</span></div>
-              <div className="flex justify-between"><span className="text-gray-600">Questions Answered:</span><span className="font-bold text-blue-600">{answeredCount}/{examData?.questions.length}</span></div>
-            </div>
-          </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-            <p className="text-sm text-blue-800">Your responses have been recorded and will be reviewed by the exam administrator.</p>
-          </div>
-          <button onClick={() => navigate('/classes')} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-colors">
-            Return to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
+
 
   // ============================================================
   // Time Up View

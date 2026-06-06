@@ -372,3 +372,52 @@ class ResetPasswordView(APIView):
         user.save()
 
         return Response({"message": "Password updated successfully!"}, status=status.HTTP_200_OK)
+
+# --- Contact Us ---------------------------------------------------
+class ContactView(APIView):
+    def post(self, request):
+        name    = request.data.get('name', '').strip()
+        email   = request.data.get('email', '').strip()
+        subject = request.data.get('subject', '').strip()
+        message = request.data.get('message', '').strip()
+
+        if not all([name, email, subject, message]):
+            return Response({'error': 'All fields are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ── Step 1: Always save to database first ─────────────────
+        from .models import ContactMessage
+        contact = ContactMessage.objects.create(
+            name=name, email=email, subject=subject, message=message
+        )
+        print(f'[ContactView] Message saved to DB (id={contact.id}) from {name} <{email}>')
+
+        # ── Step 2: Attempt to send email (non-blocking, best-effort)
+        try:
+            from django.core.mail import send_mail
+            from django.conf import settings
+            host_user = getattr(settings, 'EMAIL_HOST_USER', '')
+            host_pass = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
+
+            if host_user and host_pass:
+                email_body = (
+                    f'Name:    {name}\n'
+                    f'Email:   {email}\n'
+                    f'Subject: {subject}\n\n'
+                    f'Message:\n{message}'
+                )
+                send_mail(
+                    subject=f'[ExamGuard Contact] {subject}',
+                    message=email_body,
+                    from_email=host_user,
+                    recipient_list=['ExamGuard11@gmail.com'],
+                    fail_silently=False,
+                )
+                ContactMessage.objects.filter(pk=contact.pk).update(email_sent=True)
+                print(f'[ContactView] Email sent successfully for message id={contact.id}')
+            else:
+                print('[ContactView] Email credentials not set — message saved to DB only.')
+        except Exception as e:
+            print(f'[ContactView] Email failed (message still saved to DB): {e}')
+
+        return Response({'message': 'Message sent successfully!'}, status=status.HTTP_200_OK)
+

@@ -340,3 +340,20 @@ class ProfessorProfile(models.Model):
 
     def __str__(self):
         return f"Professor — {self.user}"
+
+
+# ─── Contact Message ─────────────────────────────────────────────
+class ContactMessage(models.Model):
+    name       = models.CharField(max_length=200)
+    email      = models.EmailField()
+    subject    = models.CharField(max_length=300)
+    message    = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    email_sent = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'contact_messages'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"[{self.created_at:%Y-%m-%d}] {self.subject} — {self.name}"

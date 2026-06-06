@@ -138,6 +138,7 @@ class ExamResult(models.Model):
     percentage           = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     submitted_at         = models.DateTimeField(auto_now_add=True)
     is_terminated        = models.BooleanField(default=False)
+    termination_reason   = models.CharField(max_length=20, null=True, blank=True)
     violation_score      = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     risk_score           = models.DecimalField(
         max_digits=5, decimal_places=1, default=0,

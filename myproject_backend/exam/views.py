@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 
-from .models import Exam, ExamResult
+from .models import Exam, ExamResult, ExamSession
 from .serializers import ExamSerializer, ExamListSerializer
 from authentication.models import BaseUser
 from instructors.models import Class
@@ -342,4 +342,90 @@ class GradeEssayView(APIView):
             'new_total': float(result.total_marks_obtained),
             'new_percentage': float(result.percentage),
             'grading_status': result.grading_status,
-        })
+        })
+
+
+class TerminateStudentExamView(APIView):
+    """
+    POST /api/exam/<exam_id>/terminate/<student_id>/
+    Allows an instructor to forcefully terminate a student's exam.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, exam_id, student_id):
+        if not is_professor(request.user):
+            return Response({"error": "Unauthorized. Professors only."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            exam = Exam.objects.get(id=exam_id, professor=request.user)
+        except Exam.DoesNotExist:
+            return Response({"error": "Exam not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            student = BaseUser.objects.get(id=student_id, role=BaseUser.Role.STUDENT)
+        except BaseUser.DoesNotExist:
+            return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Mark session inactive
+        session = ExamSession.objects.filter(exam=exam, student=student, is_active=True).first()
+        if session:
+            session.is_active = False
+            session.save()
+
+        # Compute risk score
+        from violation_Exam.risk_engine import compute_risk_score
+        computed_risk = compute_risk_score(student, exam)
+
+        # Update or create ExamResult
+        has_essays = exam.questions.filter(question_type='essay').exists()
+        grading_status = 'pending' if has_essays else 'auto'
+
+        result, created = ExamResult.objects.get_or_create(
+            student=student,
+            exam=exam,
+            defaults={
+                'total_marks_obtained': 0,
+                'total_marks': exam.total_marks,
+                'percentage': 0.0,
+                'is_terminated': True,
+                'termination_reason': 'instructor',
+                'violation_score': 0.0,
+                'risk_score': computed_risk,
+                'grading_status': grading_status,
+            }
+        )
+
+        if not created:
+            result.is_terminated = True
+            result.termination_reason = 'instructor'
+            result.risk_score = computed_risk
+            result.save()
+
+        # Notify student
+        from notifications.models import Notification
+        from django.core.mail import send_mail
+        
+        Notification.objects.create(
+            recipient=student,
+            type='system',
+            title='Exam Terminated',
+            content=f'Your exam "{exam.title}" was terminated by the instructor.',
+            priority='high',
+            metadata={'examId': exam.id}
+        )
+
+        try:
+            send_mail(
+                subject=f'Exam Terminated: {student.email}',
+                message=f'Student {student.email} ({student.first_name} {student.last_name}) had their exam "{exam.title}" forcefully terminated by the instructor.',
+                from_email=None,
+                recipient_list=['ExamGuard11@gmail.com'],
+                fail_silently=True,
+            )
+        except Exception as e:
+            print(f"Email failed to send: {e}")
+
+        return Response({
+            'detail': 'Exam terminated successfully.',
+            'student_id': student.id
+        }, status=status.HTTP_200_OK)

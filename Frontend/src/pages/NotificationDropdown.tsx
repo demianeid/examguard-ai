@@ -19,6 +19,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
   const [filterType, setFilterType] = useState<string>("all");
   const [showAll, setShowAll] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItemBackend[]>([]);
+  const [isError, setIsError] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -35,6 +36,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
   const fetchNotifications = async () => {
     try {
       const data = await notificationApi.getAll();
+      setIsError(false);
       if (Array.isArray(data)) {
         setNotifications(data);
       } else if (data && typeof data === 'object' && 'results' in data) {
@@ -46,6 +48,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
     } catch (err) {
       console.error("Failed to fetch notifications:", err);
       setNotifications([]);
+      setIsError(true);
     }
   };
 
@@ -70,6 +73,11 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
 
     ws.onerror = (error) => {
       console.error("WebSocket error", error);
+      setIsError(true);
+    };
+
+    ws.onclose = () => {
+      // Could implement retry logic here if needed
     };
 
     wsRef.current = ws;
@@ -280,7 +288,15 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ isScrolled 
             </div>
 
             <div className="max-h-[32rem] overflow-y-auto divide-y divide-gray-100">
-              {getFilteredNotifications().length > 0 ? (
+              {isError ? (
+                <div className="px-5 py-12 text-center">
+                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                    <AlertCircle size={24} className="text-red-500" />
+                  </div>
+                  <p className="text-gray-900 font-medium mb-1">Server Disconnected</p>
+                  <p className="text-gray-500 text-sm">Unable to connect to the notifications server.</p>
+                </div>
+              ) : getFilteredNotifications().length > 0 ? (
                 getFilteredNotifications().map((notification) => (
                   <div
                     key={notification.id}

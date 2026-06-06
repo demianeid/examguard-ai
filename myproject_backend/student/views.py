@@ -162,9 +162,15 @@ class StudentClassExamsView(APIView):
             if now < exam.start_datetime - timedelta(minutes=5):
                 student_status = 'upcoming'
             elif now < exam.end_datetime:
-                student_status = 'submitted' if result else 'active'
+                if result:
+                    student_status = 'terminated' if result.is_terminated else 'submitted'
+                else:
+                    student_status = 'active'
             else:
-                student_status = 'completed' if result else 'missed'
+                if result:
+                    student_status = 'terminated' if result.is_terminated else 'completed'
+                else:
+                    student_status = 'missed'
 
             data.append({
                 'id': exam.id,
@@ -473,6 +479,7 @@ class StudentExamSubmitView(APIView):
             total_marks=exam.total_marks,
             percentage=round(percentage, 2),
             is_terminated=is_terminated,
+            termination_reason='score' if is_terminated else None,
             violation_score=violation_score,
             risk_score=computed_risk,
             grading_status=grading_status,
@@ -481,6 +488,19 @@ class StudentExamSubmitView(APIView):
         # أغلق الـ session بعد الـ submit
         session.is_active = False
         session.save()
+
+        if is_terminated:
+            from django.core.mail import send_mail
+            try:
+                send_mail(
+                    subject=f'Exam Terminated by Score: {request.user.email}',
+                    message=f'Student {request.user.email} ({request.user.first_name} {request.user.last_name}) had their exam "{exam.title}" automatically terminated because they exceeded the violation score limit ({violation_score} pts).',
+                    from_email=None,
+                    recipient_list=['ExamGuard11@gmail.com'],
+                    fail_silently=True,
+                )
+            except Exception as e:
+                print(f"Email failed to send: {e}")
 
         return Response({
             'detail': 'Exam submitted successfully.',
@@ -593,3 +613,39 @@ class StudentDashboardView(APIView):
             'total_exams': total_exams,
             'enrolled_classes': enrolled_classes_data,
         })
+
+
+# --- Lightweight status check for real-time termination polling ---
+class StudentExamStatusView(APIView):
+    """
+    GET /api/student/exams/<exam_id>/status/
+    Returns whether the student's exam is terminated, and the reason.
+    Used by the frontend to poll every 10 seconds for instructor-forced termination.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, exam_id):
+        try:
+            exam = Exam.objects.get(id=exam_id)
+        except Exam.DoesNotExist:
+            return Response({'detail': 'Exam not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Check ExamResult first — the most authoritative source
+        result = ExamResult.objects.filter(student=request.user, exam=exam).first()
+        if result and result.is_terminated:
+            return Response({
+                'is_terminated': True,
+                'termination_reason': result.termination_reason or 'score',
+            })
+
+        # Also check if the session was deactivated by the instructor
+        session = ExamSession.objects.filter(student=request.user, exam=exam).first()
+        if session and not session.is_active:
+            # Session was force-deactivated — check if result exists for reason
+            reason = result.termination_reason if result else 'instructor'
+            return Response({
+                'is_terminated': True,
+                'termination_reason': reason,
+            })
+
+        return Response({'is_terminated': False, 'termination_reason': None})

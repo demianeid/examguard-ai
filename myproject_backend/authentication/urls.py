@@ -6,6 +6,7 @@ from .views import (
     ForgetPasswordView,
     VerifyOtpView,
     ResetPasswordView,
+    ContactView,
 )
 from . import profile_views
 
@@ -18,6 +19,7 @@ urlpatterns = [
     path('forget-password/',   ForgetPasswordView.as_view(),    name='forget-password'),
     path('verify-otp/',        VerifyOtpView.as_view(),         name='verify-otp'),
     path('reset-password/',    ResetPasswordView.as_view(),     name='reset-password'),
+    path('contact/',           ContactView.as_view(),           name='contact'),
 
     # ─── Profile ─────────────────────────────────────────────────
     path('profile/',         profile_views.GetProfileView.as_view(),    name='get-profile'),

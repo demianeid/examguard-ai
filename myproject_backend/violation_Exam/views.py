@@ -249,7 +249,7 @@ class ExamLiveStatusView(APIView):
             # Determine status based on ExamResult first, then current score
             res = results_map.get(sid)
             if res:
-                status_val = 'submitted'
+                status_val = 'terminated' if res.is_terminated else 'submitted'
             else:
                 status_val = _student_status(v_score)
 
@@ -284,6 +284,8 @@ class ExamLiveStatusView(APIView):
             'flagged':         sum(1 for s in students_data if s['status'] == 'flagged'),
             'warning':         sum(1 for s in students_data if s['status'] == 'warning'),
             'online':          sum(1 for s in students_data if s['status'] == 'online'),
+            'terminated':      sum(1 for s in students_data if s['status'] == 'terminated'),
+            'submitted':       sum(1 for s in students_data if s['status'] == 'submitted'),
             'students':        students_data,
         })
 

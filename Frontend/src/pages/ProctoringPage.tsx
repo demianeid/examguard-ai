@@ -110,6 +110,8 @@ const ProctoringPage = () => {
   const [dataLoading, setDataLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
+  const [isTerminating, setIsTerminating] = useState(false);
+  const [confirmTerminateId, setConfirmTerminateId] = useState<number | null>(null);
   
   // Live frame dictionary mapping db_id → base64 jpeg
   const [liveFrames, setLiveFrames] = useState<Record<number, string>>({});
@@ -198,6 +200,22 @@ const ProctoringPage = () => {
     const interval = setInterval(fetchLiveData, 10_000);
     return () => clearInterval(interval);
   }, [fetchLiveData]);
+
+  const handleForceTerminate = async (studentDbId: number) => {
+    setIsTerminating(true);
+    try {
+      await apiRequest(`${DJANGO}/api/exam/${examId}/terminate/${studentDbId}/`, {
+        method: 'POST',
+      });
+      await fetchLiveData();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to terminate exam.");
+    } finally {
+      setIsTerminating(false);
+      setConfirmTerminateId(null);
+    }
+  };
 
   // Pre-populate Live Alerts on initial load
   useEffect(() => {
@@ -506,7 +524,15 @@ const ProctoringPage = () => {
                         className="w-full h-full object-cover"
                       />
                     ) : student.profile_image ? (
-                      <img src={student.profile_image} alt={student.name} className="w-14 h-14 rounded-full object-cover border-2 border-gray-500" />
+                      <img 
+                        src={student.profile_image.startsWith('http') ? student.profile_image : `${DJANGO}${student.profile_image}`} 
+                        alt={student.name} 
+                        className="w-14 h-14 rounded-full object-cover border-2 border-gray-500"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || '?')}&background=1A80F6&color=fff&size=64`;
+                        }}
+                      />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold text-lg border-2 border-gray-500">
                         {student.name.charAt(0).toUpperCase()}
@@ -1311,7 +1337,15 @@ const ProctoringPage = () => {
                     <div className="md:w-1/2 p-6 bg-gray-50 flex flex-col gap-5 border-r border-gray-100 overflow-y-auto custom-scrollbar">
                       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center gap-4">
                         {liveData?.profile_image ? (
-                          <img src={liveData.profile_image} alt="Profile" className="w-16 h-16 rounded-full object-cover border-2 border-gray-100" />
+                          <img 
+                            src={liveData.profile_image.startsWith('http') ? liveData.profile_image : `${DJANGO}${liveData.profile_image}`} 
+                            alt="Profile" 
+                            className="w-16 h-16 rounded-full object-cover border-2 border-gray-100"
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(liveData.name || '?')}&background=1A80F6&color=fff&size=64`;
+                            }}
+                          />
                         ) : (
                           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#1A80F6] to-blue-600 flex items-center justify-center text-white font-bold text-2xl shadow-sm">
                             {(liveData?.name || '?').charAt(0).toUpperCase()}
@@ -1364,6 +1398,22 @@ const ProctoringPage = () => {
                           {rData && <p className={`text-[9px] font-bold mt-1 uppercase text-${rData.risk_color}-700 opacity-80`}>{rData.risk_band} RISK</p>}
                         </div>
                       </div>
+
+                      {/* Force End Exam Button */}
+                      {liveData?.status !== 'terminated' && liveData?.status !== 'submitted' && liveData?.db_id && (
+                        <button
+                          onClick={() => setConfirmTerminateId(liveData.db_id)}
+                          disabled={isTerminating}
+                          className="mt-2 w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 px-4 rounded-xl transition-colors border border-red-200 shadow-sm disabled:opacity-50"
+                        >
+                          {isTerminating ? (
+                            <span className="animate-spin w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full" />
+                          ) : (
+                            <X size={18} />
+                          )}
+                          {isTerminating ? 'Terminating...' : 'Force End Exam'}
+                        </button>
+                      )}
                     </div>
 
                     {/* Right side: Incident List */}
@@ -1415,6 +1465,43 @@ const ProctoringPage = () => {
                   </>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Force Terminate Confirmation Modal */}
+      {confirmTerminateId && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="bg-red-50 p-6 flex flex-col items-center text-center border-b border-red-100">
+              <div className="bg-red-100 p-3 rounded-full mb-3">
+                <AlertTriangle size={32} className="text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Force End Exam?</h2>
+              <p className="text-sm text-gray-600">
+                Are you sure you want to manually terminate this student's exam? This action is immediate and <strong>cannot be undone</strong>.
+              </p>
+            </div>
+            <div className="p-4 flex gap-3">
+              <button
+                onClick={() => setConfirmTerminateId(null)}
+                disabled={isTerminating}
+                className="flex-1 py-2.5 px-4 rounded-xl font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleForceTerminate(confirmTerminateId)}
+                disabled={isTerminating}
+                className="flex-1 py-2.5 px-4 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isTerminating ? (
+                  <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  'Force End'
+                )}
+              </button>
             </div>
           </div>
         </div>

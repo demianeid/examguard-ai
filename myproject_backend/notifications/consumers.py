@@ -3,17 +3,16 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from urllib.parse import parse_qs
 from channels.db import database_sync_to_async
 from rest_framework_simplejwt.tokens import AccessToken
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
-
 @database_sync_to_async
 def get_user_from_token(token):
     try:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
         access_token = AccessToken(token)
         user = User.objects.get(id=access_token['user_id'])
         return user
-    except Exception:
+    except Exception as e:
+        print(f"[WebSocket Auth] Error parsing token: {e}")
         return None
 
 class NotificationConsumer(AsyncWebsocketConsumer):

@@ -22,6 +22,9 @@ const Contact: React.FC = () => {
     subject: '',
     message: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({
@@ -30,10 +33,34 @@ const Contact: React.FC = () => {
     });
   };
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // Handle form submission here
-    console.log('Form submitted:', formData);
+    setLoading(true);
+    setSuccessMsg('');
+    setErrorMsg('');
+    
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/auth/contact/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccessMsg(data.message || 'Message sent successfully!');
+        setFormData({ name: '', email: '', subject: '', message: '' });
+      } else {
+        setErrorMsg(data.error || 'Failed to send message.');
+      }
+    } catch (err) {
+      setErrorMsg('Network error. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -182,13 +209,16 @@ const Contact: React.FC = () => {
                   </div>
 
                   {/* Submit Button */}
-                  <div className="flex justify-start pt-2">
+                  <div className="flex flex-col gap-3 pt-2">
                     <button
                       type="submit"
-                      className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-300 hover:shadow-lg transform hover:-translate-y-0.5"
+                      disabled={loading}
+                      className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all duration-300 hover:shadow-lg transform hover:-translate-y-0.5 disabled:opacity-70 disabled:hover:translate-y-0"
                     >
-                      Send Message
+                      {loading ? 'Sending...' : 'Send Message'}
                     </button>
+                    {successMsg && <p className="text-green-600 font-medium text-sm">{successMsg}</p>}
+                    {errorMsg && <p className="text-red-600 font-medium text-sm">{errorMsg}</p>}
                   </div>
                 </form>
               </div>

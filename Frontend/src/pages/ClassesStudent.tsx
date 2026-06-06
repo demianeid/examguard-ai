@@ -43,7 +43,7 @@ interface Exam {
   name: string;
   date: string;
   duration: string;
-  status: "upcoming" | "active" | "completed" | "missed" | "submitted";
+  status: "upcoming" | "active" | "completed" | "missed" | "submitted" | "terminated";
   score: number | null;
   start_datetime?: string;
   end_datetime?: string;
@@ -620,6 +620,8 @@ const ClassesStudent = () => {
                     </>
                   ) : exam.status === "missed" ? (
                     <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-sm font-medium">Missed</span>
+                  ) : exam.status === "terminated" ? (
+                    <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium border border-red-200">Terminated</span>
                   ) : exam.status === "submitted" ? (
                     <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">Submitted</span>
                   ) : (
