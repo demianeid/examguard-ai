@@ -274,6 +274,15 @@ export const cameraApi = {
     request<void>(`/api/hardware/monitoring/cameras/${cameraId}/`, {
       method: "DELETE",
     }),
+
+  getSnapshot: (cameraId: number): Promise<{
+    snapshot: string;   // data:image/jpeg;base64,...
+    width: number;
+    height: number;
+    camera_name: string;
+    stream_url: string;
+  }> =>
+    request(`/api/hardware/monitoring/cameras/${cameraId}/snapshot/`),
 };
 
 // ============================================================

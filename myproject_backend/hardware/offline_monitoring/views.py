@@ -104,6 +104,100 @@ def camera_detail(request, pk):
     return Response({'message': 'Camera deleted'}, status=status.HTTP_200_OK)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def camera_snapshot(request, pk):
+    """
+    GET /api/hardware/monitoring/cameras/<pk>/snapshot/
+
+    Captures a single frame from the camera's stream_url and returns it as a
+    base64-encoded JPEG.
+
+    Response (200):
+        {
+          "snapshot": "data:image/jpeg;base64,...",
+          "width": 1280,
+          "height": 720,
+          "camera_name": "Front Left",
+          "stream_url": "rtsp://..."
+        }
+
+    Response (503 / 400):
+        { "error": "..." }
+
+    Works for both RTSP URLs and integer webcam index strings (e.g. "0").
+    """
+    try:
+        camera = Camera.objects.get(pk=pk)
+    except Camera.DoesNotExist:
+        return Response({'error': 'Camera not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    stream_url = camera.stream_url
+    if not stream_url and stream_url != 0:
+        return Response(
+            {'error': 'Camera has no stream URL configured.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        import cv2
+        import base64
+        import time as _time
+
+        # Support integer webcam index stored as a string e.g. "0"
+        source = int(stream_url) if str(stream_url).strip().isdigit() else stream_url
+
+        if isinstance(source, int):
+            cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(source)
+
+        if not cap.isOpened():
+            return Response(
+                {'error': f'Cannot open camera stream: {stream_url}'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        # Warm-up: discard a few frames so auto-exposure settles (important for webcams)
+        if isinstance(source, int):
+            _time.sleep(0.8)
+            for _ in range(5):
+                cap.read()
+
+        ret, frame = cap.read()
+        cap.release()
+
+        if not ret or frame is None:
+            return Response(
+                {'error': 'Camera opened but returned an empty frame. Stream may be initialising.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        h, w = frame.shape[:2]
+
+        # Encode to JPEG and then base64
+        ok, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        if not ok:
+            return Response({'error': 'Failed to encode frame to JPEG.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        b64 = base64.b64encode(buf.tobytes()).decode('utf-8')
+        data_url = f'data:image/jpeg;base64,{b64}'
+
+        return Response({
+            'snapshot':    data_url,
+            'width':       w,
+            'height':      h,
+            'camera_name': camera.name,
+            'stream_url':  str(stream_url),
+        })
+
+    except Exception as exc:
+        return Response(
+            {'error': f'Snapshot failed: {str(exc)}'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
+
 # ─── OfflineExam ──────────────────────────────────────────────────
 
 @api_view(['GET', 'POST'])

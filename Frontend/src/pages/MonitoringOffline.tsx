@@ -1,10 +1,10 @@
-import React, { useState, useEffect, type FC } from 'react';
+import React, { useState, useEffect, useRef, type FC } from 'react';
 import {
   Video, Camera, Users, AlertCircle, Shield,
   MapPin, Activity, Eye, Mic, Clock,
   Download,
   User, Phone, FileText, Volume2, Radio, WifiOff,
-  CheckCircle, XCircle, AlertTriangle,
+  CheckCircle, XCircle, AlertTriangle, Wifi,
   Save, Loader2, Play, FileSpreadsheet
 } from 'lucide-react';
 import { downloadXlsx } from '../utils/xlsxExport';
@@ -83,6 +83,11 @@ const OfflineMonitoringPage: FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
+
+  // Live camera snapshot for selected student
+  const [seatSnapshot, setSeatSnapshot] = useState<string | null>(null);
+  const [seatSnapshotLoading, setSeatSnapshotLoading] = useState(false);
+  const seatSnapshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const currentHall = halls.find(h => h.id === selectedHallId);
 
@@ -261,6 +266,43 @@ const OfflineMonitoringPage: FC = () => {
     const timer = setInterval(() => setTime(prev => prev + 1), 1000);
     return () => clearInterval(timer);
   }, [isMonitoring]);
+
+  // Live snapshot polling for selected student's camera (every 4 s)
+  useEffect(() => {
+    // Clear any existing interval
+    if (seatSnapshotIntervalRef.current) {
+      clearInterval(seatSnapshotIntervalRef.current);
+      seatSnapshotIntervalRef.current = null;
+    }
+
+    if (!selectedSeat?.cameraId) {
+      setSeatSnapshot(null);
+      return;
+    }
+
+    const fetchSnap = async () => {
+      setSeatSnapshotLoading(true);
+      try {
+        const data = await cameraApi.getSnapshot(selectedSeat.cameraId!);
+        setSeatSnapshot(data.snapshot);
+      } catch {
+        setSeatSnapshot(null);
+      } finally {
+        setSeatSnapshotLoading(false);
+      }
+    };
+
+    // Fetch immediately, then poll every 4 seconds
+    fetchSnap();
+    seatSnapshotIntervalRef.current = setInterval(fetchSnap, 4000);
+
+    return () => {
+      if (seatSnapshotIntervalRef.current) {
+        clearInterval(seatSnapshotIntervalRef.current);
+        seatSnapshotIntervalRef.current = null;
+      }
+    };
+  }, [selectedSeat?.cameraId]);
 
   // --- Actions ---
   const onStartMonitoringClick = () => {
@@ -838,14 +880,34 @@ const OfflineMonitoringPage: FC = () => {
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-700 mb-2">Camera Feed</p>
-            <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center overflow-hidden">
-              {selectedSeat.streamUrl ? (
-                <img src={selectedSeat.streamUrl} alt="Camera Feed" className="w-full h-full object-cover" />
-              ) : (
-                <Video className="text-gray-600" size={48} />
+            <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center overflow-hidden relative">
+              {seatSnapshotLoading && !seatSnapshot && (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 size={24} className="text-blue-400 animate-spin" />
+                  <span className="text-gray-400 text-xs">Connecting to camera…</span>
+                </div>
+              )}
+              {seatSnapshot ? (
+                <img
+                  src={seatSnapshot}
+                  alt="Live Camera Feed"
+                  className="w-full h-full object-cover"
+                />
+              ) : !seatSnapshotLoading ? (
+                <div className="flex flex-col items-center gap-2">
+                  <WifiOff className="text-gray-600" size={36} />
+                  <span className="text-gray-500 text-xs">Camera offline</span>
+                </div>
+              ) : null}
+              {seatSnapshot && seatSnapshotLoading && (
+                <div className="absolute top-2 right-2">
+                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" title="Live" />
+                </div>
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-2">Camera {selectedSeat.cameraId} • ROI Active</p>
+            <p className="text-xs text-gray-500 mt-2">
+              Camera {selectedSeat.cameraId} • Refreshing every 4 s
+            </p>
           </div>
           <div className="space-y-2">
             <button className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">

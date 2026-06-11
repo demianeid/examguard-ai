@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import {
   LayoutDashboard,
   Crosshair,
@@ -17,6 +17,8 @@ import {
   Save,
   Plus,
   Users,
+  RefreshCw,
+  WifiOff,
 } from "lucide-react"
 import { Link, useSearchParams, useLocation } from "react-router-dom"
 import {
@@ -37,6 +39,7 @@ interface Zone {
   rect: { x: number; y: number; width: number; height: number }
   zoneNumber: number
   backendId?: number
+  cameraId?: number
 }
 
 // ==================== ROIConfigurationPage (Zone Config) ====================
@@ -58,11 +61,23 @@ export default function ROIConfigurationPage() {
   const [zoneSaving, setZoneSaving] = useState(false)
   const [zoneError, setZoneError] = useState("")
 
+  // Camera snapshot state
+  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null)
+  const [snapshotLoading, setSnapshotLoading] = useState(false)
+  const [snapshotError, setSnapshotError] = useState<string | null>(null)
+  // Native camera frame dimensions (used for correct coordinate mapping)
+  const [cameraFrameSize, setCameraFrameSize] = useState<{ w: number; h: number } | null>(null)
+
   const [isDrawing, setIsDrawing] = useState(false)
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null)
   const [studentId, setStudentId] = useState("")
   const [studentName, setStudentName] = useState("")
+  
+  // Derived states for camera filtering
+  const activeCamId = cameras.find(c => c.name === activeCamera)?.id
+  const visibleZones = zones.filter(z => z.cameraId === activeCamId)
+
   const [showHallDropdown, setShowHallDropdown] = useState(false)
   const [showAddHallModal, setShowAddHallModal] = useState(false)
   const [newHallName, setNewHallName] = useState("")
@@ -142,6 +157,40 @@ export default function ROIConfigurationPage() {
     loadStudents()
   }, [selectedHall?.id])
 
+  // Fetch snapshot from the active camera
+  const fetchSnapshot = useCallback(async () => {
+    const cam = cameras.find((c) => c.name === activeCamera)
+    if (!cam) {
+      setSnapshotUrl(null)
+      setSnapshotError(null)
+      setCameraFrameSize(null)
+      return
+    }
+    setSnapshotLoading(true)
+    setSnapshotError(null)
+    try {
+      const data = await cameraApi.getSnapshot(cam.id)
+      setSnapshotUrl(data.snapshot)
+      setCameraFrameSize({ w: data.width, h: data.height })
+    } catch (err: any) {
+      setSnapshotError(
+        err?.response?.data?.error ||
+        "Camera offline or unreachable. Snapshot unavailable."
+      )
+      setSnapshotUrl(null)
+      setCameraFrameSize(null)
+    } finally {
+      setSnapshotLoading(false)
+    }
+  }, [cameras, activeCamera])
+
+  // Auto-fetch snapshot when the active camera changes
+  useEffect(() => {
+    if (activeCamera && cameras.length > 0) {
+      fetchSnapshot()
+    }
+  }, [activeCamera, cameras.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (studentInputRef.current && !studentInputRef.current.contains(e.target as Node)) {
@@ -174,6 +223,7 @@ export default function ROIConfigurationPage() {
             rect: { x: z.x1, y: z.y1, width: z.x2 - z.x1, height: z.y2 - z.y1 },
             zoneNumber: i + 1,
             backendId: z.id,
+            cameraId: z.camera,
           }))
         setZones(mappedZones)
         if (mappedZones.length > 0) {
@@ -188,22 +238,33 @@ export default function ROIConfigurationPage() {
     load()
   }, [examIdParam])
 
+  // Redraw canvas whenever snapshot, zones or current drawing rect changes
   useEffect(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
     if (!canvas || !container) return
     const ctx = canvas.getContext("2d")
     if (!ctx) return
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-    img.src = "/images/roi.jpg"
-    img.onload = () => {
-      imageRef.current = img
+
+    if (snapshotUrl) {
+      // Use the live camera frame as background
+      const img = new Image()
+      img.onload = () => {
+        imageRef.current = img
+        canvas.width = container.offsetWidth
+        canvas.height = Math.round((container.offsetWidth / img.naturalWidth) * img.naturalHeight)
+        drawCanvas(ctx, canvas, img)
+      }
+      img.src = snapshotUrl
+    } else {
+      // No snapshot — just clear + draw zones on a dark background
       canvas.width = container.offsetWidth
-      canvas.height = (container.offsetWidth / img.width) * img.height
-      drawCanvas(ctx, canvas, img)
+      canvas.height = Math.round(container.offsetWidth * (9 / 16)) // 16:9 placeholder
+      ctx.fillStyle = "#1a1a2e"
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      drawZonesOnCanvas(ctx, canvas, null)
     }
-  }, [zones, currentRect])
+  }, [visibleZones, currentRect, snapshotUrl])
 
   const drawCanvas = (
     ctx: CanvasRenderingContext2D,
@@ -211,19 +272,27 @@ export default function ROIConfigurationPage() {
     img: HTMLImageElement
   ) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    const sourceX = 35
-    const sourceY = 195
-    const sourceWidth = 570
-    const sourceHeight = 385
-    ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height)
-    const scaleX = canvas.width / sourceWidth
-    const scaleY = canvas.height / sourceHeight
+    // Draw the full camera snapshot as background (no cropping)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    drawZonesOnCanvas(ctx, canvas, img)
+  }
 
-    zones.forEach((zone, index) => {
+  const drawZonesOnCanvas = (
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    img: HTMLImageElement | null,
+  ) => {
+    // Scale zones from native camera pixel space → canvas display space
+    const nativeW = cameraFrameSize?.w ?? img?.naturalWidth ?? canvas.width
+    const nativeH = cameraFrameSize?.h ?? img?.naturalHeight ?? canvas.height
+    const scaleX = canvas.width  / (nativeW  || canvas.width)
+    const scaleY = canvas.height / (nativeH || canvas.height)
+
+    visibleZones.forEach((zone, index) => {
       const scaledRect = {
-        x: (zone.rect.x - sourceX) * scaleX,
-        y: (zone.rect.y - sourceY) * scaleY,
-        width: zone.rect.width * scaleX,
+        x:      zone.rect.x      * scaleX,
+        y:      zone.rect.y      * scaleY,
+        width:  zone.rect.width  * scaleX,
         height: zone.rect.height * scaleY,
       }
       ctx.strokeStyle = "#22c55e"
@@ -280,41 +349,45 @@ export default function ROIConfigurationPage() {
   const addZone = async () => {
     if (!studentId.trim() || !currentRect) return
 
-    // Convert canvas display coords → source image coords so the zone is
-    // saved (and later re-drawn) in the correct position.
-    const sourceX = 35
-    const sourceY = 195
-    const sourceWidth = 570
-    const sourceHeight = 385
+    // Convert canvas display coords → native camera pixel coords.
+    // Zones are stored in camera-pixel space so the AI backend receives
+    // the correct crop coordinates relative to the actual camera frame.
     const canvas = canvasRef.current
-    const scaleX = canvas ? canvas.width / sourceWidth : 1
-    const scaleY = canvas ? canvas.height / sourceHeight : 1
+    const nativeW = cameraFrameSize?.w ?? canvas?.width ?? 1
+    const nativeH = cameraFrameSize?.h ?? canvas?.height ?? 1
+    const displayW = canvas?.width  ?? nativeW
+    const displayH = canvas?.height ?? nativeH
 
-    const imgX = currentRect.x / scaleX + sourceX
-    const imgY = currentRect.y / scaleY + sourceY
-    const imgW = currentRect.width / scaleX
-    const imgH = currentRect.height / scaleY
+    const scaleX = nativeW / displayW
+    const scaleY = nativeH / displayH
 
-    // Store zone rect in source-image space so drawCanvas can re-scale it correctly
+    const imgX = currentRect.x * scaleX
+    const imgY = currentRect.y * scaleY
+    const imgW = currentRect.width  * scaleX
+    const imgH = currentRect.height * scaleY
+
+    // Store zone rect in native camera pixel space
     const imageSpaceRect = { x: imgX, y: imgY, width: imgW, height: imgH }
+
+    const selectedCam = cameras.find((c) => c.name === activeCamera)
 
     const newZone: Zone = {
       id: Date.now().toString(),
       studentId,
       studentName,
       rect: imageSpaceRect,
-      zoneNumber: zones.length + 1,
+      zoneNumber: visibleZones.length + 1,
+      cameraId: selectedCam?.id,
     }
     if (examIdParam) {
       setZoneSaving(true)
       setZoneError("")
       try {
-        const selectedCam = cameras.find((c) => c.name === activeCamera)
         const created = await studentZoneApi.create(Number(examIdParam), {
           student_code: studentId,
           student_name: studentName,
           camera: selectedCam?.id,
-          seat_number: `Seat ${zones.length + 1}`,
+          seat_number: `Seat ${visibleZones.length + 1}`,
           x1: Math.round(imgX),
           y1: Math.round(imgY),
           x2: Math.round(imgX + imgW),
@@ -491,8 +564,25 @@ export default function ROIConfigurationPage() {
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div
               ref={containerRef}
-              className="relative cursor-crosshair bg-gray-100 min-h-[340px]"
+              className="relative cursor-crosshair bg-gray-900 min-h-[340px]"
             >
+              {/* Snapshot loading overlay */}
+              {snapshotLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-10">
+                  <Loader2 size={32} className="text-blue-400 animate-spin" />
+                  <p className="text-gray-300 text-sm">Loading camera snapshot…</p>
+                </div>
+              )}
+
+              {/* Snapshot error / offline */}
+              {snapshotError && !snapshotLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/80 z-10 pointer-events-none">
+                  <WifiOff size={32} className="text-red-400" />
+                  <p className="text-red-300 text-sm text-center px-6">{snapshotError}</p>
+                  <p className="text-gray-400 text-xs">You can still draw zones, but coordinates may not align.</p>
+                </div>
+              )}
+
               <canvas
                 ref={canvasRef}
                 onMouseDown={handleMouseDown}
@@ -516,10 +606,27 @@ export default function ROIConfigurationPage() {
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Crosshair size={14} className="text-blue-600" />
               Click and drag to draw a new bounding box.
+              {cameraFrameSize && (
+                <span className="text-xs text-gray-400 ml-2">
+                  Frame: {cameraFrameSize.w}×{cameraFrameSize.h}px
+                </span>
+              )}
             </div>
-            <span className="bg-blue-50 text-blue-600 px-3 py-0.5 rounded-full text-xs font-medium">
-              {zones.length} active zones mapped
-            </span>
+            <div className="flex items-center gap-2">
+              {activeCamera && cameras.length > 0 && (
+                <button
+                  onClick={fetchSnapshot}
+                  disabled={snapshotLoading}
+                  title="Refresh camera snapshot"
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-all disabled:opacity-40"
+                >
+                  <RefreshCw size={13} className={snapshotLoading ? "animate-spin" : ""} />
+                </button>
+              )}
+              <span className="bg-blue-50 text-blue-600 px-3 py-0.5 rounded-full text-xs font-medium">
+                {visibleZones.length} active zones mapped
+              </span>
+            </div>
           </div>
         </div>
 
@@ -622,13 +729,13 @@ export default function ROIConfigurationPage() {
                 <Loader2 size={14} className="animate-spin" />
                 Loading zones...
               </div>
-            ) : zones.length === 0 ? (
+            ) : visibleZones.length === 0 ? (
               <p className="text-sm text-gray-400 text-center mt-6">
                 No zones configured for this camera.
               </p>
             ) : (
               <div className="flex flex-col gap-2">
-                {zones.map((zone) => (
+                {visibleZones.map((zone) => (
                   <div
                     key={zone.id}
                     className="bg-gray-50 border border-gray-200 border-l-[3px] border-l-yellow-600 rounded-lg p-2.5"

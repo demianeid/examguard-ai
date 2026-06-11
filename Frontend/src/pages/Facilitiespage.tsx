@@ -18,6 +18,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Edit2,
+  Wifi,
+  WifiOff,
+  RefreshCw,
 } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import {
@@ -134,6 +137,16 @@ export default function FacilitiesPage() {
   const [newCamName, setNewCamName] = useState("")
   const [newCamUrl, setNewCamUrl] = useState("")
   const [camSaving, setCamSaving] = useState(false)
+
+  // Camera test / snapshot preview
+  const [testingCameraId, setTestingCameraId] = useState<number | null>(null)
+  const [testSnapshot, setTestSnapshot] = useState<string | null>(null)
+  const [testSnapshotLoading, setTestSnapshotLoading] = useState(false)
+  const [testSnapshotError, setTestSnapshotError] = useState<string | null>(null)
+  // For "Test Connection" inside Add Camera modal
+  const [newCamTestLoading, setNewCamTestLoading] = useState(false)
+  const [newCamTestStatus, setNewCamTestStatus] = useState<"idle" | "ok" | "error">("idle")
+  const [newCamTestMsg, setNewCamTestMsg] = useState("")
 
   // Enroll Student modal
   const [showStudentModal, setShowStudentModal] = useState(false)
@@ -270,6 +283,29 @@ export default function FacilitiesPage() {
     } catch {
       alert("Failed to delete camera.")
     }
+  }
+
+  const openCameraTest = async (cam: Camera) => {
+    setTestingCameraId(cam.id)
+    setTestSnapshot(null)
+    setTestSnapshotError(null)
+    setTestSnapshotLoading(true)
+    try {
+      const data = await cameraApi.getSnapshot(cam.id)
+      setTestSnapshot(data.snapshot)
+    } catch (err: any) {
+      setTestSnapshotError(
+        err?.response?.data?.error || "Camera offline or unreachable."
+      )
+    } finally {
+      setTestSnapshotLoading(false)
+    }
+  }
+
+  const refreshCameraTest = async () => {
+    if (!testingCameraId) return
+    const cam = cameras.find((c) => c.id === testingCameraId)
+    if (cam) openCameraTest(cam)
   }
 
   const deleteStudent = (id: number) => {
@@ -468,13 +504,23 @@ export default function FacilitiesPage() {
                             <div className="text-xs text-gray-400">{cam.stream_url || "No stream URL"}</div>
                           </div>
                         </div>
-                        <button
-                          onClick={() => deleteCamera(cam.id)}
-                          title="Delete camera"
-                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => openCameraTest(cam)}
+                            title="Test camera connection"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                          >
+                            <Wifi size={13} />
+                            Test
+                          </button>
+                          <button
+                            onClick={() => deleteCamera(cam.id)}
+                            title="Delete camera"
+                            className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -618,7 +664,13 @@ export default function FacilitiesPage() {
       {showCameraModal && (
         <Modal
           title="Add Camera"
-          onClose={() => setShowCameraModal(false)}
+          onClose={() => {
+            setShowCameraModal(false)
+            setNewCamName("")
+            setNewCamUrl("")
+            setNewCamTestStatus("idle")
+            setNewCamTestMsg("")
+          }}
           onSubmit={addCamera}
           saving={camSaving}
           disabled={!newCamName.trim()}
@@ -643,11 +695,74 @@ export default function FacilitiesPage() {
             <input
               type="text"
               value={newCamUrl}
-              onChange={(e) => setNewCamUrl(e.target.value)}
-              placeholder="rtsp://... or USB index (0)"
+              onChange={(e) => {
+                setNewCamUrl(e.target.value)
+                setNewCamTestStatus("idle")
+                setNewCamTestMsg("")
+              }}
+              placeholder="rtsp://... or webcam index (0)"
               className="w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:border-blue-500 transition-colors"
             />
           </div>
+
+          {/* Test Connection row */}
+          {newCamUrl.trim() && (
+            <div>
+              <button
+                type="button"
+                disabled={newCamTestLoading}
+                onClick={async () => {
+                  // Save a temporary camera record, test it, then remove it
+                  // OR just call the snapshot on an existing matching camera.
+                  // Simplest: show the user we'll verify on save.
+                  setNewCamTestLoading(true)
+                  setNewCamTestStatus("idle")
+                  try {
+                    // Temporarily create the camera to test via the snapshot endpoint
+                    if (!selectedHall) throw new Error("No hall selected")
+                    const tmp = await cameraApi.create(selectedHall.id, {
+                      name: `__test_${Date.now()}`,
+                      stream_url: newCamUrl,
+                    })
+                    try {
+                      await cameraApi.getSnapshot(tmp.id)
+                      setNewCamTestStatus("ok")
+                      setNewCamTestMsg("Camera reachable ✓")
+                    } finally {
+                      await cameraApi.delete(tmp.id)
+                    }
+                  } catch (err: any) {
+                    setNewCamTestStatus("error")
+                    setNewCamTestMsg(
+                      err?.response?.data?.error || "Cannot connect to camera."
+                    )
+                  } finally {
+                    setNewCamTestLoading(false)
+                  }
+                }}
+                className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  newCamTestLoading
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-gray-50 border border-gray-200 text-gray-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600"
+                }`}
+              >
+                {newCamTestLoading
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Wifi size={14} />}
+                Test Connection
+              </button>
+              {newCamTestStatus !== "idle" && (
+                <p className={`text-xs mt-1.5 flex items-center gap-1.5 ${
+                  newCamTestStatus === "ok" ? "text-green-600" : "text-red-600"
+                }`}>
+                  {newCamTestStatus === "ok"
+                    ? <Wifi size={12} />
+                    : <WifiOff size={12} />}
+                  {newCamTestMsg}
+                </p>
+              )}
+            </div>
+          )}
         </Modal>
       )}
 
@@ -1048,7 +1163,121 @@ export default function FacilitiesPage() {
           </div>
         </div>
       )}
+      {/* Camera Test Modal */}
+      {testingCameraId !== null && (() => {
+        const cam = cameras.find(c => c.id === testingCameraId)
+        if (!cam) return null
+        return (
+          <CameraTestModal
+            camera={cam}
+            snapshot={testSnapshot}
+            loading={testSnapshotLoading}
+            error={testSnapshotError}
+            onClose={() => {
+              setTestingCameraId(null)
+              setTestSnapshot(null)
+              setTestSnapshotError(null)
+            }}
+            onRefresh={refreshCameraTest}
+          />
+        )
+      })()}
 
+    </div>
+  )
+}
+
+// ── Camera Test Modal (live snapshot preview) ─────────────────────────────────
+function CameraTestModal({
+  camera,
+  snapshot,
+  loading,
+  error,
+  onClose,
+  onRefresh,
+}: {
+  camera: Camera
+  snapshot: string | null
+  loading: boolean
+  error: string | null
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300,
+      }}
+    >
+      <div style={{
+        background: "#fff", borderRadius: 16, padding: 24,
+        width: "100%", maxWidth: 560, margin: "0 16px",
+        boxShadow: "0 24px 64px rgba(0,0,0,0.25)",
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div>
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: "#111827", margin: 0 }}>
+              Camera Test — {camera.name}
+            </h3>
+            <p style={{ fontSize: 12, color: "#9ca3af", margin: "2px 0 0" }}>
+              {camera.stream_url || "No stream URL"}
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={onRefresh}
+              disabled={loading}
+              style={{
+                background: "#eff6ff", border: "none", borderRadius: 8, padding: "7px 12px",
+                cursor: loading ? "not-allowed" : "pointer", color: "#3b82f6",
+                display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600,
+              }}
+            >
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af" }}>
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Snapshot area */}
+        <div style={{
+          background: "#0f172a", borderRadius: 12, overflow: "hidden",
+          aspectRatio: "16/9", display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 16, position: "relative",
+        }}>
+          {loading && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+              <Loader2 size={32} style={{ color: "#60a5fa" }} className="animate-spin" />
+              <span style={{ color: "#94a3b8", fontSize: 13 }}>Connecting to camera…</span>
+            </div>
+          )}
+          {!loading && error && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: 24, textAlign: "center" }}>
+              <WifiOff size={40} style={{ color: "#f87171" }} />
+              <p style={{ color: "#fca5a5", fontSize: 13, margin: 0 }}>{error}</p>
+            </div>
+          )}
+          {!loading && snapshot && (
+            <img src={snapshot} alt="Camera snapshot" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+          )}
+        </div>
+
+        {/* Status */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {loading ? (
+            <span style={{ fontSize: 13, color: "#9ca3af" }}>Testing connection…</span>
+          ) : error ? (
+            <><WifiOff size={15} style={{ color: "#ef4444" }} /><span style={{ fontSize: 13, color: "#ef4444", fontWeight: 600 }}>Camera Offline</span></>
+          ) : snapshot ? (
+            <><Wifi size={15} style={{ color: "#22c55e" }} /><span style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>Camera Online — Snapshot captured</span></>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }

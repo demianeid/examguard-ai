@@ -7,16 +7,20 @@ connections (via Channels routing).
 
 import os
 from django.core.asgi import get_asgi_application
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
+
+# Initialize Django early so models are loaded before routing imports
+django_asgi_app = get_asgi_application()
+
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 import hardware.ai_detection.routing
 import notifications.routing
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
-
 application = ProtocolTypeRouter({
     # Standard Django HTTP
-    "http": get_asgi_application(),
+    "http": django_asgi_app,
 
     # WebSocket connections — JWT auth middleware wraps the router
     "websocket": AuthMiddlewareStack(

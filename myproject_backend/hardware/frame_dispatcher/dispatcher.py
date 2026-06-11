@@ -102,14 +102,21 @@ def _fetch_zones(exam_id: int, camera_id: int) -> list[dict[str, Any]]:
         zones_qs = StudentZone.objects.filter(hall__offline_exams__id=exam_id, camera_id=camera_id)
         zones = [
             {
-                "id": z.id,
+                "id":           z.id,
                 "student_name": z.dynamic_student_name,
                 "student_code": z.student_code,
                 "seat_number":  z.dynamic_seat_number,
-                "x1": 0, "y1": 0, "x2": 1920, "y2": 1080  # FORCING FULL FRAME
+                "x1": z.x1,
+                "y1": z.y1,
+                "x2": z.x2,
+                "y2": z.y2,
             } for z in zones_qs
         ]
-        logger.debug("Fetched %d zone(s) for exam=%s camera=%s.", len(zones), exam_id, camera_id)
+        logger.info(
+            "Fetched %d zone(s) for exam=%s camera=%s. Coords: %s",
+            len(zones), exam_id, camera_id,
+            [(z["student_code"], z["x1"], z["y1"], z["x2"], z["y2"]) for z in zones],
+        )
         return zones
     except Exception as exc:
         logger.error("Failed to fetch zones locally (exam=%s, cam=%s): %s", exam_id, camera_id, exc)
