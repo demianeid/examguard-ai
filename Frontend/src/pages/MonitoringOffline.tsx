@@ -217,7 +217,8 @@ const OfflineMonitoringPage: FC = () => {
   useEffect(() => {
     if (!isMonitoring || !session?.id || !examIdParam) return;
 
-    const WS_BASE = (import.meta.env.VITE_WS_URL || 'ws://localhost:8000').replace(/\/$/, '');
+    const defaultWsUrl = `ws://${window.location.hostname}:8000`;
+    const WS_BASE = (import.meta.env.VITE_WS_URL || defaultWsUrl).replace(/\/$/, '');
     const wsUrl   = `${WS_BASE}/ws/exam/${examIdParam}/alerts/`;
     const ws      = new WebSocket(wsUrl);
 
