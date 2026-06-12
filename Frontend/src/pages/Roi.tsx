@@ -157,6 +157,11 @@ export default function ROIConfigurationPage() {
     loadStudents()
   }, [selectedHall?.id])
 
+  const snapshotUrlRef = useRef<string | null>(null)
+  useEffect(() => {
+    snapshotUrlRef.current = snapshotUrl
+  }, [snapshotUrl])
+
   // Fetch snapshot from the active camera
   const fetchSnapshot = useCallback(async () => {
     const cam = cameras.find((c) => c.name === activeCamera)
@@ -166,6 +171,7 @@ export default function ROIConfigurationPage() {
       setCameraFrameSize(null)
       return
     }
+    setSnapshotUrl(null)
     setSnapshotLoading(true)
     setSnapshotError(null)
     try {
@@ -189,7 +195,7 @@ export default function ROIConfigurationPage() {
     if (activeCamera && cameras.length > 0) {
       fetchSnapshot()
     }
-  }, [activeCamera, cameras.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeCamera, cameras.length, fetchSnapshot]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

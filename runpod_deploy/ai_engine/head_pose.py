@@ -50,9 +50,9 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # ── Thresholds ─────────────────────────────────────────────────────────────────
-YAW_THRESHOLD:      float = float(os.getenv("HEAD_YAW_THRESHOLD",   "30.0"))  # degrees
-PITCH_THRESHOLD:    float = float(os.getenv("HEAD_PITCH_THRESHOLD",  "20.0"))  # degrees
-MOVEMENT_THRESHOLD: float = float(os.getenv("HEAD_MOVE_THRESHOLD",   "15.0"))  # Δ degrees
+YAW_THRESHOLD:      float = float(os.getenv("HEAD_YAW_THRESHOLD",   "45.0"))  # degrees
+PITCH_THRESHOLD:    float = float(os.getenv("HEAD_PITCH_THRESHOLD",  "30.0"))  # degrees
+MOVEMENT_THRESHOLD: float = float(os.getenv("HEAD_MOVE_THRESHOLD",   "20.0"))  # Δ degrees
 
 # ── 3-D model points (generic face in mm, OpenCV convention) ───────────────────
 # Indices correspond to specific MediaPipe Face Mesh landmark IDs below.

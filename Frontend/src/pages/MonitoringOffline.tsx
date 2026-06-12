@@ -249,17 +249,18 @@ const OfflineMonitoringPage: FC = () => {
     };
   }, [isMonitoring, session?.id, examIdParam]);
 
-  // Fallback polling every 15 s (catches any alerts that missed the WS push)
+  // Poll alerts every 5 s — always on while monitoring
+  // (WebSocket push is a bonus on top of this reliable baseline)
   useEffect(() => {
-    if (!isMonitoring || !session?.id || wsConnected) return;
+    if (!isMonitoring || !session?.id) return;
     const interval = setInterval(async () => {
       try {
         const a = await monitoringApi.getAlerts(session.id);
         setAlerts(a);
       } catch { /* ignore */ }
-    }, 15_000);
+    }, 2_000);
     return () => clearInterval(interval);
-  }, [isMonitoring, session?.id, wsConnected]);
+  }, [isMonitoring, session?.id]);
 
   // Timer ticks while monitoring
   useEffect(() => {

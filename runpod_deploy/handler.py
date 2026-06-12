@@ -152,16 +152,17 @@ logger.info("=== All models ready. Worker accepting requests. ===")
 
 # ── Payload validators ────────────────────────────────────────────────────────
 
-def _validate_proctor(payload: dict) -> tuple[str, list, int, int]:
+def _validate_proctor(payload: dict) -> tuple[str | None, str | None, list, int, int]:
     """
     Validate the 'proctor' action payload.
 
-    Returns: frame_b64, zones, exam_id, session_id
+    Returns: frame_b64, stream_url, zones, exam_id, session_id
     Raises:  ValueError on missing / invalid fields.
     """
     frame_b64 = payload.get("frame")
-    if not isinstance(frame_b64, str) or not frame_b64.strip():
-        raise ValueError("'frame' must be a non-empty base64 string.")
+    stream_url = payload.get("stream_url")
+    if not frame_b64 and not stream_url:
+        raise ValueError("Must provide either 'frame' (base64) or 'stream_url'.")
 
     zones = payload.get("zones", [])
     if not isinstance(zones, list):
@@ -175,7 +176,7 @@ def _validate_proctor(payload: dict) -> tuple[str, list, int, int]:
     except (TypeError, ValueError) as exc:
         raise ValueError(f"'exam_id'/'session_id' must be integers: {exc}") from exc
 
-    return frame_b64, zones, exam_id, session_id
+    return frame_b64, stream_url, zones, exam_id, session_id
 
 
 def _validate_image(payload: dict) -> str:
@@ -205,18 +206,49 @@ def _validate_stored_embedding(payload: dict) -> list[float]:
 def _handle_proctor(payload: dict) -> dict:
     """
     Live-exam frame analysis.
-    Decodes the frame, crops student zones, runs YOLO + head-pose detectors.
+    Decodes the frame or pulls from stream_url, crops student zones, runs YOLO + head-pose detectors.
     """
     t0 = time.perf_counter()
 
-    frame_b64, zones, exam_id, session_id = _validate_proctor(payload)
+    frame_b64, stream_url, zones, exam_id, session_id = _validate_proctor(payload)
 
     logger.info(
-        "proctor | exam=%s  session=%s  zones=%d",
-        exam_id, session_id, len(zones),
+        "proctor | exam=%s  session=%s  zones=%d stream_url=%s",
+        exam_id, session_id, len(zones), bool(stream_url),
     )
 
-    results    = process_frame(frame_b64, zones)
+    if stream_url:
+        import cv2
+        # Use connection pooling to avoid RTSP handshake delay on every frame
+        if not hasattr(_handle_proctor, "_OPEN_STREAMS"):
+            _handle_proctor._OPEN_STREAMS = {}
+        
+        if stream_url not in _handle_proctor._OPEN_STREAMS:
+            source = int(stream_url) if str(stream_url).strip().isdigit() else stream_url
+            if isinstance(source, int):
+                cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+            else:
+                cap = cv2.VideoCapture(source)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            _handle_proctor._OPEN_STREAMS[stream_url] = cap
+            
+        cap = _handle_proctor._OPEN_STREAMS[stream_url]
+        if not cap.isOpened():
+            source = int(stream_url) if str(stream_url).strip().isdigit() else stream_url
+            if isinstance(source, int):
+                cap.open(source, cv2.CAP_DSHOW)
+            else:
+                cap.open(source)
+
+        cap.grab()
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            raise ValueError(f"Failed to read frame from stream_url: {stream_url}")
+        
+        results = process_frame(frame_b64=None, zones=zones, frame_raw=frame)
+    else:
+        results = process_frame(frame_b64=frame_b64, zones=zones)
+
     elapsed_ms = (time.perf_counter() - t0) * 1000
     alert_count = sum(len(r.get("alerts", [])) for r in results)
 

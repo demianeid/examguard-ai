@@ -384,14 +384,15 @@ def crop_zones(
 
 
 def process_frame(
-    frame_b64: str,
+    frame_b64: str | None,
     zones: list[dict[str, Any]],
     target_size: tuple[int, int] = MODEL_INPUT_SIZE,
+    frame_raw: np.ndarray | None = None,
 ) -> list[dict[str, Any]]:
     """
     Top-level entry point called by ``runpod_worker.handler``.
 
-    Decodes *frame_b64*, crops all *zones*, and returns a list of result
+    Decodes *frame_b64* or uses *frame_raw*, crops all *zones*, and returns a list of result
     dicts.  Phase 3 will attach detector output to ``ZoneCrop.alerts``
     **before** calling ``.to_dict()``; the current implementation returns
     empty alert lists as a wired-up (but inference-free) pipeline.
@@ -401,6 +402,7 @@ def process_frame(
     frame_b64   : Base64-encoded JPEG/PNG string.
     zones       : List of StudentZone dicts from the RunPod payload.
     target_size : Resize target forwarded to ``crop_zones``.
+    frame_raw   : Raw numpy array (H, W, 3) directly from IP Camera.
 
     Returns
     -------
@@ -408,9 +410,14 @@ def process_frame(
     """
     logger.info("process_frame() | zones=%d", len(zones))
 
-    # 1. Decode
+    # 1. Decode or use raw
     try:
-        frame = _decode_frame(frame_b64)
+        if frame_raw is not None:
+            frame = frame_raw
+        elif frame_b64:
+            frame = _decode_frame(frame_b64)
+        else:
+            raise ValueError("No frame_b64 or frame_raw provided")
     except ValueError as exc:
         logger.error("Frame decode error: %s", exc)
         return [

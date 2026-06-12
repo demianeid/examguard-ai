@@ -124,10 +124,11 @@ def _fetch_zones(exam_id: int, camera_id: int) -> list[dict[str, Any]]:
 
 
 def _post_to_runpod(
-    frame_b64: str,
+    frame_b64: Optional[str],
     zones:      list[dict],
     exam_id:    int,
     session_id: int,
+    stream_url: Optional[str] = None,
 ) -> Optional[dict]:
     """
     POST a frame + zones to the RunPod /runsync endpoint.
@@ -143,12 +144,15 @@ def _post_to_runpod(
 
     payload = {
         "input": {
-            "frame":      frame_b64,
             "zones":      zones,
             "exam_id":    exam_id,
             "session_id": session_id,
         }
     }
+    if frame_b64:
+        payload["input"]["frame"] = frame_b64
+    if stream_url:
+        payload["input"]["stream_url"] = stream_url
 
     from decouple import config
     api_key = config('RUNPOD_API_KEY', default='')
@@ -314,13 +318,24 @@ def dispatch_once(
     except Exception as exc:
         logger.warning("Failed to save debug frame: %s", exc)
 
-    # 2. Encode frame to base64 JPEG
+    # 2. Encode frame to base64 JPEG (only if local camera)
     t_start_pod = time.perf_counter()
-    try:
-        frame_b64 = encode_frame(frame, quality=FRAME_JPEG_QUALITY)
-    except RuntimeError as exc:
-        logger.error("Frame encoding failed: %s", exc)
-        return False
+    s_url = str(stream_url).strip().lower()
+    is_local_camera = (
+        s_url.isdigit() or 
+        "192.168." in s_url or 
+        "10." in s_url or 
+        "172." in s_url or 
+        "localhost" in s_url or
+        "127.0.0.1" in s_url
+    )
+    frame_b64 = None
+    if is_local_camera:
+        try:
+            frame_b64 = encode_frame(frame, quality=FRAME_JPEG_QUALITY)
+        except RuntimeError as exc:
+            logger.error("Frame encoding failed: %s", exc)
+            return False
 
     # 3. Fetch zone coords from Django
     zones = _fetch_zones(exam_id, camera_id)
@@ -329,7 +344,13 @@ def dispatch_once(
         return True  # not an error; exam may just have no zones yet
 
     # 4. Send to RunPod
-    response = _post_to_runpod(frame_b64, zones, exam_id, session_id)
+    response = _post_to_runpod(
+        frame_b64=frame_b64, 
+        zones=zones, 
+        exam_id=exam_id, 
+        session_id=session_id,
+        stream_url=None if is_local_camera else stream_url
+    )
     if response is None:
         return False
 
@@ -428,14 +449,31 @@ def dispatch_loop(
             if now - last_dispatch > 10.0:
                 zones = _fetch_zones(exam_id, camera_id)
 
-            try:
-                frame_b64 = encode_frame(frame, quality=FRAME_JPEG_QUALITY)
-            except RuntimeError as exc:
-                logger.error("Encode error: %s", exc)
-                last_dispatch = time.monotonic()
-                continue
+            s_url = str(stream_url).strip().lower()
+            is_local_camera = (
+                s_url.isdigit() or 
+                "192.168." in s_url or 
+                "10." in s_url or 
+                "172." in s_url or 
+                "localhost" in s_url or
+                "127.0.0.1" in s_url
+            )
+            frame_b64 = None
+            if is_local_camera:
+                try:
+                    frame_b64 = encode_frame(frame, quality=FRAME_JPEG_QUALITY)
+                except RuntimeError as exc:
+                    logger.error("Encode error: %s", exc)
+                    last_dispatch = time.monotonic()
+                    continue
 
-            response = _post_to_runpod(frame_b64, zones, exam_id, session_id)
+            response = _post_to_runpod(
+                frame_b64=frame_b64, 
+                zones=zones, 
+                exam_id=exam_id, 
+                session_id=session_id,
+                stream_url=None if is_local_camera else stream_url
+            )
             if response:
                 results = response.get("output", {}).get("results", [])
                 _post_alerts(results, session_id)
