@@ -42,6 +42,74 @@ interface Zone {
   cameraId?: number
 }
 
+// ── ZoneCard: a single zone entry in the right panel ─────────────────────────
+interface ZoneCardProps {
+  zone: Zone
+  editingZoneId: string | null
+  editStudentId: string
+  editStudentName: string
+  setEditStudentId: (v: string) => void
+  setEditStudentName: (v: string) => void
+  startEditZone: (z: Zone) => void
+  saveEditZone: () => void
+  cancelEditZone: () => void
+  deleteZone: (id: string) => void
+}
+
+function ZoneCard({
+  zone, editingZoneId, editStudentId, editStudentName,
+  setEditStudentId, setEditStudentName,
+  startEditZone, saveEditZone, cancelEditZone, deleteZone,
+}: ZoneCardProps) {
+  return (
+    <div className="bg-gray-50 border border-gray-200 border-l-[3px] border-l-yellow-600 rounded-lg overflow-hidden">
+      <div className="p-2.5">
+        {editingZoneId === zone.id ? (
+          <div>
+            <input
+              type="text"
+              value={editStudentId}
+              onChange={(e) => setEditStudentId(e.target.value)}
+              placeholder="Student ID"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors mb-1.5"
+            />
+            <input
+              type="text"
+              value={editStudentName}
+              onChange={(e) => setEditStudentName(e.target.value)}
+              placeholder="Student Name"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors mb-2"
+            />
+            <div className="flex gap-1.5">
+              <button onClick={saveEditZone} className="flex-1 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md flex items-center justify-center transition-all">
+                <Check size={14} />
+              </button>
+              <button onClick={cancelEditZone} className="flex-1 py-1.5 bg-gray-500 hover:bg-gray-600 text-white rounded-md flex items-center justify-center transition-all">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-gray-900">{zone.studentId}</div>
+              <div className="text-[11px] text-gray-400">Zone {zone.zoneNumber} · {zone.studentName || "Unknown"}</div>
+            </div>
+            <div className="flex gap-1">
+              <button onClick={() => startEditZone(zone)} title="Edit" className="p-1.5 bg-blue-50 hover:bg-blue-100 rounded-md text-blue-600 transition-all">
+                <Edit2 size={13} />
+              </button>
+              <button onClick={() => deleteZone(zone.id)} title="Delete" className="p-1.5 bg-red-50 hover:bg-red-100 rounded-md text-red-500 transition-all">
+                <Trash2 size={13} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ==================== ROIConfigurationPage (Zone Config) ====================
 export default function ROIConfigurationPage() {
   const [searchParams] = useSearchParams()
@@ -61,12 +129,8 @@ export default function ROIConfigurationPage() {
   const [zoneSaving, setZoneSaving] = useState(false)
   const [zoneError, setZoneError] = useState("")
 
-  // Camera snapshot state
-  const [snapshotUrl, setSnapshotUrl] = useState<string | null>(null)
-  const [snapshotLoading, setSnapshotLoading] = useState(false)
-  const [snapshotError, setSnapshotError] = useState<string | null>(null)
-  // Native camera frame dimensions (used for correct coordinate mapping)
-  const [cameraFrameSize, setCameraFrameSize] = useState<{ w: number; h: number } | null>(null)
+  // Hardcoded for NATIVE STREAM 1920x1080
+  const cameraFrameSize = { w: 1920, h: 1080 }
 
   const [isDrawing, setIsDrawing] = useState(false)
   const [currentRect, setCurrentRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
@@ -75,7 +139,9 @@ export default function ROIConfigurationPage() {
   const [studentName, setStudentName] = useState("")
   
   // Derived states for camera filtering
-  const activeCamId = cameras.find(c => c.name === activeCamera)?.id
+  const activeCam = cameras.find(c => c.name === activeCamera)
+  const activeCamId = activeCam?.id
+  const hasVideoStream = activeCam?.stream_url?.startsWith('http')
   const visibleZones = zones.filter(z => z.cameraId === activeCamId)
 
   const [showHallDropdown, setShowHallDropdown] = useState(false)
@@ -96,7 +162,6 @@ export default function ROIConfigurationPage() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const imageRef = useRef<HTMLImageElement | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -157,46 +222,6 @@ export default function ROIConfigurationPage() {
     loadStudents()
   }, [selectedHall?.id])
 
-  const snapshotUrlRef = useRef<string | null>(null)
-  useEffect(() => {
-    snapshotUrlRef.current = snapshotUrl
-  }, [snapshotUrl])
-
-  // Fetch snapshot from the active camera
-  const fetchSnapshot = useCallback(async () => {
-    const cam = cameras.find((c) => c.name === activeCamera)
-    if (!cam) {
-      setSnapshotUrl(null)
-      setSnapshotError(null)
-      setCameraFrameSize(null)
-      return
-    }
-    setSnapshotUrl(null)
-    setSnapshotLoading(true)
-    setSnapshotError(null)
-    try {
-      const data = await cameraApi.getSnapshot(cam.id)
-      setSnapshotUrl(data.snapshot)
-      setCameraFrameSize({ w: data.width, h: data.height })
-    } catch (err: any) {
-      setSnapshotError(
-        err?.response?.data?.error ||
-        "Camera offline or unreachable. Snapshot unavailable."
-      )
-      setSnapshotUrl(null)
-      setCameraFrameSize(null)
-    } finally {
-      setSnapshotLoading(false)
-    }
-  }, [cameras, activeCamera])
-
-  // Auto-fetch snapshot when the active camera changes
-  useEffect(() => {
-    if (activeCamera && cameras.length > 0) {
-      fetchSnapshot()
-    }
-  }, [activeCamera, cameras.length, fetchSnapshot]) // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (studentInputRef.current && !studentInputRef.current.contains(e.target as Node)) {
@@ -244,7 +269,7 @@ export default function ROIConfigurationPage() {
     load()
   }, [examIdParam])
 
-  // Redraw canvas whenever snapshot, zones or current drawing rect changes
+  // Redraw canvas whenever zones or current drawing rect changes
   useEffect(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
@@ -252,36 +277,24 @@ export default function ROIConfigurationPage() {
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    if (snapshotUrl) {
-      // Use the live camera frame as background
-      const img = new Image()
-      img.onload = () => {
-        imageRef.current = img
-        canvas.width = container.offsetWidth
-        canvas.height = Math.round((container.offsetWidth / img.naturalWidth) * img.naturalHeight)
-        drawCanvas(ctx, canvas, img)
-      }
-      img.src = snapshotUrl
+    if (hasVideoStream) {
+      // Native video stream mode — make canvas transparent overlay
+      canvas.width = container.offsetWidth
+      canvas.height = Math.round((container.offsetWidth / cameraFrameSize.w) * cameraFrameSize.h)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      drawZonesOnCanvas(ctx, canvas, null)
     } else {
-      // No snapshot — just clear + draw zones on a dark background
+      // No stream — just clear + draw zones on a dark background
       canvas.width = container.offsetWidth
       canvas.height = Math.round(container.offsetWidth * (9 / 16)) // 16:9 placeholder
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.fillStyle = "#1a1a2e"
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       drawZonesOnCanvas(ctx, canvas, null)
     }
-  }, [visibleZones, currentRect, snapshotUrl])
+  }, [visibleZones, currentRect, hasVideoStream])
 
-  const drawCanvas = (
-    ctx: CanvasRenderingContext2D,
-    canvas: HTMLCanvasElement,
-    img: HTMLImageElement
-  ) => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    // Draw the full camera snapshot as background (no cropping)
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-    drawZonesOnCanvas(ctx, canvas, img)
-  }
+  // Removed drawCanvas as we no longer draw background images from snapshots
 
   const drawZonesOnCanvas = (
     ctx: CanvasRenderingContext2D,
@@ -289,10 +302,10 @@ export default function ROIConfigurationPage() {
     img: HTMLImageElement | null,
   ) => {
     // Scale zones from native camera pixel space → canvas display space
-    const nativeW = cameraFrameSize?.w ?? img?.naturalWidth ?? canvas.width
-    const nativeH = cameraFrameSize?.h ?? img?.naturalHeight ?? canvas.height
-    const scaleX = canvas.width  / (nativeW  || canvas.width)
-    const scaleY = canvas.height / (nativeH || canvas.height)
+    const nativeW = cameraFrameSize.w
+    const nativeH = cameraFrameSize.h
+    const scaleX = canvas.width  / nativeW
+    const scaleY = canvas.height / nativeH
 
     visibleZones.forEach((zone, index) => {
       const scaledRect = {
@@ -359,8 +372,8 @@ export default function ROIConfigurationPage() {
     // Zones are stored in camera-pixel space so the AI backend receives
     // the correct crop coordinates relative to the actual camera frame.
     const canvas = canvasRef.current
-    const nativeW = cameraFrameSize?.w ?? canvas?.width ?? 1
-    const nativeH = cameraFrameSize?.h ?? canvas?.height ?? 1
+    const nativeW = cameraFrameSize.w
+    const nativeH = cameraFrameSize.h
     const displayW = canvas?.width  ?? nativeW
     const displayH = canvas?.height ?? nativeH
 
@@ -567,26 +580,39 @@ export default function ROIConfigurationPage() {
       <div className="flex-1 flex">
         {/* Canvas column */}
         <div className="flex-1 p-6 flex flex-col gap-3">
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow-xl">
+            {/* Canvas toolbar */}
+            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-900 border-b border-gray-800">
+              <div className="flex items-center gap-2.5">
+                <Video size={14} className="text-blue-400" />
+                <span className="text-white text-xs font-semibold tracking-wide">
+                  {activeCamera || 'No Camera Selected'}
+                </span>
+                {hasVideoStream && (
+                  <span className="flex items-center gap-1.5 bg-red-500/20 border border-red-500/40 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    NATIVE STREAM
+                  </span>
+                )}
+                {cameraFrameSize && (
+                  <span className="text-gray-500 text-[10px] font-mono">
+                    {cameraFrameSize.w}×{cameraFrameSize.h}
+                  </span>
+                )}
+              </div>
+            </div>
+
             <div
               ref={containerRef}
-              className="relative cursor-crosshair bg-gray-900 min-h-[340px]"
+              className="relative cursor-crosshair bg-gray-950 min-h-[340px]"
             >
-              {/* Snapshot loading overlay */}
-              {snapshotLoading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/90 z-10">
-                  <Loader2 size={32} className="text-blue-400 animate-spin" />
-                  <p className="text-gray-300 text-sm">Loading camera snapshot…</p>
-                </div>
-              )}
-
-              {/* Snapshot error / offline */}
-              {snapshotError && !snapshotLoading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900/80 z-10 pointer-events-none">
-                  <WifiOff size={32} className="text-red-400" />
-                  <p className="text-red-300 text-sm text-center px-6">{snapshotError}</p>
-                  <p className="text-gray-400 text-xs">You can still draw zones, but coordinates may not align.</p>
-                </div>
+              {/* Native MJPEG IP Camera Stream Background */}
+              {hasVideoStream && activeCam && (
+                <img
+                  src={activeCam.stream_url}
+                  alt="Live IP Camera Stream"
+                  className="w-full block"
+                />
               )}
 
               <canvas
@@ -595,12 +621,13 @@ export default function ROIConfigurationPage() {
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
-                className="w-full block"
+                className={`w-full block ${hasVideoStream ? 'absolute inset-0 z-10' : ''}`}
               />
               {cameras.length === 0 && !camerasLoading && (
+
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 min-h-[340px]">
-                  <Crosshair size={32} className="text-gray-300" />
-                  <p className="text-gray-400 text-sm m-0 text-center">
+                  <Crosshair size={32} className="text-gray-600" />
+                  <p className="text-gray-500 text-sm m-0 text-center">
                     Select a camera to start drawing Regions of Interest (ROI).
                   </p>
                 </div>
@@ -612,27 +639,10 @@ export default function ROIConfigurationPage() {
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Crosshair size={14} className="text-blue-600" />
               Click and drag to draw a new bounding box.
-              {cameraFrameSize && (
-                <span className="text-xs text-gray-400 ml-2">
-                  Frame: {cameraFrameSize.w}×{cameraFrameSize.h}px
-                </span>
-              )}
             </div>
-            <div className="flex items-center gap-2">
-              {activeCamera && cameras.length > 0 && (
-                <button
-                  onClick={fetchSnapshot}
-                  disabled={snapshotLoading}
-                  title="Refresh camera snapshot"
-                  className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-all disabled:opacity-40"
-                >
-                  <RefreshCw size={13} className={snapshotLoading ? "animate-spin" : ""} />
-                </button>
-              )}
-              <span className="bg-blue-50 text-blue-600 px-3 py-0.5 rounded-full text-xs font-medium">
-                {visibleZones.length} active zones mapped
-              </span>
-            </div>
+            <span className="bg-blue-50 text-blue-600 px-3 py-0.5 rounded-full text-xs font-medium">
+              {visibleZones.length} active zones mapped
+            </span>
           </div>
         </div>
 
@@ -742,70 +752,19 @@ export default function ROIConfigurationPage() {
             ) : (
               <div className="flex flex-col gap-2">
                 {visibleZones.map((zone) => (
-                  <div
+                  <ZoneCard
                     key={zone.id}
-                    className="bg-gray-50 border border-gray-200 border-l-[3px] border-l-yellow-600 rounded-lg p-2.5"
-                  >
-                    {editingZoneId === zone.id ? (
-                      <div>
-                        <input
-                          type="text"
-                          value={editStudentId}
-                          onChange={(e) => setEditStudentId(e.target.value)}
-                          placeholder="Student ID"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors mb-1.5"
-                        />
-                        <input
-                          type="text"
-                          value={editStudentName}
-                          onChange={(e) => setEditStudentName(e.target.value)}
-                          placeholder="Student Name"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white outline-none focus:border-blue-500 transition-colors mb-2"
-                        />
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={saveEditZone}
-                            className="flex-1 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md flex items-center justify-center transition-all"
-                          >
-                            <Check size={14} />
-                          </button>
-                          <button
-                            onClick={cancelEditZone}
-                            className="flex-1 py-1.5 bg-gray-500 hover:bg-gray-600 text-white rounded-md flex items-center justify-center transition-all"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-sm font-semibold text-gray-900">
-                            {zone.studentId}
-                          </div>
-                          <div className="text-[11px] text-gray-400">
-                            Zone {zone.zoneNumber} · {zone.studentName || "Unknown"}
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => startEditZone(zone)}
-                            title="Edit"
-                            className="p-1.5 bg-blue-50 hover:bg-blue-100 rounded-md text-blue-600 transition-all"
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button
-                            onClick={() => deleteZone(zone.id)}
-                            title="Delete"
-                            className="p-1.5 bg-red-50 hover:bg-red-100 rounded-md text-red-500 transition-all"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    zone={zone}
+                    editingZoneId={editingZoneId}
+                    editStudentId={editStudentId}
+                    editStudentName={editStudentName}
+                    setEditStudentId={setEditStudentId}
+                    setEditStudentName={setEditStudentName}
+                    startEditZone={startEditZone}
+                    saveEditZone={saveEditZone}
+                    cancelEditZone={cancelEditZone}
+                    deleteZone={deleteZone}
+                  />
                 ))}
               </div>
             )}

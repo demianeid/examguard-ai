@@ -55,6 +55,47 @@ interface Feature {
   status: boolean;
 }
 
+// --- Live Zone Canvas Component ---
+// Crops an MJPEG live stream in real-time onto a canvas (0 lag)
+// Defined OUTSIDE to prevent React from unmounting it on every parent render
+const LiveZoneCanvas: FC<{ streamUrl: string; zone: StudentZone }> = ({ streamUrl, zone }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    let animationId: number;
+    const draw = () => {
+      const canvas = canvasRef.current;
+      const img = imgRef.current;
+      if (canvas && img && img.complete && img.naturalWidth > 0) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          // Zone bounds (rounded to avoid floating point canvas resizing loops)
+          const x = Math.round(Math.max(0, zone.x1));
+          const y = Math.round(Math.max(0, zone.y1));
+          const w = Math.round(Math.max(1, zone.x2 - zone.x1));
+          const h = Math.round(Math.max(1, zone.y2 - zone.y1));
+
+          if (canvas.width !== w) canvas.width = w;
+          if (canvas.height !== h) canvas.height = h;
+
+          ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+        }
+      }
+      animationId = requestAnimationFrame(draw);
+    };
+    animationId = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animationId);
+  }, [zone.x1, zone.y1, zone.x2, zone.y2]);
+
+  return (
+    <>
+      <img ref={imgRef} src={streamUrl} style={{ display: 'none' }} crossOrigin="anonymous" />
+      <canvas ref={canvasRef} className="w-full h-full object-cover rounded-xl block bg-black" />
+    </>
+  );
+};
+
 const OfflineMonitoringPage: FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -83,8 +124,10 @@ const OfflineMonitoringPage: FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
   const [wsConnected, setWsConnected] = useState(false);
+  const [expandedSnap, setExpandedSnap] = useState<string | null>(null);
+  const [expandedCameraUrl, setExpandedCameraUrl] = useState<string | null>(null);
 
-  // Live camera snapshot for selected student
+  // Snapshot fallback for local webcams (e.g., "0")
   const [seatSnapshot, setSeatSnapshot] = useState<string | null>(null);
   const [seatSnapshotLoading, setSeatSnapshotLoading] = useState(false);
   const seatSnapshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -95,12 +138,13 @@ const OfflineMonitoringPage: FC = () => {
   const seats: Seat[] = React.useMemo(() => {
     return zones.map((zone, i) => {
       const zoneAlerts = alerts.filter(a => a.zone === zone.id);
-      const highCount = zoneAlerts.filter(a => a.severity === 'high').length;
+      const highCount   = zoneAlerts.filter(a => a.severity === 'high').length;
       const mediumCount = zoneAlerts.filter(a => a.severity === 'medium').length;
+      const lowCount    = zoneAlerts.filter(a => a.severity === 'low').length;
 
       let status: SeatStatus = 'normal';
       if (highCount > 0) status = 'alert';
-      else if (mediumCount > 0) status = 'warning';
+      else if (mediumCount > 0 || lowCount > 0) status = 'warning';
 
       const cam = hallCameras.find(c => c.id === zone.camera);
       const faceAlerts = zoneAlerts.filter(a =>
@@ -110,8 +154,16 @@ const OfflineMonitoringPage: FC = () => {
       return {
         id: i + 1,
         studentId: String(zone.student_code || ''),
-        studentName: zone.student_name || `Student ${zone.student_code || 'Unknown'}`,
-        seatNumber: zone.seat_number || `Seat ${i + 1}`,
+        // Prefer the dynamically-resolved name from enrollment; fall back to static field
+        studentName:
+          zone.dynamic_student_name ||
+          zone.student_name ||
+          `Student ${zone.student_code || i + 1}`,
+        // Prefer the dynamically-resolved seat number; fall back to static field
+        seatNumber:
+          zone.dynamic_seat_number ||
+          zone.seat_number ||
+          String(i + 1),
         status,
         faceMatch: faceAlerts.length === 0,
         violations: zoneAlerts.length,
@@ -230,7 +282,11 @@ const OfflineMonitoringPage: FC = () => {
     ws.onmessage = (event) => {
       try {
         const alert = JSON.parse(event.data) as HwAlert;
-        setAlerts(prev => [alert, ...prev]);
+        setAlerts(prev => {
+          // Prevent duplicates if REST API already fetched it
+          if (prev.some(a => a.id === alert.id)) return prev;
+          return [alert, ...prev];
+        });
       } catch (e) {
         console.warn('[WS] Could not parse message:', event.data);
       }
@@ -243,13 +299,26 @@ const OfflineMonitoringPage: FC = () => {
       console.log('[WS] Disconnected');
     };
 
+    // FALLBACK: Poll the database every 1 second.
+    // This is required because run_local_ai runs in a separate process, and
+    // Django's InMemoryChannelLayer cannot route messages between processes!
+    const pollInterval = setInterval(async () => {
+      try {
+        const freshAlerts = await monitoringApi.getAlerts(session.id);
+        setAlerts(freshAlerts);
+      } catch (err) {
+        console.error('[Polling] Failed to fetch alerts:', err);
+      }
+    }, 1000);
+
     return () => {
       ws.close();
       setWsConnected(false);
+      clearInterval(pollInterval);
     };
   }, [isMonitoring, session?.id, examIdParam]);
 
-  // Poll alerts every 5 s — always on while monitoring
+  // Poll alerts every 1 s — always on while monitoring
   // (WebSocket push is a bonus on top of this reliable baseline)
   useEffect(() => {
     if (!isMonitoring || !session?.id) return;
@@ -258,26 +327,18 @@ const OfflineMonitoringPage: FC = () => {
         const a = await monitoringApi.getAlerts(session.id);
         setAlerts(a);
       } catch { /* ignore */ }
-    }, 2_000);
+    }, 1000);
     return () => clearInterval(interval);
   }, [isMonitoring, session?.id]);
 
-  // Timer ticks while monitoring
+  // Zone snapshot — polls the cropped zone view every 2s when a seat is selected
   useEffect(() => {
-    if (!isMonitoring) return;
-    const timer = setInterval(() => setTime(prev => prev + 1), 1000);
-    return () => clearInterval(timer);
-  }, [isMonitoring]);
-
-  // Live snapshot polling for selected student's camera (every 4 s)
-  useEffect(() => {
-    // Clear any existing interval
     if (seatSnapshotIntervalRef.current) {
       clearInterval(seatSnapshotIntervalRef.current);
       seatSnapshotIntervalRef.current = null;
     }
 
-    if (!selectedSeat?.cameraId) {
+    if (!selectedSeat?.zoneId) {
       setSeatSnapshot(null);
       return;
     }
@@ -285,7 +346,7 @@ const OfflineMonitoringPage: FC = () => {
     const fetchSnap = async () => {
       setSeatSnapshotLoading(true);
       try {
-        const data = await cameraApi.getSnapshot(selectedSeat.cameraId!);
+        const data = await studentZoneApi.getZoneSnapshot(selectedSeat.zoneId);
         setSeatSnapshot(data.snapshot);
       } catch {
         setSeatSnapshot(null);
@@ -294,9 +355,8 @@ const OfflineMonitoringPage: FC = () => {
       }
     };
 
-    // Fetch immediately, then poll every 4 seconds
     fetchSnap();
-    seatSnapshotIntervalRef.current = setInterval(fetchSnap, 4000);
+    seatSnapshotIntervalRef.current = setInterval(fetchSnap, 2000);
 
     return () => {
       if (seatSnapshotIntervalRef.current) {
@@ -304,7 +364,14 @@ const OfflineMonitoringPage: FC = () => {
         seatSnapshotIntervalRef.current = null;
       }
     };
-  }, [selectedSeat?.cameraId]);
+  }, [selectedSeat?.zoneId]);
+
+  // Timer ticks while monitoring
+  useEffect(() => {
+    if (!isMonitoring) return;
+    const timer = setInterval(() => setTime(prev => prev + 1), 1000);
+    return () => clearInterval(timer);
+  }, [isMonitoring]);
 
   // --- Actions ---
   const onStartMonitoringClick = () => {
@@ -479,7 +546,7 @@ const OfflineMonitoringPage: FC = () => {
     try {
       const newAlert = await monitoringApi.createAlert(session.id, {
         zone: selectedSeat.zoneId,
-        alert_type: 'head_movement',
+        alert_type: 'manual_flag',
         severity: 'high',
       });
       setAlerts(prev => [...prev, newAlert]);
@@ -530,80 +597,102 @@ const OfflineMonitoringPage: FC = () => {
   // ============================
   // Sub-components
   // ============================
-  const StatusBar: FC = () => (
-    <div className="bg-gradient-to-r from-blue-900 to-blue-800 text-white p-4 shadow-lg">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <Radio className={`${isMonitoring ? 'text-green-400 animate-pulse' : 'text-gray-400'}`} size={24} />
-              <div>
-                <p className="text-xs opacity-75">Monitoring Status</p>
-                <p className="font-bold text-lg">{isMonitoring ? 'LIVE' : 'STOPPED'}</p>
-              </div>
-            </div>
-
-            <div className="h-10 w-px bg-blue-600"></div>
-
-            <div className="flex items-center gap-3">
-              <Clock size={24} />
-              <div>
-                <p className="text-xs opacity-75">Exam Duration</p>
-                <p className="font-bold text-lg">{formatTime(time)}</p>
-              </div>
-            </div>
-
-            <div className="h-10 w-px bg-blue-600"></div>
-
-            {/* WebSocket status badge */}
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${wsConnected ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
-              <div>
-                <p className="text-xs opacity-75">Alerts Channel</p>
-                <p className="font-bold text-sm">{wsConnected ? 'WS LIVE' : 'POLLING'}</p>
-              </div>
-            </div>
-
-            <div className="h-10 w-px bg-blue-600"></div>
-
-            <div className="flex items-center gap-3">
-              <WifiOff size={24} className="text-green-400" />
-              <div>
-                <p className="text-xs opacity-75">Mode</p>
-                <p className="font-bold">OFFLINE</p>
-              </div>
-            </div>
+  const renderStatusBar = () => (
+    <header className="bg-gradient-to-r from-blue-900 to-blue-800 text-white px-6 py-3 shadow-lg">
+      <div className="max-w-screen-2xl mx-auto flex items-center justify-between gap-4">
+        {/* Brand */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center">
+            <Shield size={18} className="text-white" />
           </div>
-
-          <div className="flex items-center gap-3">
-            {!isMonitoring && examIdParam && (
-              <button
-                onClick={onStartMonitoringClick}
-                disabled={actionLoading}
-                className="bg-green-500 hover:bg-green-600 disabled:opacity-50 px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
-              >
-                {actionLoading ? <Loader2 size={20} className="animate-spin" /> : <Play size={20} />}
-                Start Monitoring
-              </button>
-            )}
-            {isMonitoring && (
-              <button
-                onClick={handleEndMonitoringClick}
-                disabled={actionLoading}
-                className="bg-red-500 hover:bg-red-600 disabled:opacity-50 px-6 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2"
-              >
-                {actionLoading ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
-                End Exam
-              </button>
-            )}
+          <div>
+            <p className="font-extrabold text-sm leading-tight tracking-wide text-white">
+              {exam?.title || 'Exam Monitor'}
+            </p>
+            <p className="text-[10px] text-blue-200 font-medium">
+              {exam?.hall_name || ''} · Offline Mode
+            </p>
           </div>
         </div>
-        {actionError && <p className="mt-2 text-sm text-red-300">{actionError}</p>}
+
+        {/* Status pills */}
+        <div className="flex items-center gap-3 flex-wrap justify-center">
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${
+            isMonitoring
+              ? 'bg-green-500/20 border-green-400/50 text-green-200'
+              : 'bg-white/10 border-white/20 text-blue-200'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${ isMonitoring ? 'bg-green-400 animate-pulse' : 'bg-blue-300' }`} />
+            {isMonitoring ? 'LIVE' : 'STOPPED'}
+          </div>
+
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-mono font-bold text-white">
+            <Clock size={12} className="text-blue-200" />
+            {formatTime(time)}
+          </div>
+
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border ${
+            wsConnected
+              ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-200'
+              : 'bg-yellow-500/20 border-yellow-400/50 text-yellow-200'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${ wsConnected ? 'bg-cyan-400 animate-pulse' : 'bg-yellow-400' }`} />
+            {wsConnected ? 'WS LIVE' : 'POLLING'}
+          </div>
+
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-bold text-white">
+            <Camera size={12} className="text-blue-200" />
+            {hallCameras.length} Camera{hallCameras.length !== 1 ? 's' : ''}
+          </div>
+
+          {alerts.length > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/20 border border-red-400/50 text-xs font-bold text-red-200">
+              <AlertCircle size={12} />
+              {alerts.length} Alert{alerts.length !== 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleGenerateReport}
+            disabled={!session?.id || actionLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 text-xs font-semibold transition-all disabled:opacity-40"
+          >
+            <FileSpreadsheet size={13} />
+            Export
+          </button>
+
+          {!isMonitoring && examIdParam && (
+            <button
+              onClick={onStartMonitoringClick}
+              disabled={actionLoading}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-green-500 hover:bg-green-400 text-xs font-bold shadow-lg shadow-green-900/30 transition-all disabled:opacity-50"
+            >
+              {actionLoading ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+              Start Monitoring
+            </button>
+          )}
+          {isMonitoring && (
+            <button
+              onClick={handleEndMonitoringClick}
+              disabled={actionLoading}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-xs font-bold shadow-lg shadow-red-900/30 transition-all disabled:opacity-50"
+            >
+              {actionLoading ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              End Exam
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+      {actionError && (
+        <p className="text-center text-xs text-red-300 mt-1">{actionError}</p>
+      )}
+    </header>
   );
 
-  const HallSelector: FC = () => (
+  const renderHallSelector = () => (
     <div className="bg-white rounded-lg shadow-md p-4 mb-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-gray-800">Select Exam Hall</h3>
@@ -653,105 +742,94 @@ const OfflineMonitoringPage: FC = () => {
     </div>
   );
 
-  const StatsGrid: FC = () => (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <div className="bg-white p-4 rounded-lg shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-100 p-3 rounded-lg"><Users className="text-blue-600" size={24} /></div>
+  const renderStatsGrid = () => (
+    <div className="grid grid-cols-4 gap-3">
+      {[
+        { label: 'Total Students', value: stats.totalStudents,  icon: <Users size={18}/>,         bg: 'bg-blue-100',   text: 'text-blue-600',   border: 'border-blue-200' },
+        { label: 'Normal',         value: stats.normalBehavior, icon: <CheckCircle size={18}/>,   bg: 'bg-green-100',  text: 'text-green-600',  border: 'border-green-200' },
+        { label: 'Suspicious',     value: stats.suspicious,     icon: <AlertTriangle size={18}/>, bg: 'bg-yellow-100', text: 'text-yellow-600', border: 'border-yellow-200' },
+        { label: 'Violations',     value: stats.violations,     icon: <XCircle size={18}/>,       bg: 'bg-red-100',    text: 'text-red-600',    border: 'border-red-200' },
+      ].map(({ label, value, icon, bg, text, border }) => (
+        <div key={label} className={`bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm border ${border}`}>
+          <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center ${text} shrink-0`}>
+            {icon}
+          </div>
           <div>
-            <p className="text-xs text-gray-600">Total Students</p>
-            <p className="text-2xl font-bold text-gray-800">{stats.totalStudents}</p>
+            <p className="text-2xl font-extrabold text-gray-800 leading-none">{value}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5 font-medium">{label}</p>
           </div>
         </div>
-      </div>
-      <div className="bg-white p-4 rounded-lg shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="bg-green-100 p-3 rounded-lg"><CheckCircle className="text-green-600" size={24} /></div>
-          <div>
-            <p className="text-xs text-gray-600">Normal Behavior</p>
-            <p className="text-2xl font-bold text-green-600">{stats.normalBehavior}</p>
-          </div>
-        </div>
-      </div>
-      <div className="bg-white p-4 rounded-lg shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="bg-yellow-100 p-3 rounded-lg"><AlertTriangle className="text-yellow-600" size={24} /></div>
-          <div>
-            <p className="text-xs text-gray-600">Suspicious</p>
-            <p className="text-2xl font-bold text-yellow-600">{stats.suspicious}</p>
-          </div>
-        </div>
-      </div>
-      <div className="bg-white p-4 rounded-lg shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="bg-red-100 p-3 rounded-lg"><XCircle className="text-red-600" size={24} /></div>
-          <div>
-            <p className="text-xs text-gray-600">Violations</p>
-            <p className="text-2xl font-bold text-red-600">{stats.violations}</p>
-          </div>
-        </div>
-      </div>
+      ))}
     </div>
   );
 
-  const SeatingMapView: FC = () => (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <MapPin className="text-blue-600" size={24} />
+  const renderSeatingMapView = () => (
+    <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden flex-1">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <div className="flex items-center gap-2.5">
+          <MapPin size={16} className="text-blue-600" />
           <div>
-            <h3 className="font-semibold text-gray-800">Hall Seating Map</h3>
-            <p className="text-sm text-gray-600">Monitoring {currentHall?.name ?? exam?.hall_name ?? 'N/A'}</p>
+            <h3 className="font-bold text-gray-800 text-sm">Seating Map</h3>
+            <p className="text-[10px] text-gray-500">{currentHall?.name ?? exam?.hall_name ?? 'N/A'}</p>
           </div>
         </div>
+        <div className="flex items-center gap-3 text-[10px] text-gray-500">
+          {[['bg-green-500','Normal'],['bg-yellow-500','Suspicious'],['bg-red-500','Violation'],['bg-gray-300','Empty']].map(([c,l]) => (
+            <span key={l} className="flex items-center gap-1">
+              <span className={`w-2 h-2 rounded-sm ${c}`} />{l}
+            </span>
+          ))}
+        </div>
       </div>
-
-      <div className="flex items-center gap-6 mb-4 text-sm">
-        <div className="flex items-center gap-2"><div className="w-4 h-4 bg-green-500 rounded"></div><span className="text-gray-600">Normal</span></div>
-        <div className="flex items-center gap-2"><div className="w-4 h-4 bg-yellow-500 rounded"></div><span className="text-gray-600">Suspicious</span></div>
-        <div className="flex items-center gap-2"><div className="w-4 h-4 bg-red-500 rounded"></div><span className="text-gray-600">Violation</span></div>
-        <div className="flex items-center gap-2"><div className="w-4 h-4 bg-gray-300 rounded"></div><span className="text-gray-600">Empty</span></div>
-      </div>
-
-      <div className="bg-gray-50 p-6 rounded-lg">
+      {/* Grid */}
+      <div className="p-5 bg-gray-50">
         {zonesLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="animate-spin text-blue-600" size={24} />
-            <span className="ml-3 text-gray-600">Loading zones...</span>
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="animate-spin text-blue-600" size={28} />
+            <span className="ml-3 text-gray-500 text-sm">Loading zones...</span>
           </div>
         ) : seats.length === 0 ? (
-          <p className="text-center text-gray-500 py-8">
-            {examIdParam
-              ? 'No zones configured. Go to Zone Config to set up student zones.'
-              : 'No seats to display. Select a hall with capacity.'}
-          </p>
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <MapPin size={36} className="text-gray-400 mb-3" />
+            <p className="text-gray-500 text-sm">
+              {examIdParam ? 'No zones configured. Go to Zone Config.' : 'No seats to display.'}
+            </p>
+          </div>
         ) : (
-          <div className="grid grid-cols-8 gap-3">
-            {seats.map(seat => (
-              <button
-                key={seat.id}
-                onClick={() => setSelectedSeat(seat)}
-                className={`relative aspect-square rounded-lg ${getStatusColor(seat.status)}
-                  hover:ring-2 hover:ring-blue-500 transition-all group cursor-pointer
-                  ${selectedSeat?.id === seat.id ? 'ring-4 ring-blue-500 scale-110' : ''}`}
-              >
-                <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-sm">
-                  {seat.id}
-                </span>
-                {seat.violations > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    {seat.violations}
+          <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))' }}>
+            {seats.map(seat => {
+              const colors = {
+                normal: 'bg-green-500 hover:bg-green-600 shadow-green-200',
+                warning: 'bg-yellow-500 hover:bg-yellow-600 shadow-yellow-200',
+                alert: 'bg-red-500 hover:bg-red-600 shadow-red-200',
+              };
+              return (
+                <button
+                  key={seat.id}
+                  onClick={() => setSelectedSeat(seat)}
+                  title={seat.studentName}
+                  className={`relative aspect-square rounded-xl ${
+                    colors[seat.status]
+                  } shadow-md hover:scale-110 transition-all duration-150 ${
+                    selectedSeat?.id === seat.id ? 'ring-2 ring-blue-500 ring-offset-2 scale-110' : ''
+                  }`}
+                >
+                  <span className="absolute inset-0 flex items-center justify-center text-white font-bold text-[11px]">
+                    {seat.seatNumber}
                   </span>
-                )}
-                {!seat.faceMatch && (
-                  <AlertCircle className="absolute -bottom-1 -right-1 text-red-600 bg-white rounded-full" size={16} />
-                )}
-              </button>
-            ))}
+                  {seat.violations > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-red-700 border border-white text-white text-[9px] font-extrabold rounded-full w-[18px] h-[18px] flex items-center justify-center shadow">
+                      {seat.violations}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
-        <div className="mt-4 text-center">
-          <div className="bg-gray-300 text-gray-700 py-2 px-4 rounded-lg inline-block font-semibold">
+        <div className="mt-5 text-center">
+          <div className="inline-flex items-center gap-2 bg-gray-200 text-gray-600 text-xs font-semibold px-4 py-2 rounded-lg">
             📋 Front / Proctor Station
           </div>
         </div>
@@ -759,203 +837,54 @@ const OfflineMonitoringPage: FC = () => {
     </div>
   );
 
-  const AlertsPanel: FC = () => (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <AlertCircle className="text-red-600" size={24} />
-          <h3 className="font-semibold text-gray-800">Live Alerts</h3>
-        </div>
-        <span className="text-sm text-gray-500">{alerts.length} total</span>
-      </div>
-
-      {alertsLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="animate-spin text-blue-600" size={24} />
-        </div>
-      ) : alerts.length === 0 ? (
-        <p className="text-gray-500 text-center py-8 text-sm">No alerts yet.</p>
-      ) : (
-        <div className="space-y-2 max-h-96 overflow-y-auto">
-          {alerts.map(a => {
-            // Resolve student identity info from alert fields
-            const matchedZone = zones.find(z => z.id === a.zone);
-            const displayName = a.student_name || matchedZone?.student_name || `Zone ${a.zone}`;
-            const displaySeat = a.seat_number || matchedZone?.seat_number || '';
-            const displayId   = matchedZone?.student_code || '';
-            return (
-              <div
-                key={a.id}
-                className={`p-3 rounded-lg border-l-4 ${
-                  a.severity === 'high' ? 'border-red-500 bg-red-50' :
-                  a.severity === 'medium' ? 'border-orange-500 bg-orange-50' :
-                  'border-yellow-500 bg-yellow-50'
-                } ${a.is_reviewed ? 'opacity-60' : ''}`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className={`p-2 rounded-lg ${getSeverityColor(a.severity)}`}>
-                      {getAlertIcon(a.alert_type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      {/* Name + Seat row */}
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-semibold text-gray-800 truncate">{displayName}</span>
-                        {displaySeat && (
-                          <span className="text-[10px] font-bold bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded shrink-0">
-                            Seat {displaySeat}
-                          </span>
-                        )}
-                      </div>
-                      {/* Student ID row */}
-                      {displayId && (
-                        <p className="text-[10px] text-gray-400 font-mono mb-0.5">ID: {displayId}</p>
-                      )}
-                      {/* Alert type + timestamp */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-600">{a.alert_type.replace(/_/g, ' ')}</span>
-                        <span className="text-[10px] text-gray-400">{new Date(a.timestamp).toLocaleTimeString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                  {!a.is_reviewed && (
-                    <button onClick={() => handleReviewAlert(a.id)} title="Mark reviewed" className="text-gray-400 hover:text-green-600 shrink-0">
-                      <Eye size={18} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-
-  const StudentDetailsPanel: FC = () => {
-    if (!selectedSeat) {
-      return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="text-center py-8">
-            <User className="mx-auto text-gray-300 mb-3" size={48} />
-            <p className="text-gray-500">Select a seat to view student details</p>
-          </div>
-        </div>
-      );
-    }
+  const renderFullCameraStream = () => {
+    if (!hallCameras || hallCameras.length === 0) return null;
 
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-800">Student Details</h3>
-          <button onClick={() => setSelectedSeat(null)} className="text-gray-400 hover:text-gray-600">×</button>
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700">
+          <div className="flex items-center gap-2">
+            <Video size={14} className="text-white" />
+            <h3 className="font-bold text-white text-sm">Live Camera{hallCameras.length > 1 ? 's' : ''}</h3>
+          </div>
+          {isMonitoring && (
+            <span className="flex items-center gap-1.5 bg-green-500/20 border border-green-400/50 text-green-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              LIVE
+            </span>
+          )}
         </div>
-        <div className="space-y-4">
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <div className="flex items-center gap-4 mb-3">
-              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl">
-                {selectedSeat.studentName.charAt(0)}
-              </div>
-              <div>
-                <h4 className="font-bold text-gray-800">{selectedSeat.studentName}</h4>
-                <p className="text-sm text-gray-600">ID: {selectedSeat.studentId}</p>
-                <p className="text-xs text-gray-500">{selectedSeat.seatNumber}</p>
-              </div>
-            </div>
-            <div className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
-              selectedSeat.status === 'normal' ? 'bg-green-100 text-green-700' :
-              selectedSeat.status === 'warning' ? 'bg-yellow-100 text-yellow-700' :
-              'bg-red-100 text-red-700'
-            }`}>
-              {selectedSeat.status.toUpperCase()}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <p className="text-xs text-gray-600 mb-1">Violations</p>
-              <p className="text-2xl font-bold text-blue-600">{selectedSeat.violations}</p>
-            </div>
-            <div className="bg-green-50 p-3 rounded-lg">
-              <p className="text-xs text-gray-600 mb-1">Face Match</p>
-              <p className="text-2xl font-bold text-green-600">{selectedSeat.faceMatch ? '✓' : '✗'}</p>
-            </div>
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-700 mb-2">Camera Feed</p>
-            <div className="bg-gray-900 rounded-lg aspect-video flex items-center justify-center overflow-hidden relative">
-              {seatSnapshotLoading && !seatSnapshot && (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 size={24} className="text-blue-400 animate-spin" />
-                  <span className="text-gray-400 text-xs">Connecting to camera…</span>
-                </div>
-              )}
-              {seatSnapshot ? (
-                <img
-                  src={seatSnapshot}
-                  alt="Live Camera Feed"
-                  className="w-full h-full object-cover"
-                />
-              ) : !seatSnapshotLoading ? (
-                <div className="flex flex-col items-center gap-2">
-                  <WifiOff className="text-gray-600" size={36} />
-                  <span className="text-gray-500 text-xs">Camera offline</span>
-                </div>
-              ) : null}
-              {seatSnapshot && seatSnapshotLoading && (
-                <div className="absolute top-2 right-2">
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" title="Live" />
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Camera {selectedSeat.cameraId} • Refreshing every 4 s
-            </p>
-          </div>
-          <div className="space-y-2">
-            <button className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-              <Eye size={18} className="inline mr-2" />View Full Recording
-            </button>
-            <button
-              onClick={handleFlagForInvestigation}
-              disabled={!session?.id || actionLoading}
-              className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+        <div className="p-3 bg-gray-50 space-y-3">
+          {hallCameras.map(cam => (
+            <div 
+              key={cam.id} 
+              className="relative rounded-xl overflow-hidden bg-gray-100 aspect-video shadow group cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+              onClick={() => { if (cam.stream_url) setExpandedCameraUrl(cam.stream_url) }}
             >
-              {actionLoading ? (
-                <Loader2 size={18} className="inline mr-2 animate-spin" />
+              {cam.stream_url ? (
+                <img
+                  src={cam.stream_url}
+                  alt={cam.name}
+                  className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
+                  crossOrigin="anonymous"
+                />
               ) : (
-                <AlertCircle size={18} className="inline mr-2" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                  <WifiOff size={22} className="mb-2 opacity-50" />
+                  <span className="text-xs font-semibold">Camera Offline</span>
+                </div>
               )}
-              Flag for Investigation
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-
-  const FeaturesPanel: FC = () => {
-    const features: Feature[] = [
-      { icon: <Eye size={18} />, label: 'Behavior Analysis', status: true },
-      { icon: <Phone size={18} />, label: 'Object Detection', status: true },
-      { icon: <Camera size={18} />, label: 'Multi-Camera Tracking', status: true },
-      { icon: <Activity size={18} />, label: 'Movement Detection', status: true },
-    ];
-
-    return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <Shield size={20} className="text-blue-600" />
-          Active Monitoring Features
-        </h3>
-        <div className="space-y-3">
-          {features.map((feature, i) => (
-            <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="text-blue-600">{feature.icon}</div>
-                <span className="text-sm font-medium text-gray-700">{feature.label}</span>
+              <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Camera size={9} /> {cam.name}
               </div>
-              <CheckCircle className="text-green-600" size={18} />
+              
+              {cam.stream_url && (
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <div className="bg-black/60 text-white p-2.5 rounded-full backdrop-blur-md shadow-lg transform scale-90 group-hover:scale-100 transition-all">
+                    <Video size={20} />
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -963,7 +892,389 @@ const OfflineMonitoringPage: FC = () => {
     );
   };
 
-  const EndExamModal: FC = () => {
+  const renderAlertsPanel = () => {
+    const BACKEND = `http://${window.location.hostname}:8000`;
+
+    const severityConfig: Record<string, { bar: string; bg: string; badge: string; label: string }> = {
+      high:   { bar: 'bg-red-500',    bg: 'bg-red-50',    badge: 'bg-red-100 text-red-700',    label: 'HIGH' },
+      medium: { bar: 'bg-amber-500',  bg: 'bg-amber-50',  badge: 'bg-amber-100 text-amber-700', label: 'MED'  },
+      low:    { bar: 'bg-yellow-400', bg: 'bg-yellow-50', badge: 'bg-yellow-100 text-yellow-700',label: 'LOW'  },
+    };
+
+    return (
+      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-red-600 to-rose-600 px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <AlertCircle size={18} className="text-white" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-sm leading-tight">Live Alerts</h3>
+              <p className="text-white/70 text-[10px]">Real-time AI detection events</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {isMonitoring && (
+              <span className="flex items-center gap-1.5 bg-white/20 text-white text-[10px] font-bold px-2 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                LIVE
+              </span>
+            )}
+            <span className="bg-white/20 text-white text-xs font-extrabold px-2.5 py-1 rounded-full">
+              {alerts.length}
+            </span>
+          </div>
+        </div>
+
+        {/* Body */}
+        {alertsLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin text-red-500" size={28} />
+          </div>
+        ) : alerts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-green-50 flex items-center justify-center mb-3">
+              <CheckCircle size={28} className="text-green-400" />
+            </div>
+            <p className="text-gray-500 font-medium text-sm">No alerts yet</p>
+            <p className="text-gray-400 text-xs mt-1">AI is watching — all clear so far</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50 max-h-[520px] overflow-y-auto">
+            {alerts.map(a => {
+              const matchedZone = zones.find(z => z.id === a.zone);
+              const displayName = a.student_name || matchedZone?.dynamic_student_name || matchedZone?.student_name || `Zone ${a.zone}`;
+              const displaySeat = a.seat_number || matchedZone?.dynamic_seat_number || matchedZone?.seat_number || '';
+              const displayId   = matchedZone?.student_code || '';
+              const sc = severityConfig[a.severity] ?? severityConfig.low;
+              const snapUrl = a.snapshot
+                ? (a.snapshot.startsWith('http') ? a.snapshot : `${BACKEND}${a.snapshot}`)
+                : null;
+
+              return (
+                <div
+                  key={a.id}
+                  className={`relative flex gap-0 transition-all duration-200 ${a.is_reviewed ? 'opacity-50' : 'hover:bg-gray-50'}`}
+                >
+                  {/* Severity bar */}
+                  <div className={`w-1 shrink-0 ${sc.bar}`} />
+
+                  <div className="flex-1 p-3 flex gap-3 min-w-0">
+                    {/* Snapshot thumbnail */}
+                    <div className="shrink-0">
+                      {snapUrl ? (
+                        <button
+                          onClick={() => setExpandedSnap(expandedSnap === String(a.id) ? null : String(a.id))}
+                          className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-900 group border-2 border-gray-100 hover:border-red-300 transition-all"
+                          title="Click to enlarge"
+                        >
+                          <img
+                            src={snapUrl}
+                            alt="Alert snapshot"
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                            <Eye size={14} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </button>
+                      ) : (
+                        <div className={`w-16 h-16 rounded-lg flex flex-col items-center justify-center ${sc.bg} border border-gray-100`}>
+                          <div className="text-gray-400">{getAlertIcon(a.alert_type)}</div>
+                          <span className="text-[9px] text-gray-400 mt-1 text-center leading-tight px-1">No snap</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-1 mb-1">
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-800 text-xs truncate leading-tight">{displayName}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {displaySeat && (
+                              <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
+                                Seat {displaySeat.replace(/^Seat\s+/i, '')}
+                              </span>
+                            )}
+                            {displayId && (
+                              <span className="text-[10px] text-gray-400 font-mono">#{displayId}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${sc.badge}`}>
+                            {sc.label}
+                          </span>
+                          {!a.is_reviewed && (
+                            <button
+                              onClick={() => handleReviewAlert(a.id)}
+                              title="Mark reviewed"
+                              className="text-gray-300 hover:text-green-500 transition-colors"
+                            >
+                              <Eye size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-semibold capitalize ${
+                          a.severity === 'high' ? 'text-red-600' :
+                          a.severity === 'medium' ? 'text-amber-600' : 'text-yellow-600'
+                        }`}>
+                          {a.alert_type.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-gray-300">•</span>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(a.timestamp).toLocaleTimeString()}
+                        </span>
+                        {a.is_reviewed && (
+                          <span className="ml-auto flex items-center gap-0.5 text-[9px] text-green-600">
+                            <CheckCircle size={10} /> Reviewed
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded snapshot removed, using global modal instead */}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderStudentDetailsPanel = () => {
+    const seatAlerts = selectedSeat
+      ? alerts.filter(a => a.zone === selectedSeat.zoneId)
+      : [];
+
+    if (!selectedSeat) {
+      return (
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-700 to-indigo-700 p-5 flex items-center gap-3">
+            <Shield size={22} className="text-blue-200" />
+            <h3 className="font-bold text-white text-lg">Student Details & AI Monitoring</h3>
+          </div>
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+              <User className="text-gray-300" size={40} />
+            </div>
+            <p className="text-gray-500 font-medium">No student selected</p>
+            <p className="text-gray-400 text-sm mt-1">Click any seat on the map to view live details and AI alerts</p>
+          </div>
+          {/* Active features strip */}
+          <div className="border-t border-gray-100 bg-gray-50 p-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Active AI Modules</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { icon: <Eye size={14}/>, label: 'Behavior Analysis' },
+                { icon: <Phone size={14}/>, label: 'Object Detection' },
+                { icon: <Camera size={14}/>, label: 'Multi-Camera' },
+                { icon: <Activity size={14}/>, label: 'Head Pose & Movement' },
+              ].map((f, i) => (
+                <div key={i} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-gray-100 shadow-sm">
+                  <span className="text-blue-600">{f.icon}</span>
+                  <span className="text-xs text-gray-700 font-medium">{f.label}</span>
+                  <CheckCircle size={12} className="text-green-500 ml-auto" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const statusConfig = {
+      normal:  { bg: 'bg-emerald-500', text: 'text-emerald-700', badge: 'bg-emerald-100', label: 'NORMAL', dot: 'bg-emerald-400' },
+      warning: { bg: 'bg-amber-500',   text: 'text-amber-700',   badge: 'bg-amber-100',   label: 'SUSPICIOUS', dot: 'bg-amber-400' },
+      alert:   { bg: 'bg-red-500',     text: 'text-red-700',     badge: 'bg-red-100',     label: 'VIOLATION',  dot: 'bg-red-500' },
+    };
+    const sc = statusConfig[selectedSeat.status];
+
+    return (
+      <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+        {/* Header bar */}
+        <div className={`${sc.bg} p-4 flex items-center justify-between`}>
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Avatar circle */}
+            <div className="w-12 h-12 rounded-full bg-white/25 flex items-center justify-center text-white font-extrabold text-xl shrink-0 border-2 border-white/40">
+              {selectedSeat.studentName.charAt(0).toUpperCase()}
+            </div>
+            {/* Student info */}
+            <div className="min-w-0">
+              <p className="font-extrabold text-white text-base leading-tight truncate">
+                {selectedSeat.studentName}
+              </p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                {/* Seat number badge */}
+                <span className="flex items-center gap-1 bg-white/20 text-white text-[11px] font-semibold px-2 py-0.5 rounded-full">
+                  📍 Seat {selectedSeat.seatNumber.replace(/^Seat\s+/i, '')}
+                </span>
+                {/* Student code */}
+                <span className="text-white/80 text-[11px] font-mono">
+                  #{selectedSeat.studentId}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+              <span className={`w-1.5 h-1.5 rounded-full ${sc.dot} animate-pulse`} />
+              {sc.label}
+            </span>
+            <button
+              onClick={() => setSelectedSeat(null)}
+              className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white font-bold transition-colors text-lg leading-none"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Metrics Row */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
+              <p className="text-2xl font-extrabold text-gray-800">{selectedSeat.violations}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5 uppercase tracking-wide font-semibold">Total Alerts</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
+              <p className="text-xl font-bold text-gray-700 leading-tight mt-1">{selectedSeat.seatNumber}</p>
+              <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide font-semibold">Seat</p>
+            </div>
+          </div>
+
+          {/* Severity Breakdown */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-red-50 rounded-lg p-2 text-center border border-red-100">
+              <p className="text-lg font-bold text-red-700">{seatAlerts.filter(a => a.severity === 'high').length}</p>
+              <p className="text-[9px] text-red-600 uppercase tracking-wider font-bold">High</p>
+            </div>
+            <div className="bg-orange-50 rounded-lg p-2 text-center border border-orange-100">
+              <p className="text-lg font-bold text-orange-700">{seatAlerts.filter(a => a.severity === 'medium').length}</p>
+              <p className="text-[9px] text-orange-600 uppercase tracking-wider font-bold">Medium</p>
+            </div>
+            <div className="bg-yellow-50 rounded-lg p-2 text-center border border-yellow-100">
+              <p className="text-lg font-bold text-yellow-700">{seatAlerts.filter(a => a.severity === 'low').length}</p>
+              <p className="text-[9px] text-yellow-600 uppercase tracking-wider font-bold">Low</p>
+            </div>
+          </div>
+
+          {/* Zone Live View — shows exactly what the AI sees */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Camera size={15} className="text-blue-600" /> AI Zone View
+              </p>
+              <span className="text-[10px] text-gray-400 font-mono">Zone #{selectedSeat.zoneId}</span>
+            </div>
+            <div className="bg-gray-900 rounded-xl overflow-hidden relative border border-gray-700" style={{minHeight:'140px'}}>
+              {selectedSeat.streamUrl.startsWith('http') && zones.find(z => z.id === selectedSeat.zoneId) ? (
+                <LiveZoneCanvas 
+                  streamUrl={selectedSeat.streamUrl} 
+                  zone={zones.find(z => z.id === selectedSeat.zoneId)!} 
+                />
+              ) : seatSnapshot ? (
+                <img
+                  src={seatSnapshot}
+                  alt="Zone Live View"
+                  className="w-full h-full block object-cover rounded-xl"
+                />
+              ) : seatSnapshotLoading ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                  <Loader2 size={28} className="text-blue-400 animate-spin" />
+                  <span className="text-gray-400 text-xs">Loading zone view…</span>
+                </div>
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                  <WifiOff className="text-gray-600" size={36} />
+                  <span className="text-gray-500 text-xs">Zone not available</span>
+                </div>
+              )}
+              {/* LIVE badge */}
+              {(selectedSeat.streamUrl.startsWith('http') || seatSnapshot) && (
+                <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full z-10">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  AI VIEW
+                </div>
+              )}
+              <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-full z-10">
+                <Eye size={9} className="text-white/70" />
+                <span className="text-white/70 text-[9px] font-semibold">What AI sees</span>
+              </div>
+              {/* Alert overlay if violation */}
+              {selectedSeat.status === 'alert' && (
+                <div className="absolute bottom-2 left-2 right-2 bg-red-600/80 backdrop-blur-sm text-white text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1.5">
+                  <AlertCircle size={12} className="shrink-0" />
+                  Violation Detected — Review Required
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Per-student alert log */}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <AlertCircle size={15} className="text-red-500" />
+              Alert History
+              {seatAlerts.length > 0 && (
+                <span className="ml-auto bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full">{seatAlerts.length}</span>
+              )}
+            </p>
+            {seatAlerts.length === 0 ? (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+                <CheckCircle size={16} className="text-emerald-500 shrink-0" />
+                <span className="text-xs text-emerald-700 font-medium">No alerts for this student — all good!</span>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                {seatAlerts.slice().reverse().map(a => (
+                  <div
+                    key={a.id}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border-l-4 ${
+                      a.severity === 'high'   ? 'border-red-500 bg-red-50' :
+                      a.severity === 'medium' ? 'border-amber-500 bg-amber-50' :
+                                                'border-yellow-400 bg-yellow-50'
+                    } ${a.is_reviewed ? 'opacity-50' : ''}`}
+                  >
+                    <div className={`p-1.5 rounded-lg mt-0.5 ${
+                      a.severity === 'high' ? 'bg-red-100 text-red-600' :
+                      a.severity === 'medium' ? 'bg-amber-100 text-amber-600' :
+                      'bg-yellow-100 text-yellow-600'
+                    }`}>
+                      {getAlertIcon(a.alert_type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-gray-800 capitalize">{a.alert_type.replace(/_/g, ' ')}</p>
+                      <p className="text-[10px] text-gray-500">{new Date(a.timestamp).toLocaleTimeString()}</p>
+                    </div>
+                    {!a.is_reviewed && (
+                      <button
+                        onClick={() => handleReviewAlert(a.id)}
+                        title="Mark reviewed"
+                        className="text-gray-300 hover:text-emerald-600 shrink-0 transition-colors mt-0.5"
+                      >
+                        <Eye size={15} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+    );
+  };
+
+  const renderEndExamModal = () => {
     if (!showEndConfirm) return null;
 
     return (
@@ -1012,7 +1323,7 @@ const OfflineMonitoringPage: FC = () => {
     );
   };
 
-  const EarlyStartModal: FC = () => {
+  const renderEarlyStartModal = () => {
     if (!showEarlyStartWarning) return null;
 
     return (
@@ -1060,49 +1371,144 @@ const OfflineMonitoringPage: FC = () => {
   // Main render
   // ============================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <StatusBar />
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {renderStatusBar()}
 
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                {exam?.title || 'Offline Exam Monitoring'}
-              </h1>
-              <p className="text-gray-600">Real-time monitoring with AI-powered detection</p>
+      <main className="flex-1 p-4 lg:p-5 max-w-screen-2xl mx-auto w-full space-y-4">
+
+        {/* Stats Row */}
+        {selectedHallId && renderStatsGrid()}
+
+        {!selectedHallId ? (
+          /* Hall selector */
+          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+            <h3 className="font-bold text-gray-800 text-lg mb-4 flex items-center gap-2">
+              <MapPin size={18} className="text-blue-600" /> Select Exam Hall
+            </h3>
+            {hallsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="animate-spin text-blue-600" size={32} />
+                <span className="ml-3 text-gray-500">Loading halls...</span>
+              </div>
+            ) : hallsError ? (
+              <p className="text-red-500 text-sm py-4">{hallsError}</p>
+            ) : halls.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No exam halls found. Create one from the ROI page.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {halls.map(hall => (
+                  <button
+                    key={hall.id}
+                    onClick={() => setSelectedHallId(hall.id)}
+                    className={`p-4 rounded-xl border-2 transition-all text-left ${
+                      selectedHallId === hall.id
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-blue-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold text-gray-800">{hall.name}</h4>
+                      <span className={`w-2.5 h-2.5 rounded-full ${ hall.is_active ? 'bg-green-500 animate-pulse' : 'bg-gray-300' }`} />
+                    </div>
+                    <div className="space-y-1 text-xs text-gray-500">
+                      <div className="flex items-center gap-1.5"><MapPin size={11} /> {hall.building}</div>
+                      <div className="flex items-center gap-1.5"><Users size={11} /> Capacity: {hall.capacity}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* ── Main 3-column command-center grid ── */
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+
+            {/* LEFT COLUMN: Camera + Alerts */}
+            <div className="xl:col-span-3 space-y-4">
+              {renderFullCameraStream()}
+              {renderAlertsPanel()}
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleGenerateReport}
-                disabled={!session?.id || actionLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50"
-              >
-                {actionLoading
-                  ? <Loader2 size={18} className="animate-spin" />
-                  : <FileSpreadsheet size={18} />}
-                Export Excel Report
-              </button>
+
+            {/* CENTER COLUMN: Seating Map */}
+            <div className="xl:col-span-5 flex flex-col">
+              {renderSeatingMapView()}
             </div>
+
+            {/* RIGHT COLUMN: Student Details */}
+            <div className="xl:col-span-4">
+              {renderStudentDetailsPanel()}
+            </div>
+
+          </div>
+        )}
+      </main>
+
+      {renderEndExamModal()}
+      {renderEarlyStartModal()}
+
+      {/* Expanded Snapshot Modal */}
+      {expandedSnap && (
+        (() => {
+          const a = alerts.find(alt => String(alt.id) === expandedSnap);
+          const BACKEND = `http://${window.location.hostname}:8000`;
+          const snapUrl = a?.snapshot ? (a.snapshot.startsWith('http') ? a.snapshot : `${BACKEND}${a.snapshot}`) : '';
+          return (
+            <div 
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-black/90 backdrop-blur-sm animate-in fade-in duration-200"
+              onClick={() => setExpandedSnap(null)}
+            >
+              <div className="relative max-w-5xl w-full" onClick={e => e.stopPropagation()}>
+                <button 
+                  className="absolute -top-12 right-0 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-red-500 text-white flex items-center justify-center transition-colors backdrop-blur-md"
+                  onClick={() => setExpandedSnap(null)}
+                >
+                  <XCircle size={24} />
+                </button>
+                {a && (
+                  <div className="absolute top-4 left-4 z-10 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-xs font-bold flex items-center gap-2">
+                    <span className="capitalize">{a.alert_type.replace(/_/g, ' ')}</span>
+                    <span className="text-white/50 px-1">•</span>
+                    <span className="text-white/80">{new Date(a.timestamp).toLocaleString()}</span>
+                  </div>
+                )}
+                <img 
+                  src={snapUrl} 
+                  alt="Expanded Alert Snapshot" 
+                  className="w-full rounded-xl shadow-2xl object-contain max-h-[85vh] border border-gray-800"
+                  crossOrigin="anonymous"
+                />
+              </div>
+            </div>
+          );
+        })()
+      )}
+
+      {/* Expanded Full Camera Modal */}
+      {expandedCameraUrl && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 bg-black/90 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setExpandedCameraUrl(null)}
+        >
+          <div className="relative w-full max-w-6xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-gray-800" onClick={e => e.stopPropagation()}>
+            <button 
+              className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-black/50 hover:bg-red-500 text-white flex items-center justify-center transition-colors backdrop-blur-md"
+              onClick={() => setExpandedCameraUrl(null)}
+            >
+              <XCircle size={24} />
+            </button>
+            <div className="absolute top-4 left-4 z-10 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-xs font-bold flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              LIVE CAMERA FEED
+            </div>
+            <img 
+              src={expandedCameraUrl} 
+              alt="Expanded Live Stream" 
+              className="w-full h-full object-contain"
+              crossOrigin="anonymous"
+            />
           </div>
         </div>
-
-        <HallSelector />
-        <StatsGrid />
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <SeatingMapView />
-            <FeaturesPanel />
-          </div>
-          <div className="space-y-6">
-            <AlertsPanel />
-            <StudentDetailsPanel />
-          </div>
-        </div>
-      </div>
-      <EndExamModal />
-      <EarlyStartModal />
+      )}
     </div>
   );
 };

@@ -202,6 +202,8 @@ export interface Alert {
   severity: string;
   timestamp: string;
   is_reviewed: boolean;
+  snapshot: string | null;   // URL to the cropped event image
+  confidence?: number;       // injected by dispatcher, not a DB field
 }
 
 export interface ViolationLog {
@@ -332,6 +334,16 @@ export const studentZoneApi = {
 
   delete: (id: number): Promise<void> =>
     request<void>(`/api/hardware/monitoring/zones/${id}/`, { method: "DELETE" }),
+
+  getZoneSnapshot: (zoneId: number): Promise<{
+    snapshot: string;
+    width: number;
+    height: number;
+    zone_id: number;
+    student_name: string;
+    student_code: string;
+  }> =>
+    request(`/api/hardware/monitoring/zones/${zoneId}/snapshot/`),
 };
 
 // ============================================================
